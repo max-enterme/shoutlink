@@ -1,0 +1,23 @@
+{
+  "manifest_version": 3,
+  "name": "yt-redirect-pin",
+  "version": "0.1.0",
+  "description": "ライブリダイレクトの受信を検知し、送信元チャンネル URL をライブチャットへ投稿して固定する",
+  "permissions": ["storage"],
+  "host_permissions": ["https://www.youtube.com/*", "https://studio.youtube.com/*"],
+  "content_scripts": [
+    {
+      "matches": ["https://www.youtube.com/live_chat*", "https://studio.youtube.com/live_chat*"],
+      "all_frames": true,
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "options_ui": {
+    "page": "options.html",
+    "open_in_tab": true
+  },
+  "action": {
+    "default_title": "yt-redirect-pin (設定は拡張機能のオプションから)"
+  }
+}

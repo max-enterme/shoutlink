@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <title>yt-redirect-pin 設定</title>
+    <style>
+      body {
+        font: 14px/1.7 system-ui, sans-serif;
+        max-width: 640px;
+        margin: 24px auto;
+        padding: 0 16px;
+        color: #202020;
+      }
+      h1 { font-size: 18px; }
+      fieldset { border: 1px solid #ddd; border-radius: 6px; margin: 0 0 16px; padding: 12px 16px; }
+      legend { color: #666; padding: 0 4px; }
+      label { display: block; margin-bottom: 4px; }
+      input[type='text'], input[type='number'], select, textarea {
+        font: inherit;
+        width: 100%;
+        box-sizing: border-box;
+        padding: 6px 8px;
+        border: 1px solid #bbb;
+        border-radius: 4px;
+      }
+      textarea { min-height: 64px; resize: vertical; }
+      .hint { color: #666; font-size: 12px; margin: 4px 0 0; }
+      .preview { background: #f4f4f4; border-radius: 4px; padding: 8px; font-size: 13px; word-break: break-all; }
+      .row { display: flex; align-items: center; gap: 8px; }
+      .row input[type='checkbox'] { width: auto; }
+      .actions { display: flex; align-items: center; gap: 12px; }
+      button { font: inherit; padding: 6px 16px; border-radius: 4px; border: 1px solid #bbb; cursor: pointer; }
+      .status { color: #227a22; min-height: 1.5em; }
+      .warn { background: #fff6e0; border: 1px solid #e8cf94; border-radius: 6px; padding: 8px 12px; font-size: 13px; }
+    </style>
+  </head>
+  <body>
+    <h1>yt-redirect-pin 設定</h1>
+
+    <p class="warn">
+      実配信での DOM 採取 (T1) が未実施のため、自動検知のセレクタは推測値。
+      自動検知が動かない場合も、ライブチャット画面の右下に出る「↩ 返礼」から手動で実行できる。
+    </p>
+
+    <fieldset>
+      <legend>動作</legend>
+      <div class="row">
+        <input id="enabled" type="checkbox" />
+        <label for="enabled" style="margin: 0">有効にする</label>
+      </div>
+      <p class="hint">想定外の連投を止めたいときはここを外す。</p>
+    </fieldset>
+
+    <fieldset>
+      <legend>投稿文テンプレート</legend>
+      <label for="template">`{name}` に表示名、`{url}` にチャンネル URL が入る</label>
+      <textarea id="template"></textarea>
+      <p class="hint">プレビュー:</p>
+      <p class="preview" id="preview"></p>
+    </fieldset>
+
+    <fieldset>
+      <legend>固定モード</legend>
+      <label for="pinMode">投稿したメッセージを固定するかどうか</label>
+      <select id="pinMode">
+        <option value="off">off — 固定しない(投稿のみ)</option>
+        <option value="ifEmpty">ifEmpty — 既存の固定が無いときだけ固定する(既定)</option>
+        <option value="always">always — 既存の固定があっても上書きする</option>
+      </select>
+      <p class="hint">
+        YouTube の固定は 1 件のみ。<code>always</code> は告知等の既存の固定を消す。
+        <code>ifEmpty</code> は「現在何かが固定されているか」の DOM 判定に依存しており、これは未検証。
+      </p>
+    </fieldset>
+
+    <fieldset>
+      <legend>クールダウン</legend>
+      <label for="cooldownSec">同一送信元からの再投稿を抑止する秒数</label>
+      <input id="cooldownSec" type="number" min="0" step="10" />
+      <p class="hint">0 にすると抑止しない。</p>
+    </fieldset>
+
+    <div class="actions">
+      <button id="save" type="button">保存</button>
+      <span class="status" id="status"></span>
+    </div>
+
+    <script src="options.js"></script>
+  </body>
+</html>

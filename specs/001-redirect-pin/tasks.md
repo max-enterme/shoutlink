@@ -1,0 +1,29 @@
+---
+feature: redirect-pin
+---
+
+# 001 タスク
+
+- [ ] T1: 実配信でリダイレクトを受け、`live_chat` の DOM(通知ノード / チャット入力欄 / メッセージのメニュー / **固定中のバナー**)を採取し、匿名化して fixture 化する。あわせて**「現在何かが固定されているか」を DOM から判定できるか**を確認する(plan.md R4) ※人手・実機(SPEC-OPS §08)
+- [ ] T1b: ポップアウトチャット窓での成立性を確認 — 通知が出るか (C1) / 「固定」メニューがあるか (C2) / 最小化・非前面で `MutationObserver` が発火し続けるか (C3)。`www` 版と `studio` 版の両方 ※人手・実機(SPEC-OPS §08)
+- [x] T2: プロジェクト雛形(TypeScript + vitest + Chrome 拡張 MV3 の骨組み、`www` / `studio` 両ドメインの `live_chat` への content script 注入まで)
+- [x] T3: `selectors.ts` + `detector.ts` — fixture に対して `RedirectEvent` が出ることを単体テストで確認
+- [x] T4: `composer.ts` + `dedupe.ts` — テンプレート差し込みと多重発火抑止
+- [x] T5: `poster.ts` — チャット入力欄への投稿と、投稿した自分のメッセージ要素の特定
+- [x] T6: `pinner.ts` — `PinMode`(`off` / `ifEmpty` / `always`)を解釈してメッセージのメニューから「固定」を実行(固定 UI が見つからない場合はスキップして継続)
+- [x] T7: 設定 UI(テンプレート編集 / ON・OFF / クールダウン / **固定モードの選択**)と `chrome.storage` 永続化
+- [ ] T8: 実配信での通し確認(検知 → 投稿 → 固定)と、失敗時に配信へ影響しないことの確認 ※人手・実機(SPEC-OPS §08)
+
+## 補足
+
+- **T1 が全体のゲート。** 結果次第で T3 以降の仕様が変わる(plan.md R1)。完了時にいったん人間に返す。
+- T1 / T8 は自動実装の対象外(実機・実配信が要る)。PR は分けて、人間の動作確認を経てからマージする。
+- 自動実装できるのは T2–T4 と T7。T5 / T6 は DOM 操作の実体で、検証が実機依存になるため分けて扱う。
+- issue 未採番。`/dashboard-scaffold` で repo と issue を切ってから `<!-- #NN -->` を入れる。
+- **T2–T7 は T1 を待たずに実装した(2026-08-05)。** そのため `selectors.ts` のセレクタ・文言、
+  および `tests/fixtures/` は**すべて推測・合成**であり、実 DOM で確認していない
+  (各定義に `TODO(T1)`)。テストが緑でも実配信で動く保証は無い。**T1 の後に selectors.ts と
+  fixture を実 DOM で差し替え、落ちたテストは実装側を直す**(fixture を実装に合わせて歪めない)。
+- あわせて、plan.md R1 の「手動トリガー」を**フォールバックではなく常設の経路**として実装した
+  (`src/manual-trigger.ts`)。T1 が空振りでも投稿 → 固定を通せるようにするため。
+  自動検知と同じ `RedirectEvent` を同じパイプラインに流す。
