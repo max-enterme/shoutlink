@@ -3,6 +3,7 @@
  * 全体を try/catch で包み、どこで失敗しても配信に影響させない (AC6)。
  */
 import { compose } from './composer'
+import { REDIRECT_TEXT_PATTERNS } from './selectors'
 import { DEFAULT_CONFIG, loadConfig, onConfigChanged } from './config'
 import { createDedupe } from './dedupe'
 import { startRedirectDetector } from './detector'
@@ -11,6 +12,9 @@ import { mountManualTrigger } from './manual-trigger'
 import { pin } from './pinner'
 import { postMessage } from './poster'
 import type { Config, RedirectEvent } from './types'
+
+/** ビルド時刻。esbuild の define で埋める(どのビルドが読み込まれているかの判別用) */
+declare const __BUILD_TIME__: string
 
 async function main(): Promise<void> {
   let config: Config = await guardAsync('設定の読み込み', loadConfig, { ...DEFAULT_CONFIG })
@@ -62,7 +66,17 @@ async function main(): Promise<void> {
   // 手動トリガーは常設。自動検知が成立しない場合でも投稿 → 固定を通せる。
   mountManualTrigger({ onTrigger: safeHandle })
 
-  log.info('起動した', location.href)
+  // 「どのビルドが・どの設定で動いているか」を 1 行で分かるようにする。
+  // 拡張の ↻ 忘れ / ページのリロード忘れ / 診断ログの入れ忘れを、ログだけで切り分けるため。
+  log.info('起動した', {
+    build: __BUILD_TIME__,
+    enabled: config.enabled,
+    debug: config.debug,
+    pinMode: config.pinMode,
+    cooldownSec: config.cooldownSec,
+    patterns: REDIRECT_TEXT_PATTERNS.length,
+    url: location.href,
+  })
 }
 
 void main().catch((err) => log.error('起動に失敗した:', err))

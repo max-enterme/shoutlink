@@ -24,6 +24,9 @@ await build({
   sourcemap: true,
   outdir,
   logLevel: 'info',
+  define: {
+    __BUILD_TIME__: JSON.stringify(new Date().toISOString()),
+  },
 })
 
 await cp(path.join(root, 'public'), outdir, { recursive: true })
