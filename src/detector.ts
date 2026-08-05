@@ -8,10 +8,12 @@
 import { log } from './log'
 import {
   REDIRECT_TEXT_PATTERNS,
+  containsChatTextMessage,
   getChatItemList,
   getRedirectNoticeChannelLink,
   getRedirectNoticeChannelName,
   isChatTextMessage,
+  isInsideChatTextMessage,
   isRedirectNoticeElement,
   textOf,
 } from './selectors'
@@ -98,6 +100,11 @@ function fallbackNameFromUrl(url: string): string {
 export function isRedirectNotice(el: Element): boolean {
   if (isRedirectNoticeElement(el)) return true
   if (isChatTextMessage(el)) return false
+  // 通常のチャットメッセージの内側は通知ではない。
+  // **自分が投稿した返礼メッセージを検知して再投稿する事故**を防ぐ (2026-08-05)。
+  if (isInsideChatTextMessage(el)) return false
+  // チャットメッセージを内包する要素はコンテナであって通知ではない。
+  if (containsChatTextMessage(el)) return false
 
   const text = textOf(el)
   if (!text) return false
@@ -149,6 +156,11 @@ export type DetectedNotice = { element: Element; event: RedirectEvent }
 export function collectRedirectNotices(node: Node, detectedAt: number): DetectedNotice[] {
   if (node.nodeType !== 1 /* ELEMENT_NODE */) return []
   const el = node as Element
+
+  // 通常のチャットメッセージの中には降りない。
+  // 降りると、自分が投稿した返礼メッセージ(「リダイレクト」+ チャンネル URL を含む)の
+  // 内側の要素が通知の条件を満たし、**自分の投稿を検知して再投稿する**。
+  if (isChatTextMessage(el)) return []
 
   const fromChildren: DetectedNotice[] = []
   for (const child of Array.from(el.children)) {

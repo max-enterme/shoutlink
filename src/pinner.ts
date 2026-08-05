@@ -19,15 +19,36 @@ export type PinOptions = {
   menuIntervalMs?: number
 }
 
+/** PointerEvent が無い環境 (jsdom 等) では MouseEvent で代替する */
+function pointerish(type: string, init: MouseEventInit): Event {
+  if (typeof PointerEvent === 'function') return new PointerEvent(type, init)
+  return new MouseEvent(type, init)
+}
+
 /**
  * メニューを開くための操作。
- * TODO(T1): 実 DOM で要確認。YouTube はメッセージをホバーしないとメニューボタンを
- *           出さないことがあるため、click の前にポインタ系イベントを流している。
+ *
+ * ⚠️ **`button.click()` だけではメニューが開かないことを実配信で確認 (2026-08-05)。**
+ *    Polymer のボタンは pointerdown/up 系から `tap` を合成するため、click だけでは
+ *    ドロップダウンが開かず `unavailable` になっていた。
+ *    人の操作に近い順序でイベントを流す。
+ * TODO(T1): これで開くかは未検証。開かないなら、そもそも DOM 操作では固定できない
+ *           可能性があり、③ の実現手段から見直す必要がある。
  */
 function openMenu(message: HTMLElement, button: HTMLElement): void {
-  for (const type of ['pointerover', 'mouseover', 'pointerenter', 'mouseenter'] as const) {
-    message.dispatchEvent(new Event(type, { bubbles: true }))
+  // ホバーしないとメニューボタンが出ない場合への対処
+  for (const type of ['pointerover', 'mouseover', 'pointerenter', 'mouseenter', 'pointermove', 'mousemove']) {
+    message.dispatchEvent(pointerish(type, { bubbles: true }))
   }
+
+  const init: MouseEventInit = { bubbles: true, cancelable: true, composed: true, button: 0 }
+  button.dispatchEvent(pointerish('pointerover', init))
+  button.dispatchEvent(pointerish('pointerenter', init))
+  button.dispatchEvent(pointerish('pointerdown', init))
+  button.dispatchEvent(new MouseEvent('mousedown', init))
+  button.focus?.()
+  button.dispatchEvent(pointerish('pointerup', init))
+  button.dispatchEvent(new MouseEvent('mouseup', init))
   button.click()
 }
 

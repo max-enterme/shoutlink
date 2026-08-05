@@ -279,6 +279,32 @@ export function isChatTextMessage(el: Element): boolean {
   return matchesAny(el, SELECTORS.chatTextMessage)
 }
 
+/**
+ * 要素が通常のチャットメッセージを内包しているか。
+ * **通知は他のチャットメッセージを含まない。**含むならそれはコンテナであり、通知ではない。
+ */
+export function containsChatTextMessage(el: ParentNode): boolean {
+  return queryFirst(el, SELECTORS.chatTextMessage) != null
+}
+
+/**
+ * 要素が通常のチャットメッセージの内側にあるか。
+ *
+ * **自分が投稿した返礼メッセージを通知として検知しないための判定。**
+ * 返礼文には「リダイレクト」とチャンネル URL が両方入るため、
+ * メッセージの中身(`#message` の span 等)を単独で見ると通知の条件を満たしてしまう。
+ */
+export function isInsideChatTextMessage(el: Element): boolean {
+  for (const selector of SELECTORS.chatTextMessage) {
+    try {
+      if (el.closest?.(selector)) return true
+    } catch {
+      // 環境が解釈できないセレクタは飛ばす
+    }
+  }
+  return false
+}
+
 export function getRedirectNoticeChannelLink(notice: ParentNode): HTMLAnchorElement | null {
   return queryFirst<HTMLAnchorElement>(notice, SELECTORS.redirectNoticeChannelLink)
 }

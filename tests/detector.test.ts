@@ -98,6 +98,23 @@ describe('参加通知 (実配信で確認した文言)', () => {
     expect(events[0]?.sourceChannelUrl).not.toBe(FAKE_OTHER_CHANNEL.url)
   })
 
+  // 回帰テスト: 2026-08-05 の実配信での事故 (2 件目)。
+  // 返礼文には「リダイレクト」とチャンネル URL が両方入るため、メッセージの内側の要素を
+  // 単独で見ると通知の条件を満たし、**自分の投稿を検知して再投稿する**ループになっていた。
+  it('自分が投稿した返礼メッセージを通知として検知しない', () => {
+    const items = document.createElement('div')
+    const posted = makeChatMessage(
+      `${FAKE_CHANNEL.handle}さんからリダイレクトありがとうございます! ${FAKE_CHANNEL.url}`,
+      'me',
+    )
+    items.appendChild(posted)
+
+    expect(collectRedirectEvents(items, 1)).toEqual([])
+    // メッセージの内側の要素を直接渡しても検知しない
+    const inner = posted.querySelector('#message')!
+    expect(extractRedirectEvent(inner, 1)).toBeNull()
+  })
+
   it('長いテキストの塊は通知とみなさない', () => {
     const container = document.createElement('div')
     container.textContent = `${'あ'.repeat(400)} ${FAKE_CHANNEL.handle} とその視聴者が参加しました`
