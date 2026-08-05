@@ -31,7 +31,7 @@ async function main(): Promise<void> {
 
   // **自分の配信のチャットでしか動かさない。**
   // ここを緩めると他人のチャットへ投稿する (2026-08-06 の事故)。設定変更後はページの再読み込みが要る。
-  const scope = decideScope(location.hostname, config.allowWww)
+  const scope = decideScope(location.hostname)
   if (!scope.allowed) {
     log.info('この画面では動かさない:', scope.reason)
     return

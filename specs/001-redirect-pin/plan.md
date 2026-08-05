@@ -34,24 +34,32 @@ test: npm run typecheck && npx vitest run
 | Tampermonkey ユーザースクリプト | ○ 一番軽いが、設定 UI と配布・更新が雑になる |
 | Playwright で別ブラウザを起動 | △ 配信者本人のログインセッションと別になり、投稿の名義・固定権限が面倒。常駐プロセスも増える |
 
-### 対象ウィンドウ — ポップアウトチャットを主対象にする
-
-ライブチャットは独立ウィンドウにポップアウトでき、それが `live_chat` ページの実体そのもの。
-**ポップアウトを主対象にすると、watch ページ内の iframe を跨がずトップレベル文書として扱えるため実装が単純になる。**
+### 対象ウィンドウ — **`studio.youtube.com` のライブ管制室だけ**
 
 ```jsonc
 // manifest.json
 "content_scripts": [{
-  "matches": [
-    "https://www.youtube.com/live_chat*",      // ポップアウト (?is_popout=1) と watch 埋め込み iframe
-    "https://studio.youtube.com/live_chat*"    // Studio ライブ管制室からのポップアウト
-  ],
-  "all_frames": true                            // 埋め込み iframe でも動くように
+  "matches": ["https://studio.youtube.com/live_chat*"],  // 管制室の埋め込みとポップアウト
+  "all_frames": true                                     // 管制室では iframe に入るため必須
 }]
 ```
 
-- `all_frames: true` にしておけば、ポップアウトと watch ページ埋め込みの**両対応が追加コストほぼゼロ**で成立する。
-- 運用上の利点: 配信画面を閉じてもチャットウィンドウだけ常駐させられる。サブモニタに小さく置ける。
+⚠️ **`www.youtube.com/live_chat*` は意図的に対象外**(2026-08-06 の事故)。
+
+当初は「ポップアウトを主対象、`www` と `studio` の両方に注入」としていたが、
+**`www` のライブチャットは他人の配信でも開ける。**そこで動かすと、他人の配信が
+リダイレクトを受けたときに**自分の名義でその配信のチャットへ投稿してしまう**。
+実際に起きた。
+
+`www` で「自分の配信かどうか」を DOM から判別する確実な手段が無い以上、
+**設定で許可する余地も持たせない**(「ON にすると他人のチャットを荒らしうる」設定は
+安全にしようがない)。ライブ管制室は自分の配信でしか開けないため、これが
+「自分の配信である」ことの代わりに使える唯一の確実な手掛かり。
+
+- ポップアウト運用は `studio.youtube.com/live_chat?is_popout=1` で足りる。
+  運用上の利点(配信画面を閉じてもチャットだけ常駐 / サブモニタに置ける)はそのまま。
+- `all_frames: true` は管制室のチャットが iframe のため必須。
+- コード側にも `src/scope.ts` で同じ判定を置き、注入先が増えたときの二重の歯止めとする。
 
 **T1 の結果 (2026-08-05 / 詳細は [docs/t1-findings.md](../../docs/t1-findings.md)):**
 

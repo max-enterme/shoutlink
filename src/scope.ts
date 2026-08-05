@@ -19,24 +19,22 @@ export type ScopeDecision = {
 }
 
 /**
- * このホストで動かしてよいか。
+ * このホストで動かしてよいか。**`studio.youtube.com` だけ。**
  *
- * - `studio.youtube.com` → **常に許可**(自分の配信の管制室)
- * - それ以外(`www.youtube.com` 等)→ **既定は不許可。**設定で明示的に許可したときだけ動く。
- *   許可した場合、**他人の配信のチャットを開いていると誤爆する**ことを利用者が承知している前提。
+ * `www.youtube.com` を設定で許可する余地は**意図的に持たせない**。
+ * そこでは自分の配信か他人の配信かを原理的に判別できず、
+ * 「許可すると他人のチャットへ投稿しうる」設定は安全にしようがないため。
+ * ポップアウト運用も `studio.youtube.com/live_chat?is_popout=1` で足りる。
+ *
+ * manifest からも `www` を外してあるので通常ここへは来ないが、
+ * 注入先が増えたときの二重の歯止めとして残す。
  */
-export function decideScope(hostname: string, allowWww: boolean): ScopeDecision {
+export function decideScope(hostname: string): ScopeDecision {
   if (hostname === STUDIO_HOST) {
     return { allowed: true, reason: 'Studio のライブ管制室(自分の配信)' }
   }
-  if (allowWww) {
-    return {
-      allowed: true,
-      reason: `設定で ${hostname} を許可済み(他人の配信のチャットでは無効化すること)`,
-    }
-  }
   return {
     allowed: false,
-    reason: `${hostname} では既定で動かさない。自分の配信かどうかを判別できず、他人のチャットへ投稿する恐れがあるため`,
+    reason: `${hostname} では動かさない。自分の配信かどうかを判別できず、他人のチャットへ投稿する恐れがあるため`,
   }
 }
