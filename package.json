@@ -6,7 +6,10 @@
   "type": "module",
   "scripts": {
     "build": "node scripts/build.mjs",
+    "build:store": "node scripts/build.mjs --store",
     "package": "node scripts/build.mjs && node scripts/package.mjs",
+    "package:store": "node scripts/build.mjs --store && node scripts/package-store.mjs",
+    "icons": "node scripts/make-icons.mjs",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
   },

@@ -1,8 +1,14 @@
 {
   "manifest_version": 3,
-  "name": "yt-redirect-pin",
+  "name": "リダイレクト返礼ピン (yt-redirect-pin)",
   "version": "0.1.0",
-  "description": "ライブリダイレクトの受信を検知し、送信元チャンネル URL をライブチャットへ投稿して固定する",
+  "description": "配信中に受け取ったライブリダイレクトを検知し、送信元チャンネルの URL をライブチャットへ投稿して固定します。",
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
   "permissions": ["storage"],
   "host_permissions": ["https://studio.youtube.com/*"],
   "content_scripts": [
@@ -18,6 +24,12 @@
     "open_in_tab": true
   },
   "action": {
-    "default_title": "yt-redirect-pin (設定は拡張機能のオプションから)"
+    "default_title": "リダイレクト返礼ピン (設定は拡張機能のオプションから)",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "32": "icons/icon32.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
   }
 }

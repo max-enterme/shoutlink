@@ -50,6 +50,17 @@ npm run package
 `START-HERE.md`(テスター向け手順書)/ `extension/`(読み込むフォルダ)/ `source/`(監査用のソース一式)。
 渡す相手向けの説明は [docs/for-testers.md](docs/for-testers.md)。
 
+### Chrome ウェブストアに出す
+
+```bash
+npm run package:store
+```
+
+提出物・掲載文面・プライバシー申告の一式は **[store/README.md](store/README.md)** に集約してある
+(掲載文面 [store/listing.md](store/listing.md) / プライバシータブ [store/privacy.md](store/privacy.md) /
+ポリシー本文 [docs/privacy-policy.md](docs/privacy-policy.md))。
+**公開の前に spec.md D3(自動投稿の是非)と T8 の残りが片付いていること。**
+
 ### 構成
 
 | ファイル | 役割 |
