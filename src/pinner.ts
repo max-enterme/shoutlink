@@ -8,7 +8,7 @@
  *   固定 UI が見つからない → 'unavailable'(投稿は成立しているので処理は継続 / AC6)
  */
 import { log } from './log'
-import { findPinMenuItem, getMessageMenuButton, getPinnedBanner } from './selectors'
+import { findPinMenuItem, getMessageMenuButton, getPinnedBanner, textOf } from './selectors'
 import type { PinMode, PinResult } from './types'
 import { waitFor } from './wait'
 
@@ -52,6 +52,30 @@ function openMenu(message: HTMLElement, button: HTMLElement): void {
   button.click()
 }
 
+/**
+ * 固定に失敗したときの状況を記録する。
+ * 「メニューが開かなかった」のか「開いたが固定項目が無い」のかを区別できないと、
+ * ③ を DOM 操作で実現できるかの判断ができない。
+ */
+function describeMenuState(root: ParentNode): Record<string, unknown> {
+  const isItem = (e: Element) => /item-renderer$|paper-item$/.test(e.tagName.toLowerCase())
+  const popups = Array.from(root.querySelectorAll('tp-yt-iron-dropdown, ytd-menu-popup-renderer'))
+  return {
+    popupCount: popups.length,
+    popups: popups.slice(0, 6).map((d) => ({
+      tag: d.tagName.toLowerCase(),
+      ariaHidden: d.getAttribute('aria-hidden'),
+      visible: d.getClientRects().length > 0,
+      items: Array.from(d.querySelectorAll('*'))
+        .filter(isItem)
+        .map((e) => textOf(e).slice(0, 24)),
+    })),
+    roleMenuItems: Array.from(root.querySelectorAll('[role="menuitem"]')).map((e) =>
+      textOf(e).slice(0, 24),
+    ),
+  }
+}
+
 /** 開いたメニューを閉じる(固定項目が見つからなかったとき、開きっぱなしにしない) */
 function closeMenu(root: ParentNode): void {
   const node = root as unknown as Node
@@ -78,7 +102,12 @@ export async function pin(
 
   const menuButton = getMessageMenuButton(el)
   if (!menuButton) {
-    log.warn('メッセージのメニューボタンが見つからない。固定をスキップする')
+    log.warn('メッセージのメニューボタンが見つからない。固定をスキップする', {
+      messageTag: el.tagName.toLowerCase(),
+      innerTags: Array.from(el.querySelectorAll('*'))
+        .map((c) => c.tagName.toLowerCase() + (c.id ? '#' + c.id : ''))
+        .slice(0, 30),
+    })
     return 'unavailable'
   }
 
@@ -90,7 +119,9 @@ export async function pin(
   })
 
   if (!item) {
-    log.warn('メニューに「固定」項目が見つからない。固定をスキップする')
+    // popupCount が 0 / visible が false なら「メニューが開いていない」、
+    // items にラベルが並んでいるのに固定が無いなら「固定できない権限・画面」。
+    log.warn('メニューに「固定」項目が見つからない。固定をスキップする', describeMenuState(root))
     closeMenu(root)
     return 'unavailable'
   }
