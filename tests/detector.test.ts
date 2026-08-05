@@ -7,6 +7,7 @@ import {
   isSameChannel,
   normalizeChannelUrl,
 } from '../src/detector'
+import { REDIRECT_TEXT_PATTERNS } from '../src/selectors'
 import {
   FAKE_CHANNEL,
   FAKE_OTHER_CHANNEL,
@@ -173,6 +174,14 @@ describe('参加通知 (実配信で確認した文言)', () => {
     banner.textContent = `この機会に、${FAKE_CHANNEL.handle} のコンテンツの視聴を促進しましょう`
     expect(extractRedirectEvent(banner, 1)).toBeNull()
     expect(collectRedirectEvents(banner, 1)).toEqual([])
+  })
+
+  // 「なぜテキストのパターンマッチングで足りるのか」の根拠。
+  // 送信側バナーの文言は、そもそも通知の文言パターンに一つも当たらない。
+  // 2026-08-06 に発火したのは、推測で置いた要素セレクタが文言チェックを飛ばしていたため。
+  it('送信側バナーの文言は、除外リストが無くても通知パターンに当たらない', () => {
+    const text = `この機会に、${FAKE_CHANNEL.handle} のコンテンツの視聴を促進しましょう`
+    expect(REDIRECT_TEXT_PATTERNS.some((pattern) => pattern.test(text))).toBe(false)
   })
 
   it('クラス名に redirect を含むだけの要素は、文言が合わなければ拾わない', () => {

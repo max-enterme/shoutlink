@@ -55,10 +55,10 @@ async function main(): Promise<void> {
    * 手動トリガーは検知を飛ばすだけで、以降は自動検知とまったく同じ経路を通る。
    */
   const handle = async (event: RedirectEvent): Promise<void> => {
-    // 送信元が自分自身になるのは、リダイレクトを**送った**ときのバナーを拾った場合。
-    // そのバナーに載っているのは送信先であって送信元ではないので、投稿してはいけない。
+    // 抽出のバグで送信元が自分自身になることがある(2026-08-05 に 2 件)。
+    // 自分に向けてお礼を投稿する失敗を止める最後の歯止め。設定が空なら何もしない。
     if (isSameChannel(config.ownChannelUrl, event.sourceChannelUrl)) {
-      log.warn('送信元が自分のチャンネル。送信側のバナーとみなして無視する', event.sourceChannelUrl)
+      log.warn('送信元が自分のチャンネル。抽出の誤りとみなして捨てる', event.sourceChannelUrl)
       return
     }
 
