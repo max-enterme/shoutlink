@@ -20,6 +20,12 @@ import type { RedirectEvent } from './types'
 const YOUTUBE_ORIGIN = 'https://www.youtube.com'
 
 /**
+ * 通知とみなすテキストの長さの上限。
+ * 実際の通知は `@ハンドル とその視聴者が参加しました。挨拶しましょう` 程度(30 文字前後)。
+ */
+export const MAX_NOTICE_TEXT_LENGTH = 300
+
+/**
  * チャンネル URL を `https://www.youtube.com/@handle` /
  * `https://www.youtube.com/channel/UC...` に正規化する。
  * チャンネル URL として解釈できなければ null。
@@ -95,6 +101,9 @@ export function isRedirectNotice(el: Element): boolean {
 
   const text = textOf(el)
   if (!text) return false
+  // コンテナ誤検知の保険。通知は 1 行の短文で、チャット欄やリスト全体のような
+  // 長いテキストの塊は通知ではない (2026-08-05 の事故を参照)。
+  if (text.length > MAX_NOTICE_TEXT_LENGTH) return false
   return REDIRECT_TEXT_PATTERNS.some((pattern) => pattern.test(text))
 }
 
@@ -130,19 +139,25 @@ export type DetectedNotice = { element: Element; event: RedirectEvent }
  * ノードとその子孫からリダイレクト通知を集める純関数。
  * MutationObserver が受け取る追加ノードは、通知そのものとは限らず親要素のこともある。
  * 通知が見つかった要素も返す(ノード単位の多重発火抑止に使う)。
+ *
+ * **子孫を先に見て、最も内側で一致した要素を通知とみなす。**
+ * 2026-08-05 の実配信で、チャット項目リスト全体が 1 つの要素として渡された結果、
+ * 「リスト全体のテキスト」が文言パターンに一致し、**リスト内の無関係な `@ハンドル`
+ * (自分自身のもの)を送信元として拾って投稿する**事故が起きた。
+ * 外側から順に見て最初の一致を採ると、必ずこの誤りが起きる。
  */
 export function collectRedirectNotices(node: Node, detectedAt: number): DetectedNotice[] {
   if (node.nodeType !== 1 /* ELEMENT_NODE */) return []
   const el = node as Element
 
-  const self = extractRedirectEvent(el, detectedAt)
-  if (self) return [{ element: el, event: self }]
-
-  const found: DetectedNotice[] = []
+  const fromChildren: DetectedNotice[] = []
   for (const child of Array.from(el.children)) {
-    found.push(...collectRedirectNotices(child, detectedAt))
+    fromChildren.push(...collectRedirectNotices(child, detectedAt))
   }
-  return found
+  if (fromChildren.length > 0) return fromChildren
+
+  const self = extractRedirectEvent(el, detectedAt)
+  return self ? [{ element: el, event: self }] : []
 }
 
 /** `collectRedirectNotices` の RedirectEvent だけを取り出した版 */

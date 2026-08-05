@@ -7,6 +7,7 @@ import {
 } from '../src/detector'
 import {
   FAKE_CHANNEL,
+  FAKE_OTHER_CHANNEL,
   makeChatMessage,
   makeJoinNotice,
   makeRedirectNotice,
@@ -79,6 +80,28 @@ describe('参加通知 (実配信で確認した文言)', () => {
     wrapper.appendChild(makeChatMessage('こんばんは'))
     wrapper.appendChild(makeJoinNotice())
     expect(collectRedirectEvents(wrapper, 1)).toHaveLength(1)
+  })
+
+  // 回帰テスト: 2026-08-05 の実配信での事故。
+  // チャット項目リスト全体が 1 要素として渡され、「リスト全体のテキスト」が文言に一致した結果、
+  // リスト内の無関係な @ハンドル(自分自身のもの)を送信元として投稿してしまった。
+  it('リスト全体を渡されても、リスト内の別の @ハンドル を送信元にしない', () => {
+    const items = document.createElement('div')
+    items.id = 'items'
+    items.appendChild(makeChatMessage(`${FAKE_OTHER_CHANNEL.handle} こんばんは`))
+    items.appendChild(makeChatMessage('配信ありがとう'))
+    items.appendChild(makeJoinNotice({ handle: FAKE_CHANNEL.handle }))
+
+    const events = collectRedirectEvents(items, 1)
+    expect(events).toHaveLength(1)
+    expect(events[0]?.sourceChannelUrl).toBe(FAKE_CHANNEL.url)
+    expect(events[0]?.sourceChannelUrl).not.toBe(FAKE_OTHER_CHANNEL.url)
+  })
+
+  it('長いテキストの塊は通知とみなさない', () => {
+    const container = document.createElement('div')
+    container.textContent = `${'あ'.repeat(400)} ${FAKE_CHANNEL.handle} とその視聴者が参加しました`
+    expect(extractRedirectEvent(container, 1)).toBeNull()
   })
 })
 
