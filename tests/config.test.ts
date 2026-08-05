@@ -13,8 +13,25 @@ describe('normalizeConfig', () => {
 
   it('有効な値はそのまま通す', () => {
     expect(
-      normalizeConfig({ enabled: false, template: '{url}', pinMode: 'always', cooldownSec: 30 }),
-    ).toEqual({ enabled: false, template: '{url}', pinMode: 'always', cooldownSec: 30 })
+      normalizeConfig({
+        enabled: false,
+        template: '{url}',
+        pinMode: 'always',
+        cooldownSec: 30,
+        debug: true,
+      }),
+    ).toEqual({
+      enabled: false,
+      template: '{url}',
+      pinMode: 'always',
+      cooldownSec: 30,
+      debug: true,
+    })
+  })
+
+  it('診断ログは既定で無効', () => {
+    expect(DEFAULT_CONFIG.debug).toBe(false)
+    expect(normalizeConfig({ debug: 'yes' }).debug).toBe(false)
   })
 
   it('未知の pinMode は既定に落とす', () => {

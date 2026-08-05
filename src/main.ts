@@ -56,7 +56,7 @@ async function main(): Promise<void> {
     void guardAsync<void>('パイプライン', () => handle(event), undefined)
   }
 
-  const detector = startRedirectDetector({ onEvent: safeHandle })
+  const detector = startRedirectDetector({ onEvent: safeHandle, debug: () => config.debug })
   detector.scanExisting()
 
   // 手動トリガーは常設。自動検知が成立しない場合でも投稿 → 固定を通せる。

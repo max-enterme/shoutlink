@@ -144,6 +144,27 @@ export type DetectorOptions = {
   root?: ParentNode & Node
   onEvent: (event: RedirectEvent) => void
   now?: () => number
+  /**
+   * 診断ログ。通常のチャットメッセージ以外のノードが増えたら、その構造をコンソールに出す。
+   * **リダイレクト通知の正体が分からない間の唯一の手がかり**なので、
+   * 「検知が動かない」ときはこれを ON にして次のリダイレクトを待つ。
+   */
+  debug?: () => boolean
+}
+
+/** 診断ログ用に、要素の構造を 1 行にまとめる */
+function describeNode(el: Element): Record<string, unknown> {
+  return {
+    tag: el.tagName.toLowerCase(),
+    id: el.id || undefined,
+    attrs: el.getAttributeNames(),
+    hrefs: Array.from(el.querySelectorAll('a')).map((a) => a.getAttribute('href')),
+    innerTags: Array.from(el.querySelectorAll('*'))
+      .map((c) => c.tagName.toLowerCase())
+      .slice(0, 20),
+    text: textOf(el).slice(0, 200),
+    matchedAsNotice: isRedirectNotice(el),
+  }
 }
 
 /**
@@ -152,6 +173,7 @@ export type DetectorOptions = {
 export function startRedirectDetector(opts: DetectorOptions): DetectorHandle {
   const root = opts.root ?? document
   const now = opts.now ?? (() => Date.now())
+  const isDebug = opts.debug ?? (() => false)
   const seen = new WeakSet<Element>()
 
   const emitFrom = (node: Node): void => {
@@ -163,11 +185,23 @@ export function startRedirectDetector(opts: DetectorOptions): DetectorHandle {
     }
   }
 
+  const traceFrom = (node: Node): void => {
+    if (node.nodeType !== 1) return
+    const el = node as Element
+    // 自分の UI と、大量に流れる通常のチャットメッセージは黙らせる
+    if (el.closest?.('#yt-redirect-pin-manual-trigger')) return
+    if (isChatTextMessage(el)) return
+    const tag = el.tagName.toLowerCase()
+    if (!tag.includes('-')) return // 素の div/span は対象外(ノイズが多すぎる)
+    log.info('[debug] ノード追加:', describeNode(el))
+  }
+
   const observer = new MutationObserver((records) => {
     for (const record of records) {
       for (const added of Array.from(record.addedNodes)) {
         try {
           emitFrom(added)
+          if (isDebug()) traceFrom(added)
         } catch (err) {
           log.error('検知中に例外:', err)
         }
@@ -175,16 +209,16 @@ export function startRedirectDetector(opts: DetectorOptions): DetectorHandle {
     }
   })
 
-  // チャット項目リストが見つかればそこを、見つからなければ文書全体を監視する。
-  // TODO(T1): 実 DOM 未確認。通知がチャット項目リストの外(バナー領域)に出る場合、
-  //           リストだけを見ていると取りこぼす。現状は保険として親も監視する。
-  const list = getChatItemList(root)
-  const target = (list ?? (root as Document).body ?? root) as Node
+  // **文書全体を監視する。**
+  // 2026-08-05 に実配信で確認: リダイレクトを受けてもチャット項目リストには何も現れなかった。
+  // 通知がバナー領域・トースト等、項目リストの外に出る可能性があるため、
+  // 項目リストだけに絞らず body 全体を見る(plan.md C1)。
+  const target = ((root as Document).body ?? root) as Node
   observer.observe(target, { childList: true, subtree: true })
 
   const scanExisting = (): void => {
     try {
-      const base = (list ?? (root as Document).body) as Element | null
+      const base = (getChatItemList(root) ?? (root as Document).body) as Element | null
       if (base) emitFrom(base)
     } catch (err) {
       log.error('初期走査で例外:', err)

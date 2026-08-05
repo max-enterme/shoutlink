@@ -80,6 +80,19 @@
       <p class="hint">0 にすると抑止しない。</p>
     </fieldset>
 
+    <fieldset>
+      <legend>診断ログ</legend>
+      <div class="row">
+        <input id="debug" type="checkbox" />
+        <label for="debug" style="margin: 0">チャットに現れたノードをコンソールに出す</label>
+      </div>
+      <p class="hint">
+        リダイレクト通知の DOM がまだ分かっていないため、自動検知が動かない場合はこれを ON にして
+        次のリダイレクトを待つ。ライブチャットのウィンドウで F12 → Console に
+        <code>[yt-redirect-pin] [debug] ノード追加:</code> が出る。
+      </p>
+    </fieldset>
+
     <div class="actions">
       <button id="save" type="button">保存</button>
       <span class="status" id="status"></span>

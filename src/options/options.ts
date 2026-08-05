@@ -22,6 +22,7 @@ const enabled = el<HTMLInputElement>('enabled')
 const template = el<HTMLTextAreaElement>('template')
 const pinMode = el<HTMLSelectElement>('pinMode')
 const cooldownSec = el<HTMLInputElement>('cooldownSec')
+const debug = el<HTMLInputElement>('debug')
 const preview = el<HTMLElement>('preview')
 const status = el<HTMLElement>('status')
 const save = el<HTMLButtonElement>('save')
@@ -35,6 +36,7 @@ function apply(config: Config): void {
   template.value = config.template
   pinMode.value = config.pinMode
   cooldownSec.value = String(config.cooldownSec)
+  debug.checked = config.debug
   renderPreview()
 }
 
@@ -47,6 +49,7 @@ save.addEventListener('click', () => {
       template: template.value,
       pinMode: pinMode.value as PinMode,
       cooldownSec: Number(cooldownSec.value),
+      debug: debug.checked,
     })
     apply(saved)
     status.textContent = '保存した'

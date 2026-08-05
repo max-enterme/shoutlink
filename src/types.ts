@@ -23,6 +23,11 @@ export type Config = {
   template: string
   pinMode: PinMode
   cooldownSec: number
+  /**
+   * 診断ログ。チャットに現れた「通常のメッセージ以外」のノードをすべてコンソールに出す。
+   * リダイレクト通知の DOM が未確認(T1 未完)の間、その正体を掴むための唯一の手段。
+   */
+  debug: boolean
 }
 
 /** pinner.ts の戻り値 (plan.md) */

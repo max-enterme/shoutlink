@@ -15,6 +15,7 @@ export const DEFAULT_CONFIG: Config = {
   // 判定できることが前提で、T1 未確認 (plan.md R4)。
   pinMode: 'ifEmpty',
   cooldownSec: 600,
+  debug: false,
 }
 
 /** 未知の値・欠損を既定で埋める。壊れた設定で拡張ごと死なせない (AC6) */
@@ -39,6 +40,7 @@ export function normalizeConfig(raw: unknown): Config {
     template,
     pinMode,
     cooldownSec,
+    debug: typeof source.debug === 'boolean' ? source.debug : DEFAULT_CONFIG.debug,
   }
 }
 
