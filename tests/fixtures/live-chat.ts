@@ -75,6 +75,33 @@ export function makeWelcomeMessage(): HTMLElement {
 }
 
 /**
+ * リダイレクトを受けたときにチャットへ出る参加通知(合成)。
+ *
+ * ✅ 文言は実配信で確認済み (2026-08-05): `@ハンドル とその視聴者が参加しました。挨拶しましょう`。
+ *    **「リダイレクト」という語は含まれない。**
+ * ⚠️ 要素の種類とハンドルがリンクかどうかは**未確認**。ここでは
+ *    「ウェルカムと同じ汎用コンテナ・ハンドルはテキストのみ」を仮定して組んである。
+ *    T1 で実 DOM を採ったら差し替えること。
+ */
+export function makeJoinNotice(
+  opts: { handle?: string; withLink?: boolean } = {},
+): HTMLElement {
+  const handle = opts.handle ?? FAKE_CHANNEL.handle
+  const subject = opts.withLink ? `<a href="/${handle}">${handle}</a>` : handle
+  return frag(`
+    <yt-live-chat-viewer-engagement-message-renderer modern>
+      <div id="card">
+        <yt-icon id="icon"></yt-icon>
+        <div id="content">
+          <yt-formatted-string id="message">${subject} とその視聴者が参加しました。挨拶しましょう</yt-formatted-string>
+        </div>
+        <div id="menu"><yt-icon-button id="menu-button"><button id="button"></button></yt-icon-button></div>
+      </div>
+    </yt-live-chat-viewer-engagement-message-renderer>
+  `)
+}
+
+/**
  * 実際に固定中のバナー(合成)。`#visible-banners` の中に生える想定。
  * TODO(T1): 何かを固定した状態の実 DOM は未確認。構造は推測。
  */

@@ -53,6 +53,18 @@ export function normalizeChannelUrl(raw: string | null | undefined): string | nu
   return null
 }
 
+/**
+ * 通知文から `@ハンドル` を拾う。
+ *
+ * 通知の文言が `@ハンドル とその視聴者が参加しました` の形であることを確認済み (2026-08-05)。
+ * **ハンドルがリンクになっていない場合の逃げ道**として、テキストからも拾えるようにする。
+ * TODO(T1): リンクの有無は未確認。リンクがあるならそちらが優先される。
+ */
+export function extractHandleFromText(text: string): string | null {
+  const match = text.match(/@[A-Za-z0-9_.\-]{3,30}/)
+  return match ? match[0] : null
+}
+
 /** URL から表示名の代替(ハンドル)を作る */
 function fallbackNameFromUrl(url: string): string {
   const handle = url.match(/\/(@[\w.\-]+)$/)
@@ -93,8 +105,12 @@ export function isRedirectNotice(el: Element): boolean {
 export function extractRedirectEvent(el: Element, detectedAt: number): RedirectEvent | null {
   if (!isRedirectNotice(el)) return null
 
+  const text = textOf(el)
   const link = getRedirectNoticeChannelLink(el)
-  const url = normalizeChannelUrl(link?.getAttribute('href'))
+
+  // リンクがあればそれを使い、無ければ通知文の `@ハンドル` から組み立てる
+  const url =
+    normalizeChannelUrl(link?.getAttribute('href')) ?? normalizeChannelUrl(extractHandleFromText(text))
   // 送信元が特定できない通知は捨てる。名前だけ分かっても URL が無ければ AC2 を満たせない。
   if (!url) return null
 

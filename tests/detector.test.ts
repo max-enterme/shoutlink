@@ -1,12 +1,14 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import {
   collectRedirectEvents,
+  extractHandleFromText,
   extractRedirectEvent,
   normalizeChannelUrl,
 } from '../src/detector'
 import {
   FAKE_CHANNEL,
   makeChatMessage,
+  makeJoinNotice,
   makeRedirectNotice,
   makeWelcomeMessage,
   mountChatShell,
@@ -38,6 +40,45 @@ describe('normalizeChannelUrl', () => {
     expect(normalizeChannelUrl('https://example.com/@example-channel')).toBeNull()
     expect(normalizeChannelUrl('')).toBeNull()
     expect(normalizeChannelUrl(null)).toBeNull()
+  })
+})
+
+describe('extractHandleFromText', () => {
+  it('通知文から @ハンドル を拾う', () => {
+    expect(extractHandleFromText('@example-channel とその視聴者が参加しました。挨拶しましょう')).toBe(
+      '@example-channel',
+    )
+  })
+
+  it('ハンドルが無ければ null', () => {
+    expect(extractHandleFromText('視聴者が参加しました')).toBeNull()
+  })
+})
+
+// 2026-08-05 に実配信で確認した本物の通知の形。
+// 「リダイレクト」という語を含まないため、当初のパターンでは検知できなかった。
+describe('参加通知 (実配信で確認した文言)', () => {
+  it('ハンドルがテキストだけでも送信元を取り出せる', () => {
+    const event = extractRedirectEvent(makeJoinNotice(), 5)
+    expect(event).toEqual({
+      sourceChannelName: FAKE_CHANNEL.handle,
+      sourceChannelUrl: FAKE_CHANNEL.url,
+      detectedAt: 5,
+      origin: 'auto',
+    })
+  })
+
+  it('ハンドルがリンクになっていても取り出せる', () => {
+    const event = extractRedirectEvent(makeJoinNotice({ withLink: true }), 5)
+    expect(event?.sourceChannelUrl).toBe(FAKE_CHANNEL.url)
+  })
+
+  it('チャット項目リストの中に混じっていても拾う', () => {
+    const wrapper = document.createElement('div')
+    wrapper.appendChild(makeWelcomeMessage())
+    wrapper.appendChild(makeChatMessage('こんばんは'))
+    wrapper.appendChild(makeJoinNotice())
+    expect(collectRedirectEvents(wrapper, 1)).toHaveLength(1)
   })
 })
 
