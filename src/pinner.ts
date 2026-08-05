@@ -26,30 +26,52 @@ function pointerish(type: string, init: MouseEventInit): Event {
 }
 
 /**
- * メニューを開くための操作。
+ * 人の操作に近い一連のイベントを 1 要素に流す。
  *
  * ⚠️ **`button.click()` だけではメニューが開かないことを実配信で確認 (2026-08-05)。**
- *    Polymer のボタンは pointerdown/up 系から `tap` を合成するため、click だけでは
- *    ドロップダウンが開かず `unavailable` になっていた。
- *    人の操作に近い順序でイベントを流す。
- * TODO(T1): これで開くかは未検証。開かないなら、そもそも DOM 操作では固定できない
- *           可能性があり、③ の実現手段から見直す必要がある。
+ *    Polymer のボタンは pointerdown/up から `tap` を合成するため click だけでは足りない。
+ *    座標(要素の中心)も入れる。座標 0,0 のイベントを無視する実装があるため。
  */
-function openMenu(message: HTMLElement, button: HTMLElement): void {
-  // ホバーしないとメニューボタンが出ない場合への対処
+function pressLikeAHuman(target: HTMLElement): void {
+  const rect = target.getBoundingClientRect()
+  const base: MouseEventInit = {
+    bubbles: true,
+    cancelable: true,
+    composed: true,
+    button: 0,
+    detail: 1,
+    clientX: Math.round(rect.left + rect.width / 2),
+    clientY: Math.round(rect.top + rect.height / 2),
+  }
+  const down = { ...base, buttons: 1 }
+  const up = { ...base, buttons: 0 }
+
+  target.dispatchEvent(pointerish('pointerover', base))
+  target.dispatchEvent(pointerish('pointerenter', base))
+  target.dispatchEvent(new MouseEvent('mouseover', base))
+  target.dispatchEvent(pointerish('pointerdown', down))
+  target.dispatchEvent(new MouseEvent('mousedown', down))
+  target.focus?.()
+  target.dispatchEvent(pointerish('pointerup', up))
+  target.dispatchEvent(new MouseEvent('mouseup', up))
+  target.click()
+}
+
+/** メニューを開く前に、ホバーでボタンを出す */
+function hoverMessage(message: HTMLElement): void {
   for (const type of ['pointerover', 'mouseover', 'pointerenter', 'mouseenter', 'pointermove', 'mousemove']) {
     message.dispatchEvent(pointerish(type, { bubbles: true }))
   }
+}
 
-  const init: MouseEventInit = { bubbles: true, cancelable: true, composed: true, button: 0 }
-  button.dispatchEvent(pointerish('pointerover', init))
-  button.dispatchEvent(pointerish('pointerenter', init))
-  button.dispatchEvent(pointerish('pointerdown', init))
-  button.dispatchEvent(new MouseEvent('mousedown', init))
-  button.focus?.()
-  button.dispatchEvent(pointerish('pointerup', init))
-  button.dispatchEvent(new MouseEvent('mouseup', init))
-  button.click()
+/**
+ * メニューを開く対象の候補。
+ * TODO(T1): listener が内側の `button` にあるのかホスト (`yt-icon-button`) にあるのかが
+ *           未確認のため、両方を順に試す。同時に流すと開いた直後に閉じる恐れがある。
+ */
+function menuOpenTargets(button: HTMLElement): HTMLElement[] {
+  const host = button.closest<HTMLElement>('yt-icon-button, #menu-button, #menu')
+  return host && host !== button ? [button, host] : [button]
 }
 
 /**
@@ -111,23 +133,25 @@ export async function pin(
     return 'unavailable'
   }
 
-  openMenu(el, menuButton)
+  hoverMessage(el)
 
-  const item = await waitFor(() => findPinMenuItem(root), {
-    timeoutMs: opts.menuTimeoutMs ?? 2000,
-    intervalMs: opts.menuIntervalMs ?? 50,
-  })
+  // メニュー項目はサーバから取りに行くため、開いてから並ぶまでに時間がかかる。
+  const timeoutMs = opts.menuTimeoutMs ?? 4000
+  const intervalMs = opts.menuIntervalMs ?? 50
 
-  if (!item) {
-    // popupCount が 0 / visible が false なら「メニューが開いていない」、
-    // items にラベルが並んでいるのに固定が無いなら「固定できない権限・画面」。
-    log.warn('メニューに「固定」項目が見つからない。固定をスキップする', describeMenuState(root))
+  for (const target of menuOpenTargets(menuButton)) {
+    pressLikeAHuman(target)
+    const item = await waitFor(() => findPinMenuItem(root), { timeoutMs, intervalMs })
+    if (item) {
+      item.click()
+      // TODO(T1): 固定に確認ダイアログが挟まる場合、もう一段の確定操作が要る。未確認。
+      return 'pinned'
+    }
     closeMenu(root)
-    return 'unavailable'
   }
 
-  item.click()
-  // TODO(T1): 実 DOM で要確認。固定に確認ダイアログが挟まる場合、ここで
-  //           もう一段の確定操作が要る。未確認のため現状は click のみ。
-  return 'pinned'
+  // popupCount が 0 / visible が false なら「メニューが開いていない」、
+  // items にラベルが並んでいるのに固定が無いなら「固定できない権限・画面」。
+  log.warn('メニューに「固定」項目が見つからない。固定をスキップする', describeMenuState(root))
+  return 'unavailable'
 }

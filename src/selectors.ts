@@ -179,7 +179,11 @@ export const REDIRECT_TEXT_PATTERNS: readonly RegExp[] = [
 
 /**
  * 「固定」メニュー項目のラベル候補。
- * TODO(T1): 実 DOM で要確認。
+ *
+ * ✅ **確認済み (2026-08-05 / Studio のチャットで手動でメニューを開いて採取):**
+ *    メッセージのメニューは `["チャンネルへ", "メッセージを固定", "削除"]`。
+ *    **「メッセージを固定」が存在する**(plan.md C2 は肯定)。`固定` の部分一致で当たる。
+ * TODO(T1): 英語 UI のラベルは未確認。
  */
 export const PIN_MENU_LABELS: readonly string[] = ['固定', 'ピン留め', 'Pin message', 'Pin']
 
