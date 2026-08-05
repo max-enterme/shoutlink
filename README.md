@@ -40,6 +40,16 @@ npm run build
 
 **導入から動作確認までの手順は [docs/setup-and-verify.md](docs/setup-and-verify.md)。**
 
+### 他人に渡してテストしてもらう
+
+```bash
+npm run package
+```
+
+`release/yt-redirect-pin-test-<version>.zip` ができる。中身は
+`START-HERE.md`(テスター向け手順書)/ `extension/`(読み込むフォルダ)/ `source/`(監査用のソース一式)。
+渡す相手向けの説明は [docs/for-testers.md](docs/for-testers.md)。
+
 ### 構成
 
 | ファイル | 役割 |
