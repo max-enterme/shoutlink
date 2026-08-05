@@ -27,9 +27,24 @@ const YOUTUBE_ORIGIN = 'https://www.youtube.com'
 export const MAX_NOTICE_TEXT_LENGTH = 300
 
 /**
+ * パーセントエンコードを戻す。**壊れていても例外を投げない。**
+ *
+ * ⚠️ 2026-08-06 の事故: 素の `decodeURIComponent` が `URIError: URI malformed` を投げ、
+ *    パイプライン全体が落ちて投稿されなかった。ハンドルに単独の `%` が含まれると起きる。
+ *    ここは「見栄えを整える」だけの処理で、失敗しても元の文字列で困らない。
+ */
+function safeDecode(value: string): string {
+  try {
+    return decodeURIComponent(value)
+  } catch {
+    return value
+  }
+}
+
+/**
  * チャンネル URL を `https://www.youtube.com/@handle` /
  * `https://www.youtube.com/channel/UC...` に正規化する。
- * チャンネル URL として解釈できなければ null。
+ * チャンネル URL として解釈できなければ null。**例外は投げない。**
  */
 export function normalizeChannelUrl(raw: string | null | undefined): string | null {
   if (!raw) return null
@@ -49,7 +64,7 @@ export function normalizeChannelUrl(raw: string | null | undefined): string | nu
   if (!/(^|\.)youtube\.com$/.test(url.hostname)) return null
 
   const handle = url.pathname.match(/^\/(@[^\s/?#]{1,40})/u)
-  if (handle) return `${YOUTUBE_ORIGIN}/${decodeURIComponent(handle[1])}`
+  if (handle) return `${YOUTUBE_ORIGIN}/${safeDecode(handle[1])}`
 
   const channel = url.pathname.match(/^\/channel\/(UC[\w-]{20,})/)
   if (channel) return `${YOUTUBE_ORIGIN}/channel/${channel[1]}`

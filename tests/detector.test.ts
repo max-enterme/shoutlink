@@ -38,6 +38,18 @@ describe('normalizeChannelUrl', () => {
     )
   })
 
+  // 回帰テスト: 2026-08-06 の事故。
+  // decodeURIComponent が URIError を投げ、パイプラインごと落ちて投稿されなかった。
+  it('壊れたパーセントエンコードでも例外を投げない', () => {
+    expect(() => normalizeChannelUrl('/@100%')).not.toThrow()
+    expect(normalizeChannelUrl('/@100%')).toBe('https://www.youtube.com/@100%')
+    expect(() => normalizeChannelUrl('https://www.youtube.com/@a%zz')).not.toThrow()
+  })
+
+  it('パーセントエンコードされたハンドルは戻す', () => {
+    expect(normalizeChannelUrl('/@%E3%81%82')).toBe('https://www.youtube.com/@あ')
+  })
+
   it('チャンネル以外の URL は null', () => {
     expect(normalizeChannelUrl('https://www.youtube.com/watch?v=abc')).toBeNull()
     expect(normalizeChannelUrl('https://example.com/@example-channel')).toBeNull()
