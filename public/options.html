@@ -61,6 +61,28 @@
     </fieldset>
 
     <fieldset>
+      <legend>動かす範囲(重要)</legend>
+      <label for="ownChannelUrl">自分のチャンネル(<code>@ハンドル</code> または URL)</label>
+      <input id="ownChannelUrl" type="text" placeholder="@your-channel" />
+      <p class="hint">
+        リダイレクトを<strong>送った</strong>ときにも自分のチャットにバナーが出ます。それを
+        「受けた」と取り違えて投稿しないための保険です。設定しておくことを勧めます。
+      </p>
+      <div class="row" style="margin-top: 10px">
+        <input id="allowWww" type="checkbox" />
+        <label for="allowWww" style="margin: 0"><code>www.youtube.com</code> のチャットでも動かす</label>
+      </div>
+      <p class="hint warn" style="margin-top: 6px">
+        ⚠️ <strong>既定では Studio(ライブ管制室)のチャットでしか動きません。</strong>
+        <code>www.youtube.com</code> のライブチャットは<strong>他人の配信でも開けてしまう</strong>ため、
+        ここを ON にすると、他人の配信がリダイレクトを受けたときに
+        <strong>あなたの名義でその配信のチャットへ投稿します。</strong>
+        自分の配信のポップアウトでしか使わないと分かっている場合だけ ON にしてください。
+      </p>
+      <p class="hint">この項目の変更は、チャットのページを再読み込みしてから効きます。</p>
+    </fieldset>
+
+    <fieldset>
       <legend>投稿文テンプレート</legend>
       <label for="template">`{name}` に表示名、`{url}` にチャンネル URL が入る</label>
       <textarea id="template"></textarea>

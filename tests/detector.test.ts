@@ -4,6 +4,7 @@ import {
   collectUnextractableNotices,
   extractHandleFromText,
   extractRedirectEvent,
+  isSameChannel,
   normalizeChannelUrl,
 } from '../src/detector'
 import {
@@ -42,6 +43,22 @@ describe('normalizeChannelUrl', () => {
     expect(normalizeChannelUrl('https://example.com/@example-channel')).toBeNull()
     expect(normalizeChannelUrl('')).toBeNull()
     expect(normalizeChannelUrl(null)).toBeNull()
+  })
+})
+
+describe('isSameChannel', () => {
+  it('URL とハンドルの表記違いを同一とみなす', () => {
+    expect(isSameChannel(FAKE_CHANNEL.handle, FAKE_CHANNEL.url)).toBe(true)
+    expect(isSameChannel(FAKE_CHANNEL.url.toUpperCase(), FAKE_CHANNEL.url)).toBe(true)
+  })
+
+  it('別のチャンネルは false', () => {
+    expect(isSameChannel(FAKE_CHANNEL.url, FAKE_OTHER_CHANNEL.url)).toBe(false)
+  })
+
+  it('未設定(空)は常に false', () => {
+    expect(isSameChannel('', FAKE_CHANNEL.url)).toBe(false)
+    expect(isSameChannel(undefined, FAKE_CHANNEL.url)).toBe(false)
   })
 })
 
@@ -146,6 +163,23 @@ describe('参加通知 (実配信で確認した文言)', () => {
     // メッセージの内側の要素を直接渡しても検知しない
     const inner = posted.querySelector('#message')!
     expect(extractRedirectEvent(inner, 1)).toBeNull()
+  })
+
+  // 回帰テスト: 2026-08-06 の事故。
+  // リダイレクトを **送った** 側にもバナーが出る。そこに載っている @ハンドル は
+  // 送信先(自分ではない)なので、これを通知として拾うと逆向きに投稿してしまう。
+  it('送信側のバナー(視聴を促進しましょう)を通知として拾わない', () => {
+    const banner = document.createElement('yt-live-chat-banner-renderer')
+    banner.textContent = `この機会に、${FAKE_CHANNEL.handle} のコンテンツの視聴を促進しましょう`
+    expect(extractRedirectEvent(banner, 1)).toBeNull()
+    expect(collectRedirectEvents(banner, 1)).toEqual([])
+  })
+
+  it('クラス名に redirect を含むだけの要素は、文言が合わなければ拾わない', () => {
+    const banner = document.createElement('div')
+    banner.className = 'yt-live-chat-banner-redirect-renderer'
+    banner.textContent = `この機会に、${FAKE_CHANNEL.handle} のコンテンツの視聴を促進しましょう`
+    expect(extractRedirectEvent(banner, 1)).toBeNull()
   })
 
   it('長いテキストの塊は通知とみなさない', () => {

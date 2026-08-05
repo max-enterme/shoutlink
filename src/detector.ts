@@ -7,13 +7,13 @@
  */
 import { log } from './log'
 import {
+  EXCLUDED_TEXT_PATTERNS,
   REDIRECT_TEXT_PATTERNS,
   containsChatTextMessage,
   getRedirectNoticeChannelLink,
   getRedirectNoticeChannelName,
   isChatTextMessage,
   isInsideChatTextMessage,
-  isRedirectNoticeElement,
   textOf,
 } from './selectors'
 import type { RedirectEvent } from './types'
@@ -83,6 +83,13 @@ export function extractHandleFromText(text: string): string | null {
   return handle.length > 1 ? handle : null
 }
 
+/** 2 つのチャンネル指定(URL / @ハンドル)が同じチャンネルを指すか */
+export function isSameChannel(a: string | null | undefined, b: string | null | undefined): boolean {
+  const left = normalizeChannelUrl(a)
+  const right = normalizeChannelUrl(b)
+  return !!left && !!right && left.toLowerCase() === right.toLowerCase()
+}
+
 /** 正規化済みチャンネル URL から表示用のハンドルを作る(取れなければ URL のまま) */
 export function handleFromChannelUrl(url: string): string {
   const handle = url.match(/\/(@[^\s/?#]+)$/u)
@@ -148,7 +155,6 @@ export function collectUnextractableNotices(node: Node): UnextractableNotice[] {
  *           (b) の文言が何なのかは、まだ分かっていない。
  */
 export function isRedirectNotice(el: Element): boolean {
-  if (isRedirectNoticeElement(el)) return true
   if (isChatTextMessage(el)) return false
   // 通常のチャットメッセージの内側は通知ではない。
   // **自分が投稿した返礼メッセージを検知して再投稿する事故**を防ぐ (2026-08-05)。
@@ -161,6 +167,8 @@ export function isRedirectNotice(el: Element): boolean {
   // コンテナ誤検知の保険。通知は 1 行の短文で、チャット欄やリスト全体のような
   // 長いテキストの塊は通知ではない (2026-08-05 の事故を参照)。
   if (text.length > MAX_NOTICE_TEXT_LENGTH) return false
+  // 送信側のバナー等、通知に見えて通知でないものを先に落とす (2026-08-06 の事故)
+  if (EXCLUDED_TEXT_PATTERNS.some((pattern) => pattern.test(text))) return false
   return REDIRECT_TEXT_PATTERNS.some((pattern) => pattern.test(text))
 }
 

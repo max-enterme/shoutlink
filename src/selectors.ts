@@ -25,18 +25,6 @@ export const SELECTORS = {
   ],
 
   /**
-   * リダイレクト専用と思われる通知ノード。**これに一致すれば文言を見ずに通知とみなす。**
-   * TODO(T1): 実 DOM で要確認。実際にリダイレクトを受けた画面をまだ見ていないため、
-   *           これらの要素が存在するかどうか自体が未確認(plan.md C1 / R1)。
-   */
-  redirectNoticeStrict: [
-    'yt-live-chat-banner-redirect-renderer',
-    'yt-live-chat-redirect-renderer',
-    'ytd-live-chat-redirect-banner-renderer',
-    '[class*="redirect"][class*="live-chat"]',
-  ],
-
-  /**
    * システムメッセージの汎用コンテナ。リダイレクト通知もここに出る可能性がある。
    *
    * ⚠️ **確認済み (2026-08-05 / studio 版ポップアウト): この要素は「ライブ チャットへようこそ」の
@@ -164,6 +152,21 @@ export const SELECTORS = {
  * TODO(T1): 英語 UI の文言は未確認(下の英語パターンは推測)。
  *           「リダイレクト」を含む別形式の通知が存在するかも未確認のため、旧パターンも残す。
  */
+/**
+ * **通知とみなしてはいけない文言。**文言パターンより優先して除外する。
+ *
+ * ⚠️ **確認済み (2026-08-06 / 事故): リダイレクトを「送る」側にもバナーが出る。**
+ *    `この機会に、@<送信先> のコンテンツの視聴を促進しましょう`
+ *    これを通知として拾うと、**自分が送った相手に対して「ありがとうございます」を投稿する**
+ *    という逆向きの誤動作になる。しかもそこに出る `@ハンドル` は送信先であって送信元ではない。
+ */
+export const EXCLUDED_TEXT_PATTERNS: readonly RegExp[] = [
+  /視聴を促進/,
+  /促進しましょう/,
+  /この機会に/,
+  /promote .{0,20}content/i,
+]
+
 export const REDIRECT_TEXT_PATTERNS: readonly RegExp[] = [
   // 確認済みの形
   /とその視聴者が参加しました/,
@@ -246,11 +249,6 @@ export function textOf(el: Element | null | undefined): string {
 
 export function getChatItemList(root: ParentNode): Element | null {
   return queryFirst(root, SELECTORS.chatItemList)
-}
-
-/** リダイレクト専用の要素か(文言を見ずに通知と判定してよい) */
-export function isRedirectNoticeElement(el: Element): boolean {
-  return matchesAny(el, SELECTORS.redirectNoticeStrict)
 }
 
 /**

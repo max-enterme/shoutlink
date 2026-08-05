@@ -16,6 +16,9 @@ export const DEFAULT_CONFIG: Config = {
   pinMode: 'ifEmpty',
   cooldownSec: 600,
   debug: false,
+  // 既定で Studio (自分の配信の管制室) のみ。他人のチャットへ投稿する事故を防ぐ
+  allowWww: false,
+  ownChannelUrl: '',
 }
 
 /** 未知の値・欠損を既定で埋める。壊れた設定で拡張ごと死なせない (AC6) */
@@ -41,6 +44,9 @@ export function normalizeConfig(raw: unknown): Config {
     pinMode,
     cooldownSec,
     debug: typeof source.debug === 'boolean' ? source.debug : DEFAULT_CONFIG.debug,
+    allowWww: typeof source.allowWww === 'boolean' ? source.allowWww : DEFAULT_CONFIG.allowWww,
+    ownChannelUrl:
+      typeof source.ownChannelUrl === 'string' ? source.ownChannelUrl.trim() : DEFAULT_CONFIG.ownChannelUrl,
   }
 }
 

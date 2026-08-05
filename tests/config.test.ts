@@ -19,6 +19,8 @@ describe('normalizeConfig', () => {
         pinMode: 'always',
         cooldownSec: 30,
         debug: true,
+        allowWww: true,
+        ownChannelUrl: '@me',
       }),
     ).toEqual({
       enabled: false,
@@ -26,7 +28,22 @@ describe('normalizeConfig', () => {
       pinMode: 'always',
       cooldownSec: 30,
       debug: true,
+      allowWww: true,
+      ownChannelUrl: '@me',
     })
+  })
+
+  // 2026-08-06 の事故: www.youtube.com では他人の配信のチャットも開けるため、
+  // 既定で動かすと他人のチャットへ投稿してしまう。
+  it('www で動かす設定は既定で無効', () => {
+    expect(DEFAULT_CONFIG.allowWww).toBe(false)
+    expect(normalizeConfig({ allowWww: 'yes' }).allowWww).toBe(false)
+  })
+
+  it('自分のチャンネルは既定で未設定、前後の空白は落とす', () => {
+    expect(DEFAULT_CONFIG.ownChannelUrl).toBe('')
+    expect(normalizeConfig({ ownChannelUrl: '  @me  ' }).ownChannelUrl).toBe('@me')
+    expect(normalizeConfig({ ownChannelUrl: 123 }).ownChannelUrl).toBe('')
   })
 
   it('診断ログは既定で無効', () => {

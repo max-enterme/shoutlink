@@ -15,7 +15,8 @@ import {
   saveDirectory,
 } from './directory'
 import type { Directory } from './directory'
-import { startRedirectDetector } from './detector'
+import { isSameChannel, startRedirectDetector } from './detector'
+import { decideScope } from './scope'
 import { guardAsync, log } from './log'
 import { mountManualTrigger } from './manual-trigger'
 import { pin } from './pinner'
@@ -27,6 +28,15 @@ declare const __BUILD_TIME__: string
 
 async function main(): Promise<void> {
   let config: Config = await guardAsync('設定の読み込み', loadConfig, { ...DEFAULT_CONFIG })
+
+  // **自分の配信のチャットでしか動かさない。**
+  // ここを緩めると他人のチャットへ投稿する (2026-08-06 の事故)。設定変更後はページの再読み込みが要る。
+  const scope = decideScope(location.hostname, config.allowWww)
+  if (!scope.allowed) {
+    log.info('この画面では動かさない:', scope.reason)
+    return
+  }
+
   let directory: Directory = await guardAsync('呼び名辞書の読み込み', loadDirectory, [])
   const dedupe = createDedupe(config.cooldownSec)
 
@@ -45,6 +55,13 @@ async function main(): Promise<void> {
    * 手動トリガーは検知を飛ばすだけで、以降は自動検知とまったく同じ経路を通る。
    */
   const handle = async (event: RedirectEvent): Promise<void> => {
+    // 送信元が自分自身になるのは、リダイレクトを**送った**ときのバナーを拾った場合。
+    // そのバナーに載っているのは送信先であって送信元ではないので、投稿してはいけない。
+    if (isSameChannel(config.ownChannelUrl, event.sourceChannelUrl)) {
+      log.warn('送信元が自分のチャンネル。送信側のバナーとみなして無視する', event.sourceChannelUrl)
+      return
+    }
+
     // リダイレクトしてきた相手は、**投稿の可否に関わらず**辞書に載せる。
     // 無効化中でも「誰が来たか」は残しておきたいため。呼び名は後から人が付ける。
     if (!findEntry(directory, event.sourceChannelUrl)) {
@@ -115,6 +132,7 @@ async function main(): Promise<void> {
   // 拡張の ↻ 忘れ / ページのリロード忘れ / 診断ログの入れ忘れを、ログだけで切り分けるため。
   log.info('起動した', {
     build: __BUILD_TIME__,
+    scope: scope.reason,
     enabled: config.enabled,
     debug: config.debug,
     pinMode: config.pinMode,
