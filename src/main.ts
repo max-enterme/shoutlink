@@ -15,7 +15,7 @@ import {
   saveDirectory,
 } from './directory'
 import type { Directory } from './directory'
-import { isSameChannel, startRedirectDetector } from './detector'
+import { startRedirectDetector } from './detector'
 import { decideScope } from './scope'
 import { guardAsync, log } from './log'
 import { mountManualTrigger } from './manual-trigger'
@@ -55,13 +55,6 @@ async function main(): Promise<void> {
    * 手動トリガーは検知を飛ばすだけで、以降は自動検知とまったく同じ経路を通る。
    */
   const handle = async (event: RedirectEvent): Promise<void> => {
-    // 抽出のバグで送信元が自分自身になることがある(2026-08-05 に 2 件)。
-    // 自分に向けてお礼を投稿する失敗を止める最後の歯止め。設定が空なら何もしない。
-    if (isSameChannel(config.ownChannelUrl, event.sourceChannelUrl)) {
-      log.warn('送信元が自分のチャンネル。抽出の誤りとみなして捨てる', event.sourceChannelUrl)
-      return
-    }
-
     // リダイレクトしてきた相手は、**投稿の可否に関わらず**辞書に載せる。
     // 無効化中でも「誰が来たか」は残しておきたいため。呼び名は後から人が付ける。
     if (!findEntry(directory, event.sourceChannelUrl)) {

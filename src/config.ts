@@ -16,7 +16,6 @@ export const DEFAULT_CONFIG: Config = {
   pinMode: 'ifEmpty',
   cooldownSec: 600,
   debug: false,
-  ownChannelUrl: '',
 }
 
 /** 未知の値・欠損を既定で埋める。壊れた設定で拡張ごと死なせない (AC6) */
@@ -42,8 +41,6 @@ export function normalizeConfig(raw: unknown): Config {
     pinMode,
     cooldownSec,
     debug: typeof source.debug === 'boolean' ? source.debug : DEFAULT_CONFIG.debug,
-    ownChannelUrl:
-      typeof source.ownChannelUrl === 'string' ? source.ownChannelUrl.trim() : DEFAULT_CONFIG.ownChannelUrl,
   }
 }
 

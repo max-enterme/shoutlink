@@ -4,7 +4,6 @@ import {
   collectUnextractableNotices,
   extractHandleFromText,
   extractRedirectEvent,
-  isSameChannel,
   normalizeChannelUrl,
 } from '../src/detector'
 import { REDIRECT_TEXT_PATTERNS } from '../src/selectors'
@@ -44,22 +43,6 @@ describe('normalizeChannelUrl', () => {
     expect(normalizeChannelUrl('https://example.com/@example-channel')).toBeNull()
     expect(normalizeChannelUrl('')).toBeNull()
     expect(normalizeChannelUrl(null)).toBeNull()
-  })
-})
-
-describe('isSameChannel', () => {
-  it('URL とハンドルの表記違いを同一とみなす', () => {
-    expect(isSameChannel(FAKE_CHANNEL.handle, FAKE_CHANNEL.url)).toBe(true)
-    expect(isSameChannel(FAKE_CHANNEL.url.toUpperCase(), FAKE_CHANNEL.url)).toBe(true)
-  })
-
-  it('別のチャンネルは false', () => {
-    expect(isSameChannel(FAKE_CHANNEL.url, FAKE_OTHER_CHANNEL.url)).toBe(false)
-  })
-
-  it('未設定(空)は常に false', () => {
-    expect(isSameChannel('', FAKE_CHANNEL.url)).toBe(false)
-    expect(isSameChannel(undefined, FAKE_CHANNEL.url)).toBe(false)
   })
 })
 

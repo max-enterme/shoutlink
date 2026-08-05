@@ -19,7 +19,6 @@ describe('normalizeConfig', () => {
         pinMode: 'always',
         cooldownSec: 30,
         debug: true,
-        ownChannelUrl: '@me',
       }),
     ).toEqual({
       enabled: false,
@@ -27,14 +26,7 @@ describe('normalizeConfig', () => {
       pinMode: 'always',
       cooldownSec: 30,
       debug: true,
-      ownChannelUrl: '@me',
     })
-  })
-
-  it('自分のチャンネルは既定で未設定、前後の空白は落とす', () => {
-    expect(DEFAULT_CONFIG.ownChannelUrl).toBe('')
-    expect(normalizeConfig({ ownChannelUrl: '  @me  ' }).ownChannelUrl).toBe('@me')
-    expect(normalizeConfig({ ownChannelUrl: 123 }).ownChannelUrl).toBe('')
   })
 
   it('診断ログは既定で無効', () => {

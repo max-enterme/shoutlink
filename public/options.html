@@ -47,8 +47,10 @@
     <h1>yt-redirect-pin 設定</h1>
 
     <p class="warn">
-      実配信での DOM 採取 (T1) が未実施のため、自動検知のセレクタは推測値。
-      自動検知が動かない場合も、ライブチャット画面の右下に出る「↩ 返礼」から手動で実行できる。
+      この拡張は <strong><code>studio.youtube.com</code> のライブ管制室のチャットでしか動きません。</strong>
+      <code>www.youtube.com</code> のライブチャットは他人の配信でも開けてしまい、自分の配信かどうかを
+      判別できないためです(ポップアウトも Studio 側のものを使ってください)。<br />
+      自動検知が動かない場合は、チャット画面の右下に出る「↩ 返礼」から手動で実行できます。
     </p>
 
     <fieldset>
@@ -60,22 +62,6 @@
       <p class="hint">想定外の連投を止めたいときはここを外す。</p>
     </fieldset>
 
-    <fieldset>
-      <legend>自分のチャンネル(任意)</legend>
-      <label for="ownChannelUrl"><code>@ハンドル</code> または URL</label>
-      <input id="ownChannelUrl" type="text" placeholder="@your-channel" />
-      <p class="hint">
-        <strong>空でも動きます。</strong>用途は「送信元が自分自身になったら投稿しない」の一点で、
-        検知の不具合で<strong>自分に向けてお礼を投稿してしまう</strong>のを止める最後の歯止めです。
-        入れておくと安心、程度に考えてください。
-      </p>
-      <p class="hint">
-        なお、この拡張は <strong><code>studio.youtube.com</code> のライブ管制室のチャットでしか動きません。</strong>
-        <code>www.youtube.com</code> のライブチャットは他人の配信でも開けてしまい、
-        自分の配信かどうかを判別できないためです(ポップアウトは
-        <code>studio.youtube.com</code> 側のものを使ってください)。
-      </p>
-    </fieldset>
 
     <fieldset>
       <legend>投稿文テンプレート</legend>

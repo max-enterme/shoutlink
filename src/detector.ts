@@ -83,13 +83,6 @@ export function extractHandleFromText(text: string): string | null {
   return handle.length > 1 ? handle : null
 }
 
-/** 2 つのチャンネル指定(URL / @ハンドル)が同じチャンネルを指すか */
-export function isSameChannel(a: string | null | undefined, b: string | null | undefined): boolean {
-  const left = normalizeChannelUrl(a)
-  const right = normalizeChannelUrl(b)
-  return !!left && !!right && left.toLowerCase() === right.toLowerCase()
-}
-
 /** 正規化済みチャンネル URL から表示用のハンドルを作る(取れなければ URL のまま) */
 export function handleFromChannelUrl(url: string): string {
   const handle = url.match(/\/(@[^\s/?#]+)$/u)

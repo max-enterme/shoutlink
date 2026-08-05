@@ -34,7 +34,6 @@ const template = el<HTMLTextAreaElement>('template')
 const pinMode = el<HTMLSelectElement>('pinMode')
 const cooldownSec = el<HTMLInputElement>('cooldownSec')
 const debug = el<HTMLInputElement>('debug')
-const ownChannelUrl = el<HTMLInputElement>('ownChannelUrl')
 const directoryRows = el<HTMLElement>('directoryRows')
 const directoryStatus = el<HTMLElement>('directoryStatus')
 const newHandle = el<HTMLInputElement>('newHandle')
@@ -145,7 +144,6 @@ function apply(config: Config): void {
   pinMode.value = config.pinMode
   cooldownSec.value = String(config.cooldownSec)
   debug.checked = config.debug
-  ownChannelUrl.value = config.ownChannelUrl
   renderPreview()
 }
 
@@ -159,7 +157,6 @@ save.addEventListener('click', () => {
       pinMode: pinMode.value as PinMode,
       cooldownSec: Number(cooldownSec.value),
       debug: debug.checked,
-      ownChannelUrl: ownChannelUrl.value,
     })
     apply(saved)
     status.textContent = '保存した'
