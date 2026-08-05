@@ -253,16 +253,29 @@ export function startRedirectDetector(opts: DetectorOptions): DetectorHandle {
   })
 
   // **文書全体を監視する。**
-  // 2026-08-05 に実配信で確認: リダイレクトを受けてもチャット項目リストには何も現れなかった。
-  // 通知がバナー領域・トースト等、項目リストの外に出る可能性があるため、
-  // 項目リストだけに絞らず body 全体を見る(plan.md C1)。
-  const target = ((root as Document).body ?? root) as Node
+  // 2026-08-05 に実配信で確認: 通知はチャット項目リスト (`#items`) の中には無く、
+  // その外(バナー相当の領域)に出る。項目リストだけに絞ると取りこぼす(plan.md C1)。
+  const target = ((root as Document).body ?? root) as Element
+
   observer.observe(target, { childList: true, subtree: true })
 
+  /**
+   * 既に DOM にあるノードを走査する。
+   *
+   * ⚠️ **監視と同じ範囲(body 全体)を見ること。**
+   *    ここを `#items` に絞っていたため、**ページを開き直したときに既に出ている通知を
+   *    一切拾えなかった**(通知は `#items` の外にいる)。
+   *    リロード後は observer の追加イベントが来ないので、この走査が唯一の経路になる。
+   */
   const scanExisting = (): void => {
     try {
-      const base = (getChatItemList(root) ?? (root as Document).body) as Element | null
-      if (base) emitFrom(base)
+      emitFrom(target)
+      if (isDebug()) {
+        log.info('[debug] 初期走査した', {
+          target: target.tagName?.toLowerCase(),
+          hasChatItemList: !!getChatItemList(root),
+        })
+      }
     } catch (err) {
       log.error('初期走査で例外:', err)
     }

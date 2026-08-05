@@ -193,4 +193,19 @@ describe('collectRedirectEvents', () => {
   it('要素以外のノードは無視する', () => {
     expect(collectRedirectEvents(document.createTextNode('リダイレクト'), 1)).toEqual([])
   })
+
+  // 回帰テスト: 通知はチャット項目リスト (#items) の外に出る。
+  // 起動時の走査を #items に絞っていたため、ページを開き直したときに
+  // 既に出ている通知を一切拾えなかった (2026-08-05)。
+  it('チャット項目リストの外に出た通知も、body から走査すれば拾える', () => {
+    const { items } = mountChatShell()
+    items.appendChild(makeChatMessage('こんばんは'))
+    // 項目リストではなくバナー領域に通知が出るケース
+    document.querySelector('#visible-banners')!.appendChild(makeJoinNotice())
+
+    expect(collectRedirectEvents(items, 1)).toEqual([])
+    const fromBody = collectRedirectEvents(document.body, 1)
+    expect(fromBody).toHaveLength(1)
+    expect(fromBody[0]?.sourceChannelUrl).toBe(FAKE_CHANNEL.url)
+  })
 })
