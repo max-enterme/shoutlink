@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import {
   collectRedirectEvents,
+  collectUnextractableNotices,
   extractHandleFromText,
   extractRedirectEvent,
   normalizeChannelUrl,
@@ -54,6 +55,32 @@ describe('extractHandleFromText', () => {
   it('ハンドルが無ければ null', () => {
     expect(extractHandleFromText('視聴者が参加しました')).toBeNull()
   })
+
+  // 回帰テスト: 2026-08-05。ハンドルが日本語のことがあり、ASCII 限定の正規表現では
+  // 一文字も当たらず、通知を検知しても送信元が取れずに捨てていた。
+  it('日本語のハンドルも拾う', () => {
+    expect(extractHandleFromText('@あいうえお とその視聴者が参加しました。挨拶しましょう。')).toBe(
+      '@あいうえお',
+    )
+  })
+
+  it('末尾の句読点はハンドルに含めない', () => {
+    expect(extractHandleFromText('@あいうえお。')).toBe('@あいうえお')
+  })
+})
+
+describe('collectUnextractableNotices (診断用)', () => {
+  it('通知らしいのに送信元が取れない要素を報告する', () => {
+    const notice = document.createElement('div')
+    notice.textContent = 'とその視聴者が参加しました。挨拶しましょう。'
+    const misses = collectUnextractableNotices(notice)
+    expect(misses).toHaveLength(1)
+    expect(misses[0]?.text).toContain('参加しました')
+  })
+
+  it('送信元が取れる通知は報告しない', () => {
+    expect(collectUnextractableNotices(makeJoinNotice())).toEqual([])
+  })
 })
 
 // 2026-08-05 に実配信で確認した本物の通知の形。
@@ -67,6 +94,12 @@ describe('参加通知 (実配信で確認した文言)', () => {
       detectedAt: 5,
       origin: 'auto',
     })
+  })
+
+  it('日本語のハンドルの通知から送信元を取り出せる', () => {
+    const event = extractRedirectEvent(makeJoinNotice({ handle: '@あいうえお' }), 5)
+    expect(event?.sourceChannelUrl).toBe('https://www.youtube.com/@あいうえお')
+    expect(event?.sourceChannelName).toBe('@あいうえお')
   })
 
   it('ハンドルがリンクになっていても取り出せる', () => {

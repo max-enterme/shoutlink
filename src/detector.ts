@@ -37,8 +37,8 @@ export function normalizeChannelUrl(raw: string | null | undefined): string | nu
   const input = raw.trim()
   if (!input) return null
 
-  // `@handle` だけ渡された場合
-  if (/^@[\w.\-]+$/.test(input)) return `${YOUTUBE_ORIGIN}/${input}`
+  // `@handle` だけ渡された場合(日本語のハンドルもある)
+  if (/^@[^\s@/?#]{1,40}$/u.test(input)) return `${YOUTUBE_ORIGIN}/${input}`
 
   let url: URL
   try {
@@ -49,8 +49,8 @@ export function normalizeChannelUrl(raw: string | null | undefined): string | nu
   if (url.protocol !== 'https:' && url.protocol !== 'http:') return null
   if (!/(^|\.)youtube\.com$/.test(url.hostname)) return null
 
-  const handle = url.pathname.match(/^\/(@[\w.\-]+)/)
-  if (handle) return `${YOUTUBE_ORIGIN}/${handle[1]}`
+  const handle = url.pathname.match(/^\/(@[^\s/?#]{1,40})/u)
+  if (handle) return `${YOUTUBE_ORIGIN}/${decodeURIComponent(handle[1])}`
 
   const channel = url.pathname.match(/^\/channel\/(UC[\w-]{20,})/)
   if (channel) return `${YOUTUBE_ORIGIN}/channel/${channel[1]}`
@@ -61,25 +61,76 @@ export function normalizeChannelUrl(raw: string | null | undefined): string | nu
   return null
 }
 
+/** ハンドルとして許す文字(空白と `@` 以外)。日本語のハンドルがあるため ASCII に限定しない */
+const HANDLE_PATTERN = /@[^\s@/?#]{1,40}/u
+/** ハンドルの末尾に付きうる句読点・括弧。URL に含めない */
+const TRAILING_PUNCTUATION = /[。、，,．.!！?？「」『』()（）[\]:：;；]+$/u
+
 /**
  * 通知文から `@ハンドル` を拾う。
  *
- * 通知の文言が `@ハンドル とその視聴者が参加しました` の形であることを確認済み (2026-08-05)。
- * **ハンドルがリンクになっていない場合の逃げ道**として、テキストからも拾えるようにする。
- * TODO(T1): リンクの有無は未確認。リンクがあるならそちらが優先される。
+ * ⚠️ **確認済み (2026-08-05): ハンドルは日本語のことがある。**
+ *    以前は `[A-Za-z0-9_.-]` に限定していたため、日本語のハンドルに一文字も当たらず、
+ *    通知を検知しても送信元が取れずに捨てていた。
+ *
+ * ⚠️ **これはあくまで逃げ道。**通知内にチャンネルへのリンクがあるならそちらを使う。
+ *    表示されている `@名前` が実際のハンドルとは限らず、そうでない場合ここから
+ *    組み立てた URL は**間違ったチャンネルを指す**。
  */
 export function extractHandleFromText(text: string): string | null {
-  const match = text.match(/@[A-Za-z0-9_.\-]{3,30}/)
-  return match ? match[0] : null
+  const match = text.match(HANDLE_PATTERN)
+  if (!match) return null
+  const handle = match[0].replace(TRAILING_PUNCTUATION, '')
+  return handle.length > 1 ? handle : null
 }
 
 /** URL から表示名の代替(ハンドル)を作る */
 function fallbackNameFromUrl(url: string): string {
-  const handle = url.match(/\/(@[\w.\-]+)$/)
+  const handle = url.match(/\/(@[^\s/?#]+)$/u)
   if (handle) return handle[1]
-  const legacy = url.match(/\/(?:c|user)\/([\w.\-]+)$/)
+  const legacy = url.match(/\/(?:c|user)\/([^\s/?#]+)$/u)
   if (legacy) return legacy[1]
   return url
+}
+
+/** 診断用の記録 */
+export type UnextractableNotice = {
+  tag: string
+  text: string
+  hrefs: (string | null)[]
+}
+
+/**
+ * 診断用: **「通知らしいのに送信元が取れなかった」要素**を集める。
+ *
+ * これが無かったために「検知が発火しない」の原因(ハンドルが日本語で正規表現に
+ * 当たらない)を掴むのに時間がかかった。無言で捨てないための窓。
+ */
+export function collectUnextractableNotices(node: Node): UnextractableNotice[] {
+  const out: UnextractableNotice[] = []
+
+  const walk = (el: Element): boolean => {
+    if (isChatTextMessage(el)) return false
+
+    let childMatched = false
+    for (const child of Array.from(el.children)) {
+      if (walk(child)) childMatched = true
+    }
+    if (childMatched) return true
+
+    if (!isRedirectNotice(el)) return false
+    if (extractRedirectEvent(el, 0)) return true
+
+    out.push({
+      tag: el.tagName.toLowerCase(),
+      text: textOf(el).slice(0, 120),
+      hrefs: Array.from(el.querySelectorAll('a')).map((a) => a.getAttribute('href')),
+    })
+    return true
+  }
+
+  if (node.nodeType === 1) walk(node as Element)
+  return out
 }
 
 /**
@@ -271,9 +322,12 @@ export function startRedirectDetector(opts: DetectorOptions): DetectorHandle {
     try {
       emitFrom(target)
       if (isDebug()) {
+        const misses = collectUnextractableNotices(target)
         log.info('[debug] 初期走査した', {
           target: target.tagName?.toLowerCase(),
           hasChatItemList: !!getChatItemList(root),
+          // 「通知らしいが送信元が取れなかった」もの。ここに出るなら抽出側の問題
+          unextractable: misses,
         })
       }
     } catch (err) {
