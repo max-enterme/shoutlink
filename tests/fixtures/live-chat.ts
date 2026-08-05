@@ -56,39 +56,76 @@ export function makeChatMessage(text: string, author = 'viewer'): HTMLElement {
   `)
 }
 
-/** 固定中のバナー(合成)。`ifEmpty` の判定対象 */
-export function makePinnedBanner(text = '固定中の告知'): HTMLElement {
+/**
+ * 「ライブ チャットへようこそ」の常設メッセージ(合成)。
+ * ⚠️ **リダイレクト通知と同じ `yt-live-chat-viewer-engagement-message-renderer` が使われている**
+ *    ことを実 DOM で確認済み (2026-08-05 / studio 版ポップアウト)。
+ *    要素の一致だけで通知と判定すると、これを毎回拾ってしまう。
+ */
+export function makeWelcomeMessage(): HTMLElement {
   return frag(`
-    <yt-live-chat-pinned-message-renderer>
-      <span id="message">${text}</span>
-    </yt-live-chat-pinned-message-renderer>
+    <yt-live-chat-viewer-engagement-message-renderer modern>
+      <div id="card">
+        <span id="message">下記のガイドラインを守ってチャットを楽しみましょう
+          <a href="//support.google.com/youtube/answer/2853856?hl=ja#safe">詳細</a>
+        </span>
+      </div>
+    </yt-live-chat-viewer-engagement-message-renderer>
   `)
 }
 
-/** チャット画面の骨格(項目リスト + 入力欄 + 送信ボタン)を document に組む */
+/**
+ * 実際に固定中のバナー(合成)。`#visible-banners` の中に生える想定。
+ * TODO(T1): 何かを固定した状態の実 DOM は未確認。構造は推測。
+ */
+export function makePinnedBanner(text = '固定中の告知'): HTMLElement {
+  return frag(`
+    <yt-live-chat-banner-renderer>
+      <yt-live-chat-pinned-message-renderer>
+        <span id="message">${text}</span>
+      </yt-live-chat-pinned-message-renderer>
+    </yt-live-chat-banner-renderer>
+  `)
+}
+
+/**
+ * チャット画面の骨格を document に組む。
+ *
+ * 実 DOM で確認できた点を反映してある (2026-08-05 / studio 版ポップアウト):
+ * - 入力欄の `contenteditable` は **値なし**(`"true"` ではない)
+ * - `yt-live-chat-pinned-message-renderer` は**何も固定していなくても `hidden` で常駐する**
+ * - `yt-live-chat-banner-manager` の中に `#visible-banners`(通常時は空)がある
+ * - 「ライブ チャットへようこそ」の常設メッセージが最初から 1 件ある
+ */
 export function mountChatShell(): {
   items: HTMLElement
   input: HTMLElement
   sendButton: HTMLButtonElement
+  visibleBanners: HTMLElement
 } {
   document.body.innerHTML = `
     <yt-live-chat-renderer>
-      <yt-live-chat-banner-manager id="banner-container"></yt-live-chat-banner-manager>
+      <yt-live-chat-banner-manager id="banner-container">
+        <div id="visible-banners"></div>
+      </yt-live-chat-banner-manager>
+      <yt-live-chat-pinned-message-renderer id="pinned-message" hidden disable-upgrade></yt-live-chat-pinned-message-renderer>
       <yt-live-chat-item-list-renderer>
         <div id="items"></div>
       </yt-live-chat-item-list-renderer>
       <yt-live-chat-message-input-renderer>
         <yt-live-chat-text-input-field-renderer>
-          <div id="input" contenteditable="true"></div>
+          <div id="input" contenteditable></div>
         </yt-live-chat-text-input-field-renderer>
         <div id="send-button"><button></button></div>
       </yt-live-chat-message-input-renderer>
     </yt-live-chat-renderer>
   `
+  document.querySelector('#items')!.appendChild(makeWelcomeMessage())
   return {
     items: document.querySelector<HTMLElement>('#items')!,
     input: document.querySelector<HTMLElement>('#input')!,
     sendButton: document.querySelector<HTMLButtonElement>('#send-button button')!,
+    visibleBanners: document.querySelector<HTMLElement>('#visible-banners')!,
   }
 }
 

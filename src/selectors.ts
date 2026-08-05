@@ -25,17 +25,25 @@ export const SELECTORS = {
   ],
 
   /**
-   * リダイレクト受信の通知ノード。
-   * TODO(T1): 実 DOM で要確認。そもそもチャット欄に出るのか(plan.md C1 / R1)、
-   *           出るならどのカスタム要素名なのかが未確認。下記はすべて推測。
+   * リダイレクト専用と思われる通知ノード。**これに一致すれば文言を見ずに通知とみなす。**
+   * TODO(T1): 実 DOM で要確認。実際にリダイレクトを受けた画面をまだ見ていないため、
+   *           これらの要素が存在するかどうか自体が未確認(plan.md C1 / R1)。
    */
-  redirectNotice: [
-    'yt-live-chat-viewer-engagement-message-renderer',
+  redirectNoticeStrict: [
     'yt-live-chat-banner-redirect-renderer',
     'yt-live-chat-redirect-renderer',
     'ytd-live-chat-redirect-banner-renderer',
     '[class*="redirect"][class*="live-chat"]',
   ],
+
+  /**
+   * システムメッセージの汎用コンテナ。リダイレクト通知もここに出る可能性がある。
+   *
+   * ⚠️ **確認済み (2026-08-05 / studio 版ポップアウト): この要素は「ライブ チャットへようこそ」の
+   *    常設メッセージにも使われている。**通常時から 1 件存在する。
+   *    したがって**要素の一致だけで通知と判定してはいけない**。文言パターンとの併用が必須。
+   */
+  redirectNoticeGeneric: ['yt-live-chat-viewer-engagement-message-renderer'],
 
   /**
    * 通知ノード内の、送信元チャンネルへのリンク。
@@ -72,20 +80,23 @@ export const SELECTORS = {
   chatMessageText: ['#message', '#content #message', '.message'],
 
   /**
-   * チャット入力欄。YouTube は contenteditable な div。
-   * TODO(T1): 実 DOM で要確認。`studio` 版は別構造の可能性がある(plan.md C2)。
+   * チャット入力欄。
+   * ✅ 確認済み (2026-08-05 / studio 版ポップアウト): 第 1・第 2 候補が当たる。
+   * ⚠️ ただし **`contenteditable` の値は `"true"` ではなく空文字**(属性はあるが値なし)。
+   *    そのため `[contenteditable="true"]` では当たらない。以前の候補は死んでいたので差し替えた。
    */
   chatInput: [
     'yt-live-chat-text-input-field-renderer #input',
     'div#input.yt-live-chat-text-input-field-renderer',
-    'div[contenteditable="true"][id="input"]',
-    'div[contenteditable="true"]',
+    '#input[contenteditable]',
+    '[contenteditable]:not([contenteditable="false"])',
     'textarea#input',
   ],
 
   /**
    * 送信ボタン。
-   * TODO(T1): 実 DOM で要確認。無効化状態の判定方法(disabled 属性 / aria-disabled)も未確認。
+   * ✅ 確認済み (2026-08-05 / studio 版ポップアウト): 第 1・第 2 候補が当たる。
+   * TODO(T1): 無効化状態の判定方法(disabled 属性 / aria-disabled)は未確認。
    */
   chatSendButton: [
     'yt-live-chat-message-input-renderer #send-button button',
@@ -96,38 +107,50 @@ export const SELECTORS = {
 
   /**
    * メッセージ 1 件のメニュー(︙)ボタン。メッセージ要素を root に探す。
-   * TODO(T1): 実 DOM で要確認。ホバーしないと DOM に出ない可能性がある。
+   * ✅ 確認済み (2026-08-05 / studio 版ポップアウト): 第 1 候補が当たる。
+   *    ホバー前から DOM に存在する。`aria-label` は「チャットの操作」。
    */
   messageMenuButton: [
     '#menu yt-icon-button#menu-button button',
     'yt-icon-button#menu-button button',
     '#menu-button button',
+    'button[aria-label*="チャットの操作"]',
     'button[aria-label*="その他"]',
     'button[aria-label*="More"]',
   ],
 
   /**
-   * 開いたメニューの項目。document 直下のポップアップコンテナに出る想定。
-   * TODO(T1): 実 DOM で要確認。
+   * 開いたメニューの項目。
+   * ✅ 確認済み (2026-08-05 / studio 版ポップアウト): 項目は `ytd-menu-service-item-renderer`
+   *    (`role="menuitem"`)で、`ytd-menu-popup-renderer` > `tp-yt-iron-dropdown` の中に出る。
+   * ⚠️ **開いた状態のメニューはまだ見ていない。**プログラムからの `click()` では
+   *    ドロップダウンが可視にならず、項目一覧を採れていない(下の pinner の注記を参照)。
    */
   menuItems: [
     'tp-yt-iron-dropdown:not([aria-hidden="true"]) ytd-menu-service-item-renderer',
     'tp-yt-iron-dropdown:not([aria-hidden="true"]) ytd-menu-navigation-item-renderer',
-    'tp-yt-paper-listbox ytd-menu-service-item-renderer',
     'ytd-menu-popup-renderer ytd-menu-service-item-renderer',
+    'tp-yt-paper-listbox ytd-menu-service-item-renderer',
     '[role="menuitem"]',
   ],
 
   /**
-   * 現在固定中のメッセージのバナー。`ifEmpty` の判定に使う。
-   * TODO(T1): 実 DOM で要確認。**これが判定できないと `ifEmpty` は成立しない**
-   *           (spec.md D2 / plan.md R4)。判定手段が無ければ `off` / `always` に縮退する。
+   * 現在固定中のメッセージのバナー。`ifEmpty` の判定に使う (spec.md D2 / plan.md R4)。
+   *
+   * ⚠️ **確認済み (2026-08-05 / studio 版ポップアウト): `yt-live-chat-pinned-message-renderer` は
+   *    何も固定していなくても DOM に常駐する**(`hidden` 属性つき / `display:none` / 子要素なし)。
+   *    **要素の有無だけで判定すると `ifEmpty` が常に「固定済み」と誤判定し、一度も固定しなくなる。**
+   *    そのため `getPinnedBanner` は「表示されていて、かつ中身がある」ことまで見る。
+   *
+   * 実際に固定されたときにどこへ生えるかは未確認。`yt-live-chat-banner-manager` 配下の
+   * `#visible-banners`(通常時は空・高さ 0)が本命と見て先頭に置いてある。
+   * TODO(T1): 何かを固定した状態で要確認。
    */
   pinnedBanner: [
-    'yt-live-chat-banner-manager yt-live-chat-pinned-message-renderer',
-    'yt-live-chat-pinned-message-renderer',
+    'yt-live-chat-banner-manager #visible-banners yt-live-chat-banner-renderer',
+    'yt-live-chat-banner-manager #visible-banners yt-live-chat-pinned-message-renderer',
+    'yt-live-chat-pinned-message-renderer:not([hidden])',
     'yt-live-chat-banner-renderer[is-pinned]',
-    '#banner-container yt-live-chat-banner-renderer',
   ],
 } as const satisfies Record<string, SelectorCandidates>
 
@@ -210,8 +233,35 @@ export function getChatItemList(root: ParentNode): Element | null {
   return queryFirst(root, SELECTORS.chatItemList)
 }
 
+/** リダイレクト専用の要素か(文言を見ずに通知と判定してよい) */
 export function isRedirectNoticeElement(el: Element): boolean {
-  return matchesAny(el, SELECTORS.redirectNotice)
+  return matchesAny(el, SELECTORS.redirectNoticeStrict)
+}
+
+/**
+ * 要素が画面に出ているか。
+ * jsdom では `offsetParent` / `getClientRects` が使えないため、属性と computed style で見る
+ * (jsdom では「表示されている」側に倒れる)。
+ */
+function isDisplayed(el: Element): boolean {
+  if (el.hasAttribute('hidden')) return false
+  if (el.getAttribute('aria-hidden') === 'true') return false
+
+  const view = el.ownerDocument?.defaultView
+  if (view?.getComputedStyle) {
+    try {
+      const computed = view.getComputedStyle(el)
+      if (computed.display === 'none' || computed.visibility === 'hidden') return false
+    } catch {
+      // 取れない環境では表示扱いにする
+    }
+  }
+  return true
+}
+
+/** 中身があるか(空の placeholder を「固定中」と誤判定しないため) */
+function hasContent(el: Element): boolean {
+  return el.children.length > 0 || textOf(el).length > 0
 }
 
 export function isChatTextMessage(el: Element): boolean {
@@ -253,11 +303,27 @@ export function getOpenMenuItems(root: ParentNode): HTMLElement[] {
 
 /**
  * 現在固定中のメッセージのバナー。
+ *
+ * **要素が在るだけでは「固定中」と判定しない。**`yt-live-chat-pinned-message-renderer` は
+ * 何も固定していなくても `hidden` で常駐していることを確認済み (2026-08-05)。
+ * 表示されていて中身があるものだけを「固定中」とみなす。
+ *
  * ⚠️ null は「固定が無い」ではなく「**このセレクタでは見つからなかった**」でしかない。
- *    T1 で判定手段が確認できるまで、`ifEmpty` の判定はこの推測に依存している(plan.md R4)。
+ *    実際に固定した状態の DOM は未確認 (plan.md R4)。
  */
 export function getPinnedBanner(root: ParentNode): Element | null {
-  return queryFirst(root, SELECTORS.pinnedBanner)
+  for (const selector of SELECTORS.pinnedBanner) {
+    let found: Element[]
+    try {
+      found = Array.from(root.querySelectorAll(selector))
+    } catch {
+      continue
+    }
+    for (const el of found) {
+      if (isDisplayed(el) && hasContent(el)) return el
+    }
+  }
+  return null
 }
 
 /** 開いているメニューから「固定」項目を探す(「固定を解除」は除外する) */

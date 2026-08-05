@@ -13,7 +13,7 @@ function mountMessage(opts: { pinLabel?: string | null } = {}): HTMLElement {
 }
 
 function mountPinnedBanner(): void {
-  document.querySelector('#banner-container')!.appendChild(makePinnedBanner())
+  document.querySelector('#visible-banners')!.appendChild(makePinnedBanner())
 }
 
 function pinnedMenuClicked(): boolean {
@@ -42,6 +42,15 @@ describe('pin (AC3 / AC8) — PinMode × 既存固定の有無', () => {
   describe('ifEmpty', () => {
     it('既存の固定が無ければ固定する', async () => {
       const message = mountMessage()
+      expect(await pin(message, 'ifEmpty', FAST)).toBe('pinned')
+    })
+
+    // 回帰テスト: 2026-08-05 に実 DOM で判明した不具合。
+    // yt-live-chat-pinned-message-renderer は何も固定していなくても hidden で常駐するため、
+    // 要素の有無だけで判定すると ifEmpty が一度も固定しなくなる。
+    it('固定していないときの hidden な placeholder を「固定中」と誤判定しない', async () => {
+      const message = mountMessage()
+      expect(document.querySelector('yt-live-chat-pinned-message-renderer[hidden]')).not.toBeNull()
       expect(await pin(message, 'ifEmpty', FAST)).toBe('pinned')
     })
 

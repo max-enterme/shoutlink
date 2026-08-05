@@ -65,15 +65,22 @@ function fallbackNameFromUrl(url: string): string {
 /**
  * ノードがリダイレクト通知らしいか。
  *
- * TODO(T1): 実 DOM 未確認。現状は
- *   (a) selectors.ts の通知セレクタに一致する、または
- *   (b) 文言パターンに一致し、かつ通常のチャットメッセージではない
- * の 2 経路。(b) は「リダイレクト」という語を含むだけの視聴者コメントを拾わないための
- * 保険として (a) と併用しているが、実 DOM が分かれば (a) だけに寄せたい。
+ * 判定は 2 段:
+ *   (a) **リダイレクト専用の要素**に一致 → 文言を見ずに通知とみなす
+ *   (b) それ以外 → **文言パターンに一致すること**を必須にし、通常のチャットメッセージは除く
+ *
+ * (b) を必須にしているのは、システムメッセージの汎用コンテナ
+ * (`yt-live-chat-viewer-engagement-message-renderer`) が「ライブ チャットへようこそ」の
+ * 常設メッセージにも使われていることを確認しているため (2026-08-05)。
+ * 要素の一致だけで通すと、この常設メッセージを毎回「通知」として拾ってしまう。
+ *
+ * TODO(T1): 実際にリダイレクトを受けた画面は未確認。(a) の要素が存在するのか、
+ *           (b) の文言が何なのかは、まだ分かっていない。
  */
 export function isRedirectNotice(el: Element): boolean {
   if (isRedirectNoticeElement(el)) return true
   if (isChatTextMessage(el)) return false
+
   const text = textOf(el)
   if (!text) return false
   return REDIRECT_TEXT_PATTERNS.some((pattern) => pattern.test(text))

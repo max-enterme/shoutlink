@@ -8,6 +8,7 @@ import {
   FAKE_CHANNEL,
   makeChatMessage,
   makeRedirectNotice,
+  makeWelcomeMessage,
   mountChatShell,
 } from './fixtures/live-chat'
 
@@ -72,6 +73,17 @@ describe('extractRedirectEvent', () => {
   it('「リダイレクト」と書いただけの視聴者コメントは拾わない', () => {
     const message = makeChatMessage('リダイレクトありがとう <a href="/@example-channel">link</a>')
     expect(extractRedirectEvent(message, 1)).toBeNull()
+  })
+
+  // 回帰テスト: 2026-08-05 に実 DOM で確認。「ライブ チャットへようこそ」の常設メッセージは
+  // リダイレクト通知と同じ yt-live-chat-viewer-engagement-message-renderer で出ている。
+  it('常設の「ライブ チャットへようこそ」を通知として拾わない', () => {
+    expect(extractRedirectEvent(makeWelcomeMessage(), 1)).toBeNull()
+  })
+
+  it('システムメッセージでも、リダイレクトの文言が無ければ拾わない', () => {
+    const notice = makeRedirectNotice({ text: 'メンバーシップに登録しました' })
+    expect(extractRedirectEvent(notice, 1)).toBeNull()
   })
 })
 
