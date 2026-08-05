@@ -3,7 +3,7 @@
  * 全体を try/catch で包み、どこで失敗しても配信に影響させない (AC6)。
  */
 import { compose } from './composer'
-import { REDIRECT_TEXT_PATTERNS } from './selectors'
+import { REDIRECT_TEXT_PATTERNS, getChatMessages, getMessageText } from './selectors'
 import { DEFAULT_CONFIG, loadConfig, onConfigChanged } from './config'
 import { createDedupe } from './dedupe'
 import { startRedirectDetector } from './detector'
@@ -63,8 +63,29 @@ async function main(): Promise<void> {
   const detector = startRedirectDetector({ onEvent: safeHandle, debug: () => config.debug })
   detector.scanExisting()
 
+  /**
+   * 切り分け用: 投稿せずに固定だけを試す。
+   * チャットの**最後のメッセージ**を対象に、設定に関わらず `always` で固定を試みる。
+   * ③ が単独で動くかを ①② と切り離して確認するための経路。
+   */
+  const pinTest = async (): Promise<string> => {
+    const messages = getChatMessages(document)
+    const target = messages[messages.length - 1]
+    if (!target) {
+      log.warn('固定テスト: 対象のメッセージが見つからない')
+      return 'メッセージが見つからない'
+    }
+    log.info('固定テスト: 対象 =', getMessageText(target).slice(0, 40))
+    const result = await pin(target, 'always')
+    log.info('固定テスト: 結果 =', result)
+    return result
+  }
+
   // 手動トリガーは常設。自動検知が成立しない場合でも投稿 → 固定を通せる。
-  mountManualTrigger({ onTrigger: safeHandle })
+  mountManualTrigger({
+    onTrigger: safeHandle,
+    onPinTest: () => guardAsync('固定テスト', pinTest, 'エラー'),
+  })
 
   // 「どのビルドが・どの設定で動いているか」を 1 行で分かるようにする。
   // 拡張の ↻ 忘れ / ページのリロード忘れ / 診断ログの入れ忘れを、ログだけで切り分けるため。

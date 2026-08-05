@@ -74,6 +74,12 @@ input {
   font: inherit; color: #eee; background: #111; border: 1px solid #555; border-radius: 4px;
 }
 .run { width: 100%; padding: 5px; border: 0; border-radius: 4px; background: #3ea6ff; color: #06121f; }
+.pin-only {
+  width: 100%; margin-top: 6px; padding: 5px;
+  border: 1px solid #666; border-radius: 4px; background: transparent; color: #ddd;
+}
+hr { border: 0; border-top: 1px solid #444; margin: 10px 0 8px; }
+.note { color: #888; margin: 0 0 6px; }
 .status { margin-top: 6px; min-height: 1.5em; color: #ffb4b4; }
 .status[data-ok="1"] { color: #9fdf9f; }
 `
@@ -81,6 +87,11 @@ input {
 export type ManualTriggerOptions = {
   root?: Document
   onTrigger: (event: RedirectEvent) => void | Promise<void>
+  /**
+   * 切り分け用: **投稿せずに固定だけ**を試す。結果の文字列を返す。
+   * ③ が単独で動くかを、①② と切り離して確認するための経路。
+   */
+  onPinTest?: () => Promise<string> | string
   now?: () => number
 }
 
@@ -113,6 +124,9 @@ export function mountManualTrigger(opts: ManualTriggerOptions): ManualTriggerHan
       <label for="ytrp-name">表示名(空なら URL から補う)</label>
       <input id="ytrp-name" type="text" placeholder="(任意)" />
       <button class="run" type="button">投稿して固定</button>
+      <hr />
+      <p class="note">切り分け用: 投稿せず、チャットの最後のメッセージを固定してみる</p>
+      <button class="pin-only" type="button">固定だけ試す</button>
       <div class="status"></div>
     </div>
   `
@@ -122,6 +136,7 @@ export function mountManualTrigger(opts: ManualTriggerOptions): ManualTriggerHan
   const panel = root.querySelector<HTMLElement>('.panel')!
   const toggle = root.querySelector<HTMLButtonElement>('.toggle')!
   const runButton = root.querySelector<HTMLButtonElement>('.run')!
+  const pinOnlyButton = root.querySelector<HTMLButtonElement>('.pin-only')!
   const urlInput = root.querySelector<HTMLInputElement>('#ytrp-url')!
   const nameInput = root.querySelector<HTMLInputElement>('#ytrp-name')!
   const status = root.querySelector<HTMLElement>('.status')!
@@ -152,12 +167,29 @@ export function mountManualTrigger(opts: ManualTriggerOptions): ManualTriggerHan
     }
   }
 
+  const onPinOnly = (): void => {
+    if (!opts.onPinTest) {
+      setStatus('固定テストは無効')
+      return
+    }
+    setStatus('固定を試している…', true)
+    void (async () => {
+      try {
+        setStatus(`固定結果: ${await opts.onPinTest!()}`, true)
+      } catch (err) {
+        log.error('固定テストで例外:', err)
+        setStatus('固定テストに失敗した(詳細はコンソール)')
+      }
+    })()
+  }
+
   const onKey = (ev: KeyboardEvent): void => {
     if (ev.key === 'Enter') onRun()
   }
 
   toggle.addEventListener('click', onToggle)
   runButton.addEventListener('click', onRun)
+  pinOnlyButton.addEventListener('click', onPinOnly)
   urlInput.addEventListener('keydown', onKey)
   nameInput.addEventListener('keydown', onKey)
 

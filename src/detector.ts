@@ -9,7 +9,6 @@ import { log } from './log'
 import {
   REDIRECT_TEXT_PATTERNS,
   containsChatTextMessage,
-  getChatItemList,
   getRedirectNoticeChannelLink,
   getRedirectNoticeChannelName,
   isChatTextMessage,
@@ -246,6 +245,12 @@ export type DetectorOptions = {
   debug?: () => boolean
 }
 
+/**
+ * 診断ログで「通知の候補」とみなす文言のヒント。
+ * REDIRECT_TEXT_PATTERNS より緩く取り、惜しい取りこぼしも見えるようにする。
+ */
+const NOTICE_HINT = /参加|リダイレクト|redirect|raid|joined|viewers/i
+
 /** 診断ログ用に、要素の構造を 1 行にまとめる */
 function describeNode(el: Element): Record<string, unknown> {
   return {
@@ -279,15 +284,21 @@ export function startRedirectDetector(opts: DetectorOptions): DetectorHandle {
     }
   }
 
+  /**
+   * 診断ログ。**通知の候補になりうるノードだけ**を出す。
+   *
+   * 以前は「通常のチャットメッセージ以外のカスタム要素」を全部出していたが、
+   * `yt-invalidation-continuation` 等がひたすら流れてログが読めなくなったため、
+   * 文言のヒントに引っかかるものだけに絞った。何も出ないこと自体が
+   * 「候補が現れていない」という情報になる。
+   */
   const traceFrom = (node: Node): void => {
     if (node.nodeType !== 1) return
     const el = node as Element
-    // 自分の UI と、大量に流れる通常のチャットメッセージは黙らせる
     if (el.closest?.('#yt-redirect-pin-manual-trigger')) return
     if (isChatTextMessage(el)) return
-    const tag = el.tagName.toLowerCase()
-    if (!tag.includes('-')) return // 素の div/span は対象外(ノイズが多すぎる)
-    log.info('[debug] ノード追加:', describeNode(el))
+    if (!NOTICE_HINT.test(textOf(el))) return
+    log.info('[debug] 通知候補:', describeNode(el))
   }
 
   const observer = new MutationObserver((records) => {
@@ -322,13 +333,10 @@ export function startRedirectDetector(opts: DetectorOptions): DetectorHandle {
     try {
       emitFrom(target)
       if (isDebug()) {
+        // 「通知らしいが送信元が取れなかった」ものがあるときだけ出す。
+        // ここに出るなら抽出側の問題。
         const misses = collectUnextractableNotices(target)
-        log.info('[debug] 初期走査した', {
-          target: target.tagName?.toLowerCase(),
-          hasChatItemList: !!getChatItemList(root),
-          // 「通知らしいが送信元が取れなかった」もの。ここに出るなら抽出側の問題
-          unextractable: misses,
-        })
+        if (misses.length > 0) log.warn('[debug] 送信元が取れなかった通知候補:', misses)
       }
     } catch (err) {
       log.error('初期走査で例外:', err)
