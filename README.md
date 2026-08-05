@@ -14,6 +14,7 @@ status: 実装中(T2–T7 実装済み / **T1・T1b・T8 は未実施**)
 | [specs/001-redirect-pin/spec.md](specs/001-redirect-pin/spec.md) | 何を・なぜ / 受け入れ条件 / 降りる箇所 |
 | [specs/001-redirect-pin/plan.md](specs/001-redirect-pin/plan.md) | 構成・モジュール・テスト戦略・リスク |
 | [specs/001-redirect-pin/tasks.md](specs/001-redirect-pin/tasks.md) | 作業分解(T1–T8) |
+| [docs/setup-and-verify.md](docs/setup-and-verify.md) | **導入手順・設定・動作確認・切り分け・T1 の DOM 採取手順** |
 
 ## 前提(調査済み)
 
@@ -36,6 +37,8 @@ npm run build
 
 `npm run build` が `dist/` に MV3 拡張を吐く(`chrome://extensions` の「パッケージ化されていない
 拡張機能を読み込む」で `dist/` を指定する)。設定は拡張機能のオプションページ。
+
+**導入から動作確認までの手順は [docs/setup-and-verify.md](docs/setup-and-verify.md)。**
 
 ### 構成
 
