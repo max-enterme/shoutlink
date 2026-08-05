@@ -6,6 +6,15 @@ import { compose } from './composer'
 import { REDIRECT_TEXT_PATTERNS, getChatMessages, getMessageText } from './selectors'
 import { DEFAULT_CONFIG, loadConfig, onConfigChanged } from './config'
 import { createDedupe } from './dedupe'
+import {
+  findEntry,
+  loadDirectory,
+  onDirectoryChanged,
+  rememberSource,
+  resolveDisplayName,
+  saveDirectory,
+} from './directory'
+import type { Directory } from './directory'
 import { startRedirectDetector } from './detector'
 import { guardAsync, log } from './log'
 import { mountManualTrigger } from './manual-trigger'
@@ -18,7 +27,12 @@ declare const __BUILD_TIME__: string
 
 async function main(): Promise<void> {
   let config: Config = await guardAsync('設定の読み込み', loadConfig, { ...DEFAULT_CONFIG })
+  let directory: Directory = await guardAsync('呼び名辞書の読み込み', loadDirectory, [])
   const dedupe = createDedupe(config.cooldownSec)
+
+  onDirectoryChanged((next) => {
+    directory = next
+  })
 
   onConfigChanged((next) => {
     config = next
@@ -31,6 +45,14 @@ async function main(): Promise<void> {
    * 手動トリガーは検知を飛ばすだけで、以降は自動検知とまったく同じ経路を通る。
    */
   const handle = async (event: RedirectEvent): Promise<void> => {
+    // リダイレクトしてきた相手は、**投稿の可否に関わらず**辞書に載せる。
+    // 無効化中でも「誰が来たか」は残しておきたいため。呼び名は後から人が付ける。
+    if (!findEntry(directory, event.sourceChannelUrl)) {
+      log.info('辞書に登録した:', event.sourceChannelUrl)
+    }
+    directory = rememberSource(directory, event)
+    void guardAsync('呼び名辞書の保存', () => saveDirectory(directory), undefined)
+
     // AC7: 無効化されていれば何もしない
     if (!config.enabled) {
       log.info('無効化されているため何もしない', event.sourceChannelUrl)
@@ -42,7 +64,9 @@ async function main(): Promise<void> {
       return
     }
 
-    const text = compose(config.template, event)
+    // 辞書に呼び名があればそれを使う。無ければ検知した表示名のまま
+    const named = { ...event, sourceChannelName: resolveDisplayName(directory, event) }
+    const text = compose(config.template, named)
     log.info(`投稿する (${event.origin ?? 'auto'}):`, text)
 
     const posted = await postMessage(text)

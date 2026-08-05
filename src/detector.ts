@@ -83,8 +83,8 @@ export function extractHandleFromText(text: string): string | null {
   return handle.length > 1 ? handle : null
 }
 
-/** URL から表示名の代替(ハンドル)を作る */
-function fallbackNameFromUrl(url: string): string {
+/** 正規化済みチャンネル URL から表示用のハンドルを作る(取れなければ URL のまま) */
+export function handleFromChannelUrl(url: string): string {
   const handle = url.match(/\/(@[^\s/?#]+)$/u)
   if (handle) return handle[1]
   const legacy = url.match(/\/(?:c|user)\/([^\s/?#]+)$/u)
@@ -180,7 +180,7 @@ export function extractRedirectEvent(el: Element, detectedAt: number): RedirectE
   // 送信元が特定できない通知は捨てる。名前だけ分かっても URL が無ければ AC2 を満たせない。
   if (!url) return null
 
-  const name = getRedirectNoticeChannelName(el) || textOf(link) || fallbackNameFromUrl(url)
+  const name = getRedirectNoticeChannelName(el) || textOf(link) || handleFromChannelUrl(url)
 
   return {
     sourceChannelName: name,

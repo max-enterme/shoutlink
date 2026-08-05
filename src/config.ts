@@ -44,10 +44,13 @@ export function normalizeConfig(raw: unknown): Config {
   }
 }
 
-function storage(): chrome.storage.StorageArea | null {
+/** 保存先。chrome が無い環境(テスト等)では null */
+export function getStorageArea(): chrome.storage.StorageArea | null {
   if (typeof chrome === 'undefined') return null
   return chrome.storage?.sync ?? chrome.storage?.local ?? null
 }
+
+const storage = getStorageArea
 
 export async function loadConfig(): Promise<Config> {
   const area = storage()

@@ -32,6 +32,15 @@
       button { font: inherit; padding: 6px 16px; border-radius: 4px; border: 1px solid #bbb; cursor: pointer; }
       .status { color: #227a22; min-height: 1.5em; }
       .warn { background: #fff6e0; border: 1px solid #e8cf94; border-radius: 6px; padding: 8px 12px; font-size: 13px; }
+      table.directory { width: 100%; border-collapse: collapse; font-size: 13px; }
+      table.directory th { text-align: left; color: #666; font-weight: normal; padding: 4px 6px 4px 0; }
+      table.directory td { padding: 3px 6px 3px 0; vertical-align: middle; }
+      table.directory td:last-child, table.directory th:last-child { width: 2.5em; padding-right: 0; }
+      table.directory .handle { word-break: break-all; }
+      table.directory .unseen { color: #888; }
+      table.directory button { padding: 2px 8px; }
+      table.directory tfoot td { padding-top: 8px; border-top: 1px solid #eee; }
+      .empty { color: #888; }
     </style>
   </head>
   <body>
@@ -78,6 +87,28 @@
       <label for="cooldownSec">同一送信元からの再投稿を抑止する秒数</label>
       <input id="cooldownSec" type="number" min="0" step="10" />
       <p class="hint">0 にすると抑止しない。</p>
+    </fieldset>
+
+    <fieldset>
+      <legend>呼び名の辞書</legend>
+      <p class="hint">
+        `{name}` を置き換える呼び名。<strong>リダイレクトを受けた相手は自動でこの一覧に追加されます</strong>
+        (呼び名は空のまま)。呼び名が空の間はハンドルがそのまま使われます。
+      </p>
+      <table class="directory">
+        <thead>
+          <tr><th>ハンドル</th><th>呼び名</th><th></th></tr>
+        </thead>
+        <tbody id="directoryRows"></tbody>
+        <tfoot>
+          <tr>
+            <td><input id="newHandle" type="text" placeholder="@example-channel または URL" /></td>
+            <td><input id="newNickname" type="text" placeholder="呼び名" /></td>
+            <td><button id="addEntry" type="button" title="登録する">＋</button></td>
+          </tr>
+        </tfoot>
+      </table>
+      <p class="hint" id="directoryStatus"></p>
     </fieldset>
 
     <fieldset>
