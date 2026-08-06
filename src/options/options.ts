@@ -33,6 +33,7 @@ const enabled = el<HTMLInputElement>('enabled')
 const template = el<HTMLTextAreaElement>('template')
 const pinMode = el<HTMLSelectElement>('pinMode')
 const cooldownSec = el<HTMLInputElement>('cooldownSec')
+const showManualTrigger = el<HTMLInputElement>('showManualTrigger')
 const debug = el<HTMLInputElement>('debug')
 const directoryRows = el<HTMLElement>('directoryRows')
 const directoryStatus = el<HTMLElement>('directoryStatus')
@@ -143,6 +144,7 @@ function apply(config: Config): void {
   template.value = config.template
   pinMode.value = config.pinMode
   cooldownSec.value = String(config.cooldownSec)
+  showManualTrigger.checked = config.showManualTrigger
   debug.checked = config.debug
   renderPreview()
 }
@@ -156,6 +158,7 @@ save.addEventListener('click', () => {
       template: template.value,
       pinMode: pinMode.value as PinMode,
       cooldownSec: Number(cooldownSec.value),
+      showManualTrigger: showManualTrigger.checked,
       debug: debug.checked,
     })
     apply(saved)

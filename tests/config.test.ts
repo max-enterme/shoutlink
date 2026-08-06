@@ -18,6 +18,7 @@ describe('normalizeConfig', () => {
         template: '{url}',
         pinMode: 'always',
         cooldownSec: 30,
+        showManualTrigger: true,
         debug: true,
       }),
     ).toEqual({
@@ -25,8 +26,17 @@ describe('normalizeConfig', () => {
       template: '{url}',
       pinMode: 'always',
       cooldownSec: 30,
+      showManualTrigger: true,
       debug: true,
     })
+  })
+
+  // security-review.md S8: チャット窓を配信画面に載せていると常時映り込むため、
+  // 手動トリガーは既定で出さない。
+  it('手動トリガーは既定で出さない', () => {
+    expect(DEFAULT_CONFIG.showManualTrigger).toBe(false)
+    expect(normalizeConfig({}).showManualTrigger).toBe(false)
+    expect(normalizeConfig({ showManualTrigger: 'yes' }).showManualTrigger).toBe(false)
   })
 
   it('診断ログは既定で無効', () => {

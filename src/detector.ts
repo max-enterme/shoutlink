@@ -9,6 +9,7 @@ import { log } from './log'
 import {
   EXCLUDED_TEXT_PATTERNS,
   REDIRECT_TEXT_PATTERNS,
+  UNCONFIRMED_REDIRECT_TEXT_PATTERNS,
   containsChatTextMessage,
   getRedirectNoticeChannelLink,
   getRedirectNoticeChannelName,
@@ -269,6 +270,7 @@ const NOTICE_HINT = /参加|リダイレクト|redirect|raid|joined|viewers/i
 
 /** 診断ログ用に、要素の構造を 1 行にまとめる */
 function describeNode(el: Element): Record<string, unknown> {
+  const text = textOf(el)
   return {
     tag: el.tagName.toLowerCase(),
     id: el.id || undefined,
@@ -277,8 +279,11 @@ function describeNode(el: Element): Record<string, unknown> {
     innerTags: Array.from(el.querySelectorAll('*'))
       .map((c) => c.tagName.toLowerCase())
       .slice(0, 20),
-    text: textOf(el).slice(0, 200),
+    text: text.slice(0, 200),
     matchedAsNotice: isRedirectNotice(el),
+    // 「昔の版なら発火していた」候補。実際にリダイレクトの受信通知だったなら、
+    // その文言を REDIRECT_TEXT_PATTERNS へ確認済みとして昇格させる (security-review.md S2)
+    matchedUnconfirmed: UNCONFIRMED_REDIRECT_TEXT_PATTERNS.filter((p) => p.test(text)).map(String),
   }
 }
 

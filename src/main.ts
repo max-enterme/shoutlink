@@ -17,10 +17,12 @@ import {
 import type { Directory } from './directory'
 import { startRedirectDetector } from './detector'
 import { decideScope } from './scope'
-import { guardAsync, log } from './log'
+import { guard, guardAsync, log } from './log'
 import { mountManualTrigger } from './manual-trigger'
+import type { ManualTriggerHandle } from './manual-trigger'
 import { pin } from './pinner'
 import { postMessage } from './poster'
+import { createSelfEchoGuard } from './self-echo'
 import type { Config, RedirectEvent } from './types'
 
 /** ビルド時刻。esbuild の define で埋める(どのビルドが読み込まれているかの判別用) */
@@ -39,6 +41,8 @@ async function main(): Promise<void> {
 
   let directory: Directory = await guardAsync('呼び名辞書の読み込み', loadDirectory, [])
   const dedupe = createDedupe(config.cooldownSec)
+  // 設定と独立した自己ループの歯止め (security-review.md S1)
+  const selfEcho = createSelfEchoGuard()
 
   onDirectoryChanged((next) => {
     directory = next
@@ -47,6 +51,8 @@ async function main(): Promise<void> {
   onConfigChanged((next) => {
     config = next
     dedupe.setCooldownSec(next.cooldownSec)
+    // 手動トリガーの表示切り替えに、ページの再読み込みを要らなくする
+    guard('手動トリガーの切り替え', () => syncManualTrigger(next.showManualTrigger), undefined)
     log.info('設定を更新した', next)
   })
 
@@ -55,6 +61,13 @@ async function main(): Promise<void> {
    * 手動トリガーは検知を飛ばすだけで、以降は自動検知とまったく同じ経路を通る。
    */
   const handle = async (event: RedirectEvent): Promise<void> => {
+    // 自分が直前に投稿した返礼(とその固定バナー)を、新しい通知として拾い直さない (S1)。
+    // 自動検知だけを止める。手動トリガーは人が明示的に押しているので通す。
+    if (event.origin !== 'manual' && selfEcho.isEcho(event.sourceChannelUrl)) {
+      log.info('直前に自分が投稿した相手のため、自己反射とみなしてスキップ', event.sourceChannelUrl)
+      return
+    }
+
     // リダイレクトしてきた相手は、**投稿の可否に関わらず**辞書に載せる。
     // 無効化中でも「誰が来たか」は残しておきたいため。呼び名は後から人が付ける。
     if (!findEntry(directory, event.sourceChannelUrl)) {
@@ -79,6 +92,8 @@ async function main(): Promise<void> {
     const text = compose(config.template, named)
     log.info(`投稿する (${event.origin ?? 'auto'}):`, text)
 
+    // 投稿する**前に**覚える。投稿・固定の途中で observer が発火しても取りこぼさないため
+    selfEcho.remember(event.sourceChannelUrl)
     const posted = await postMessage(text)
     if (posted.status !== 'posted') {
       log.warn('投稿に失敗した:', posted.reason)
@@ -115,11 +130,27 @@ async function main(): Promise<void> {
     return result
   }
 
-  // 手動トリガーは常設。自動検知が成立しない場合でも投稿 → 固定を通せる。
-  mountManualTrigger({
-    onTrigger: safeHandle,
-    onPinTest: () => guardAsync('固定テスト', pinTest, 'エラー'),
-  })
+  /**
+   * 手動トリガー UI の出し入れ。**既定は出さない** (security-review.md S8)。
+   * 配信画面にチャット窓を載せていると常時映り込むため。機能自体は残してあり、
+   * 自動検知が空振りしたときの逃げ道 (plan.md R1) と、投稿・固定の切り分け経路として使う。
+   *
+   * 設定の変更に追従させる(ページの再読み込みを要らなくする)。
+   */
+  let manualTrigger: ManualTriggerHandle | null = null
+  const syncManualTrigger = (show: boolean): void => {
+    if (show === (manualTrigger != null)) return
+    if (show) {
+      manualTrigger = mountManualTrigger({
+        onTrigger: safeHandle,
+        onPinTest: () => guardAsync('固定テスト', pinTest, 'エラー'),
+      })
+    } else {
+      manualTrigger?.destroy()
+      manualTrigger = null
+    }
+  }
+  syncManualTrigger(config.showManualTrigger)
 
   // 「どのビルドが・どの設定で動いているか」を 1 行で分かるようにする。
   // 拡張の ↻ 忘れ / ページのリロード忘れ / 診断ログの入れ忘れを、ログだけで切り分けるため。
@@ -130,6 +161,7 @@ async function main(): Promise<void> {
     debug: config.debug,
     pinMode: config.pinMode,
     cooldownSec: config.cooldownSec,
+    showManualTrigger: config.showManualTrigger,
     patterns: REDIRECT_TEXT_PATTERNS.length,
     url: location.href,
   })

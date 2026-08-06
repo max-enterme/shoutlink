@@ -15,6 +15,7 @@ status: 実装中(T1–T7 完了 / **実配信で ①検知 → ②投稿 → �
 | [specs/001-redirect-pin/plan.md](specs/001-redirect-pin/plan.md) | 構成・モジュール・テスト戦略・リスク |
 | [specs/001-redirect-pin/tasks.md](specs/001-redirect-pin/tasks.md) | 作業分解(T1–T8) |
 | [docs/setup-and-verify.md](docs/setup-and-verify.md) | **導入手順・設定・動作確認・切り分け・T1 の DOM 採取手順** |
+| [docs/security-review.md](docs/security-review.md) | **セキュリティ点検 / インシデント点検 (2026-08-06)。未対応の指摘 S1–S9** |
 
 ## 前提(調査済み)
 
@@ -60,7 +61,8 @@ npm run package
 | `src/dedupe.ts` | 同一送信元・クールダウンの多重発火抑止 |
 | `src/poster.ts` | チャット入力欄への投稿と、投稿した自分のメッセージ要素の特定 |
 | `src/pinner.ts` | `PinMode` の解釈と「固定」の実行 |
-| `src/manual-trigger.ts` | **手動トリガー UI(常設)。**自動検知と同じ `RedirectEvent` を同じパイプラインに流す |
+| `src/manual-trigger.ts` | 手動トリガー UI(設定 `showManualTrigger` / **既定 OFF**)。自動検知と同じ `RedirectEvent` を同じパイプラインに流す |
+| `src/self-echo.ts` | 自分の投稿(とその固定バナー)を通知として拾い直す自己ループの抑止。**設定と独立** |
 | `src/config.ts` | `chrome.storage` 永続化 |
 | `src/main.ts` | 配線。全体を try/catch (AC6) |
 
@@ -87,7 +89,8 @@ npm run package
 ⚠️ `src/selectors.ts` には**確認済みの定義と推測のままの定義が混在**している。各定義のコメントに
 `✅ 確認済み` / `TODO(T1)` を書き分けてある。`tests/fixtures/live-chat.ts` は依然として合成 DOM。
 
-自動検知と並んで、**手動トリガーを常設の経路として実装してある**(ライブチャット画面右下の
-「↩ 返礼」)。同じパネルの **「固定だけ試す」** は、投稿せずに固定だけを試す切り分け用の経路。
+自動検知と並んで、**手動トリガーの経路がある**(設定「手動トリガーを出す」= ON でライブチャット
+画面右下に「↩ 返礼」。**既定は OFF** — 配信画面への映り込み対策 / security-review.md S8)。
+同じパネルの **「固定だけ試す」** は、投稿せずに固定だけを試す切り分け用の経路。
 
 **有効化の前に spec.md D3(自動投稿の是非)の判断が要る。**

@@ -6,7 +6,7 @@ import {
   extractRedirectEvent,
   normalizeChannelUrl,
 } from '../src/detector'
-import { REDIRECT_TEXT_PATTERNS } from '../src/selectors'
+import { REDIRECT_TEXT_PATTERNS, UNCONFIRMED_REDIRECT_TEXT_PATTERNS } from '../src/selectors'
 import {
   FAKE_CHANNEL,
   FAKE_OTHER_CHANNEL,
@@ -236,6 +236,64 @@ describe('extractRedirectEvent', () => {
   it('システムメッセージでも、リダイレクトの文言が無ければ拾わない', () => {
     const notice = makeRedirectNotice({ text: 'メンバーシップに登録しました' })
     expect(extractRedirectEvent(notice, 1)).toBeNull()
+  })
+})
+
+/**
+ * 回帰テスト (security-review.md S2 / 2026-08-06 の②と同型)。
+ *
+ * 「リダイレクトという話題に触れているだけ」の文言では**自動発火させない。**
+ * 受信を意味する確認済みの文言だけを自動発火の対象にする。
+ * 推測パターンは `UNCONFIRMED_REDIRECT_TEXT_PATTERNS` に移し、診断ログに出すだけ。
+ */
+describe('推測の文言では自動発火させない (S2)', () => {
+  const cases: [string, string][] = [
+    ['送信側のバナー', 'この機会に、@example-channel のコンテンツの視聴を促進しましょう'],
+    ['「リダイレクト」を含むだけの文言', 'リダイレクトの送信先を選択しました'],
+    ['リダイレクト開始のトースト', 'リダイレクトを開始しました'],
+    ['英語の raid 設定', 'Raid settings updated'],
+    ['英語の redirect 表記', 'This stream was redirected'],
+    ['誘導されました(推測)', '@example-channel へ誘導されました'],
+  ]
+
+  for (const [label, text] of cases) {
+    it(`${label} は通知として拾わない`, () => {
+      const notice = makeRedirectNotice({ text })
+      expect(extractRedirectEvent(notice, 1)).toBeNull()
+    })
+  }
+
+  it('確認済みの文言なら従来どおり拾う', () => {
+    const notice = makeRedirectNotice({ text: 'とその視聴者が参加しました。挨拶しましょう' })
+    expect(extractRedirectEvent(notice, 1)?.sourceChannelUrl).toBe(FAKE_CHANNEL.url)
+  })
+
+  it('推測パターンは自動発火の対象に入っていない', () => {
+    for (const pattern of UNCONFIRMED_REDIRECT_TEXT_PATTERNS) {
+      expect(REDIRECT_TEXT_PATTERNS.map(String)).not.toContain(String(pattern))
+    }
+  })
+})
+
+/**
+ * 回帰テスト (security-review.md S1)。
+ *
+ * 既定テンプレートの返礼文には「リダイレクト」と送信元 URL の両方が入る。
+ * それが**固定バナー**として現れると、チャットメッセージ要素ではないため
+ * `isChatTextMessage` / `isInsideChatTextMessage` の除外に当たらない。
+ * S2 の降格によって文言としても当たらなくなったことを固定する
+ * (パイプライン側の歯止めは tests/self-echo.test.ts)。
+ */
+describe('自分の返礼が固定バナーとして出ても通知として拾わない (S1)', () => {
+  it('既定テンプレートの返礼文を含む固定バナー', () => {
+    const banner = document.createElement('yt-live-chat-banner-renderer')
+    banner.innerHTML = `
+      <yt-live-chat-pinned-message-renderer>
+        <span id="message">${FAKE_CHANNEL.handle}さんからリダイレクトありがとうございます! </span>
+        <a href="/${FAKE_CHANNEL.handle}">${FAKE_CHANNEL.url}</a>
+      </yt-live-chat-pinned-message-renderer>
+    `
+    expect(collectRedirectEvents(banner, 1)).toEqual([])
   })
 })
 

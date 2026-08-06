@@ -15,6 +15,8 @@ export const DEFAULT_CONFIG: Config = {
   // 判定できることが前提で、T1 未確認 (plan.md R4)。
   pinMode: 'ifEmpty',
   cooldownSec: 600,
+  // 既定で出さない。配信画面にチャット窓を載せていると映り込むため (security-review.md S8)
+  showManualTrigger: false,
   debug: false,
 }
 
@@ -40,6 +42,10 @@ export function normalizeConfig(raw: unknown): Config {
     template,
     pinMode,
     cooldownSec,
+    showManualTrigger:
+      typeof source.showManualTrigger === 'boolean'
+        ? source.showManualTrigger
+        : DEFAULT_CONFIG.showManualTrigger,
     debug: typeof source.debug === 'boolean' ? source.debug : DEFAULT_CONFIG.debug,
   }
 }
