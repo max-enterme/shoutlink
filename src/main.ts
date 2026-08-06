@@ -22,6 +22,16 @@ import { mountManualTrigger } from './manual-trigger'
 import type { ManualTriggerHandle } from './manual-trigger'
 import { pin } from './pinner'
 import { postMessage } from './poster'
+import {
+  currentStreamId,
+  findLastPost,
+  findPostInStream,
+  loadPostLog,
+  makePostRecord,
+  rememberPost,
+  savePostLog,
+} from './post-log'
+import type { PostLog } from './post-log'
 import { createSelfEchoGuard } from './self-echo'
 import type { Config, RedirectEvent } from './types'
 
@@ -40,7 +50,13 @@ async function main(): Promise<void> {
   }
 
   let directory: Directory = await guardAsync('呼び名辞書の読み込み', loadDirectory, [])
-  const dedupe = createDedupe(config.cooldownSec)
+
+  // **リロードをまたいで再投稿を止めるための土台。**
+  // リダイレクトの通知はチャットに残り続けるため、開き直すたびに初期走査が拾い直す。
+  // 抑止の記録をメモリだけに持っていると、そのたびに白紙に戻って再投稿していた (2026-08-06)。
+  const streamId = guard('配信 ID の取得', () => currentStreamId(), '')
+  let postLog: PostLog = await guardAsync('投稿履歴の読み込み', loadPostLog, [])
+  const dedupe = createDedupe(config.cooldownSec, { streamId, history: postLog })
   // 設定と独立した自己ループの歯止め (security-review.md S1)
   const selfEcho = createSelfEchoGuard()
 
@@ -81,9 +97,19 @@ async function main(): Promise<void> {
       log.info('無効化されているため何もしない', event.sourceChannelUrl)
       return
     }
-    // AC4: 同一送信元・クールダウン内の多重発火を抑止
+    // AC4: 同じ配信の中での、同一送信元・クールダウン内の多重発火を抑止
     if (!dedupe.tryAcquire(event)) {
-      log.info('クールダウン中のためスキップ', event.sourceChannelUrl)
+      // なぜ止めたかを保存済みの履歴から説明する(「投稿されない」の切り分け用)
+      const prior =
+        findPostInStream(postLog, streamId, event.sourceChannelUrl) ??
+        findLastPost(postLog, event.sourceChannelUrl)
+      log.info(
+        'クールダウン中のためスキップ',
+        event.sourceChannelUrl,
+        prior
+          ? { 前回: new Date(prior.postedAt).toLocaleString(), 文面: prior.text }
+          : '(この画面で投稿済み)',
+      )
       return
     }
 
@@ -99,6 +125,12 @@ async function main(): Promise<void> {
       log.warn('投稿に失敗した:', posted.reason)
       return
     }
+
+    // **投稿できたときだけ**履歴に残す。次回の起動はここから抑止を組み立てる。
+    // 失敗した回まで残すと、投稿できていないのに抑止だけ効いてしまう。
+    postLog = rememberPost(postLog, makePostRecord(event, text, { streamId, postedAt: Date.now() }))
+    void guardAsync('投稿履歴の保存', () => savePostLog(postLog), undefined)
+
     if (!posted.element) return
 
     const result = await pin(posted.element, config.pinMode)
@@ -161,6 +193,9 @@ async function main(): Promise<void> {
     debug: config.debug,
     pinMode: config.pinMode,
     cooldownSec: config.cooldownSec,
+    // 「この配信で誰に投稿済みか」の土台。streamId が空だと同一配信の判定ができない
+    streamId: streamId || '(不明)',
+    postLog: postLog.length,
     showManualTrigger: config.showManualTrigger,
     patterns: REDIRECT_TEXT_PATTERNS.length,
     url: location.href,

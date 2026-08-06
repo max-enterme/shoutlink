@@ -58,7 +58,8 @@ npm run package
 | `src/selectors.ts` | **DOM 依存の集約点。**候補の配列を先頭から試す。他モジュールは `document.querySelector` を直接呼ばない |
 | `src/detector.ts` | MutationObserver → `RedirectEvent`。抽出部は純関数 (`extractRedirectEvent`) として分離 |
 | `src/composer.ts` | テンプレート差し込み (`{name}` `{url}`) |
-| `src/dedupe.ts` | 同一送信元・クールダウンの多重発火抑止 |
+| `src/dedupe.ts` | 同一送信元・クールダウンの多重発火抑止。**クールダウンは同一配信内でのみ適用**(配信が違えば通す) |
+| `src/post-log.ts` | 投稿履歴 (`chrome.storage.local`)。**リロードをまたいで再投稿を止める土台。**誰に・何を・いつ・どの配信で |
 | `src/poster.ts` | チャット入力欄への投稿と、投稿した自分のメッセージ要素の特定 |
 | `src/pinner.ts` | `PinMode` の解釈と「固定」の実行 |
 | `src/manual-trigger.ts` | 手動トリガー UI(設定 `showManualTrigger` / **既定 OFF**)。自動検知と同じ `RedirectEvent` を同じパイプラインに流す |

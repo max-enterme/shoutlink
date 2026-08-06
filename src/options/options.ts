@@ -14,6 +14,8 @@ import {
   upsertNickname,
 } from '../directory'
 import type { Directory } from '../directory'
+import { clearPostLog, loadPostLog } from '../post-log'
+import type { PostLog } from '../post-log'
 import type { Config, PinMode, RedirectEvent } from '../types'
 
 /** プレビュー用のダミー。実在するチャンネルは使わない */
@@ -40,6 +42,9 @@ const directoryStatus = el<HTMLElement>('directoryStatus')
 const newHandle = el<HTMLInputElement>('newHandle')
 const newNickname = el<HTMLInputElement>('newNickname')
 const addEntry = el<HTMLButtonElement>('addEntry')
+const postLogRows = el<HTMLElement>('postLogRows')
+const postLogStatus = el<HTMLElement>('postLogStatus')
+const clearPostLogButton = el<HTMLButtonElement>('clearPostLog')
 
 // --- 呼び名の辞書 ---------------------------------------------------------
 
@@ -131,6 +136,55 @@ onDirectoryChanged((next) => {
   directory = next
   renderDirectory()
 })
+
+// --- 投稿履歴 -------------------------------------------------------------
+// 再投稿を止めている根拠を人が見られるようにする。消せば同じ配信でももう一度投稿できる。
+
+function renderPostLog(log: PostLog): void {
+  postLogRows.textContent = ''
+
+  if (log.length === 0) {
+    const row = document.createElement('tr')
+    const cell = document.createElement('td')
+    cell.colSpan = 3
+    cell.className = 'empty'
+    cell.textContent = 'まだ投稿していません。'
+    row.appendChild(cell)
+    postLogRows.appendChild(row)
+    return
+  }
+
+  for (const record of [...log].sort((a, b) => b.postedAt - a.postedAt)) {
+    const row = document.createElement('tr')
+
+    const handleCell = document.createElement('td')
+    handleCell.className = 'handle'
+    handleCell.textContent = record.handle
+    handleCell.title = record.url
+
+    const textCell = document.createElement('td')
+    textCell.className = 'text'
+    textCell.textContent = record.text
+
+    const timeCell = document.createElement('td')
+    timeCell.textContent = new Date(record.postedAt).toLocaleString()
+    timeCell.title = record.streamId ? `配信 ID: ${record.streamId}` : '配信 ID が取れなかった回'
+
+    row.append(handleCell, textCell, timeCell)
+    postLogRows.appendChild(row)
+  }
+}
+
+clearPostLogButton.addEventListener('click', () => {
+  void (async () => {
+    await clearPostLog()
+    renderPostLog([])
+    postLogStatus.textContent = '消した'
+    setTimeout(() => (postLogStatus.textContent = ''), 2000)
+  })()
+})
+
+void loadPostLog().then(renderPostLog)
 const preview = el<HTMLElement>('preview')
 const status = el<HTMLElement>('status')
 const save = el<HTMLButtonElement>('save')

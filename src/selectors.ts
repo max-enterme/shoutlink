@@ -367,8 +367,43 @@ export function getMessageMenuButton(message: ParentNode): HTMLElement | null {
   return queryFirst<HTMLElement>(message, SELECTORS.messageMenuButton)
 }
 
+/**
+ * 祖先までさかのぼって表示されているか。
+ *
+ * ⚠️ **要素自身の `display` だけを見ても足りない。**`display:none` の親の中にいる子要素は、
+ *    `getComputedStyle(子).display` が `none` にならない(継承される値ではない)ため、
+ *    「閉じているドロップダウンの中の項目」を表示中と誤判定する。
+ */
+function isDisplayedDeep(el: Element): boolean {
+  let node: Element | null = el
+  while (node) {
+    if (!isDisplayed(node)) return false
+    node = node.parentElement
+  }
+  return true
+}
+
+/**
+ * **実際に開いている**メニューの項目。
+ *
+ * ⚠️ 2026-08-07 の不具合: 閉じたままのドロップダウン(チャットの
+ *    `["Q&A を開始…", "アンケートを開始…", "閉じる"]`)の項目を「開いているメニュー」として
+ *    読み、**メッセージのメニューが開いていないのに「固定項目が無い」と誤って報告**していた。
+ *    このドロップダウンには `aria-hidden="true"` が付かないため、セレクタ側の除外をすり抜ける。
+ *    → 表示状態を祖先までさかのぼって確認する。
+ *
+ * 候補セレクタは順に試すが、**表示されている項目が取れた候補**だけを採用する。
+ */
 export function getOpenMenuItems(root: ParentNode): HTMLElement[] {
-  return queryAll<HTMLElement>(root, SELECTORS.menuItems)
+  for (const selector of SELECTORS.menuItems) {
+    try {
+      const found = Array.from(root.querySelectorAll<HTMLElement>(selector)).filter(isDisplayedDeep)
+      if (found.length > 0) return found
+    } catch {
+      // 環境が解釈できないセレクタは飛ばす
+    }
+  }
+  return []
 }
 
 /**
@@ -405,4 +440,19 @@ export function findPinMenuItem(root: ParentNode): HTMLElement | null {
     if (PIN_MENU_LABELS.some((l) => label.includes(l))) return item
   }
   return null
+}
+
+/**
+ * 開いているメニューに「固定を解除」があるか。
+ *
+ * ✅ **確認済み (2026-08-07): 既に固定されているメッセージのメニューには
+ * 「メッセージを固定」が無く、代わりに「固定を解除」が出る。**
+ * これを見ないと、**固定済みのメッセージを「固定 UI が見つからない」(`unavailable`)と
+ * 誤って警告する。**「解除」があること自体が「そのメッセージは固定されている」証拠。
+ */
+export function hasUnpinMenuItem(root: ParentNode): boolean {
+  return getOpenMenuItems(root).some((item) => {
+    const label = textOf(item)
+    return !!label && UNPIN_MENU_LABELS.some((l) => label.includes(l))
+  })
 }

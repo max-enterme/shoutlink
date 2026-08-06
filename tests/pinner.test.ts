@@ -90,9 +90,56 @@ describe('pin (AC3 / AC8) — PinMode × 既存固定の有無', () => {
       expect(await pin(message, 'always', FAST)).toBe('unavailable')
     })
 
-    it('「固定を解除」を「固定」と取り違えない', async () => {
-      const message = mountMessage({ pinLabel: '固定を解除' })
+    /**
+     * 回帰テスト: 2026-08-07 に実配信で判明。
+     * チャットの「Q&A を開始 / アンケートを開始 / 閉じる」メニューは**閉じたまま DOM に常駐**し、
+     * `aria-hidden="true"` も付かない。これを「開いているメニュー」として読んでいたため、
+     * メッセージのメニューが開いていないのに「固定項目が無い」と誤って報告していた。
+     */
+    it('閉じているドロップダウンの項目を「開いているメニュー」として読まない', async () => {
+      const message = mountMessage({ pinLabel: null })
+      const closed = document.createElement('tp-yt-iron-dropdown')
+      closed.style.display = 'none'
+      for (const label of ['Q&A を開始', 'アンケートを開始', 'メッセージを固定']) {
+        const item = document.createElement('ytd-menu-service-item-renderer')
+        item.textContent = label
+        closed.appendChild(item)
+      }
+      document.body.appendChild(closed)
+
+      // 閉じたメニューの中に「メッセージを固定」があっても、それを押してはいけない
       expect(await pin(message, 'always', FAST)).toBe('unavailable')
+    })
+
+  })
+
+  /**
+   * 回帰テスト: 2026-08-07 に実配信で判明。
+   * **既に固定されているメッセージのメニューには「メッセージを固定」が無く、「固定を解除」が出る。**
+   * これを見ないと、固定済みなのに `unavailable` を警告し続ける。
+   */
+  describe('対象が既に固定されている場合', () => {
+    it('「固定を解除」しか無ければ、固定済みとみなして pinned を返す', async () => {
+      const message = mountMessage({ pinLabel: '固定を解除' })
+      expect(await pin(message, 'always', FAST)).toBe('pinned')
+    })
+
+    it('「固定を解除」を押さない(固定を外してしまわない)', async () => {
+      const clicked: string[] = []
+      const spy = (e: Event): void => {
+        const el = e.target as HTMLElement
+        if (el.tagName?.toLowerCase() === 'ytd-menu-service-item-renderer') {
+          clicked.push(el.textContent ?? '')
+        }
+      }
+      document.addEventListener('click', spy, true)
+      try {
+        const message = mountMessage({ pinLabel: '固定を解除' })
+        await pin(message, 'always', FAST)
+      } finally {
+        document.removeEventListener('click', spy, true)
+      }
+      expect(clicked).toEqual([])
     })
   })
 

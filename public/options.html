@@ -40,6 +40,8 @@
       table.directory .unseen { color: #888; }
       table.directory button { padding: 2px 8px; }
       table.directory tfoot td { padding-top: 8px; border-top: 1px solid #eee; }
+      table.postlog td:last-child, table.postlog th:last-child { width: auto; white-space: nowrap; color: #666; }
+      table.postlog .text { word-break: break-all; }
       .empty { color: #888; }
     </style>
   </head>
@@ -103,7 +105,33 @@
       <legend>クールダウン</legend>
       <label for="cooldownSec">同一送信元からの再投稿を抑止する秒数</label>
       <input id="cooldownSec" type="number" min="0" step="10" />
-      <p class="hint">0 にすると抑止しない。</p>
+      <p class="hint">
+        0 にすると抑止しない。<br />
+        <strong>この秒数は「同じ配信の中」でだけ効きます。</strong>配信が違えば、
+        秒数に関係なく投稿します。判定はこの端末に残した投稿履歴に基づくので、
+        <strong>チャットを再読み込みしても引き継がれます。</strong><br />
+        ⚠️ リダイレクトの通知はチャットに残り続けるため、<strong>秒数が短いと開き直すたびに
+        再投稿します。</strong>配信の長さ以上(例: 6 時間 = 21600)を目安にしてください。
+      </p>
+    </fieldset>
+
+    <fieldset>
+      <legend>投稿履歴</legend>
+      <p class="hint">
+        投稿できたときだけ、<strong>誰に・何を・いつ</strong>をこの端末に記録します
+        (再投稿の判定に使う。同期はしない)。<br />
+        同じ配信で同じ相手にもう一度すぐ投稿したいときは、ここを消すか、クールダウンを 0 にします。
+      </p>
+      <table class="directory postlog">
+        <thead>
+          <tr><th>ハンドル</th><th>投稿した文面</th><th>投稿時刻</th></tr>
+        </thead>
+        <tbody id="postLogRows"></tbody>
+      </table>
+      <p class="hint">
+        <button id="clearPostLog" type="button">履歴を消す</button>
+        <span id="postLogStatus"></span>
+      </p>
     </fieldset>
 
     <fieldset>

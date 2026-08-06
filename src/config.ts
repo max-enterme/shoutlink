@@ -14,7 +14,10 @@ export const DEFAULT_CONFIG: Config = {
   // 既定は ifEmpty (spec.md AC8)。ただし成立は「固定中かどうか」を DOM から
   // 判定できることが前提で、T1 未確認 (plan.md R4)。
   pinMode: 'ifEmpty',
-  cooldownSec: 600,
+  // **配信の長さを見込んだ値にする (6 時間)。**
+  // クールダウンは同一配信内でのみ効く一方、リダイレクトの通知はチャットに残り続けるため、
+  // 秒数が短いと「明けた後にチャットを開き直す → 再投稿」が起きる (2026-08-07)。
+  cooldownSec: 6 * 60 * 60,
   // 既定で出さない。配信画面にチャット窓を載せていると映り込むため (security-review.md S8)
   showManualTrigger: false,
   debug: false,
@@ -54,6 +57,17 @@ export function normalizeConfig(raw: unknown): Config {
 export function getStorageArea(): chrome.storage.StorageArea | null {
   if (typeof chrome === 'undefined') return null
   return chrome.storage?.sync ?? chrome.storage?.local ?? null
+}
+
+/**
+ * **この端末だけで持つもの**の保存先(投稿履歴)。
+ *
+ * `sync` を使わないのは、端末をまたいで共有する意味が無い(配信は 1 台で回す)ことと、
+ * 書き込み頻度・容量制限のため。`local` が無い環境でだけ `sync` に落とす。
+ */
+export function getLocalStorageArea(): chrome.storage.StorageArea | null {
+  if (typeof chrome === 'undefined') return null
+  return chrome.storage?.local ?? chrome.storage?.sync ?? null
 }
 
 const storage = getStorageArea
