@@ -6,13 +6,18 @@
   "type": "module",
   "scripts": {
     "build": "node scripts/build.mjs",
-    "build:store": "node scripts/build.mjs --store",
-    "package": "node scripts/build.mjs && node scripts/package.mjs",
-    "package:store": "node scripts/build.mjs --store && node scripts/package-store.mjs",
+    "package": "node scripts/build.mjs --release && node scripts/package.mjs",
     "icons": "node scripts/make-icons.mjs",
+    "site-assets": "node scripts/build.mjs && node scripts/make-site-assets.mjs",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
   },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/max-enterme/yt-redirect-pin.git"
+  },
+  "homepage": "https://max-enterme.github.io/yt-redirect-pin/",
+  "license": "MIT",
   "devDependencies": {
     "@types/chrome": "^0.0.268",
     "esbuild": "^0.23.1",

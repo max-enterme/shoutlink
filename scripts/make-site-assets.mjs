@@ -1,12 +1,12 @@
-// ストア掲載画像を撮るための HTML を dist/ に吐く。
+// 説明ページ (docs/) 用の画像を撮るための HTML を dist/ に吐く。
 //
-//   dist/_store-promo.html    … 小プロモタイル (440x280) の版下
-//   dist/_store-options.html  … オプションページに見本データを流し込んだもの (1280x800 で撮る)
+//   dist/_site-ogp.html    … OGP 画像 (440x280) の版下
+//   dist/_site-options.html  … オプションページに見本データを流し込んだもの (1280x800 で撮る)
 //
-// 撮影はブラウザ側でやる (Playwright なり手動なり)。撮った PNG は store/assets/ に置く。
+// 撮影はブラウザ側でやる (Playwright なり手動なり)。撮った PNG は docs/assets/ に置く。
 // dist/ は .gitignore 済みなので、この 2 枚はコミットされない。
 //
-//   npm run build && node scripts/make-store-assets.mjs
+//   npm run site-assets
 import { readFile, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -55,7 +55,7 @@ const PROMO = `<!doctype html>
 </html>
 `
 
-await writeFile(path.join(dist, '_store-promo.html'), PROMO)
+await writeFile(path.join(dist, '_site-ogp.html'), PROMO)
 
 // --- オプションページ (見本データ入り) -------------------------------------
 
@@ -97,9 +97,9 @@ if (!optionsHtml.includes(marker)) {
   process.exit(1)
 }
 await writeFile(
-  path.join(dist, '_store-options.html'),
+  path.join(dist, '_site-options.html'),
   optionsHtml.replace(marker, MOCK + '    ' + marker),
 )
 
-console.log('wrote dist/_store-promo.html (440x280)')
-console.log('wrote dist/_store-options.html (1280x800 で撮る)')
+console.log('wrote dist/_site-ogp.html (440x280)')
+console.log('wrote dist/_site-options.html (1280x800 で撮る)')
