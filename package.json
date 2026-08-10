@@ -4,6 +4,9 @@
   "private": true,
   "description": "YouTube ライブリダイレクトを検知して送信元 URL をライブチャットへ投稿・固定する Chrome 拡張 (MV3)",
   "type": "module",
+  "engines": {
+    "node": ">=20.1"
+  },
   "scripts": {
     "build": "node scripts/build.mjs",
     "package": "node scripts/build.mjs --release && node scripts/package.mjs",

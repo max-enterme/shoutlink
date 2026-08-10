@@ -19,8 +19,8 @@ YouTube のライブ配信で**他のチャンネルからライブリダイレ�
 
 ### 何をする拡張か(権限の説明)
 
-- 動くのは **YouTube のライブチャットのページだけ**(`youtube.com/live_chat` と
-  `studio.youtube.com/live_chat`)。それ以外のページでは一切動きません。
+- 動くのは **YouTube Studio のライブ管制室のチャットだけ**(`studio.youtube.com/live_chat`)。
+  `www.youtube.com` のライブチャットを含め、それ以外のページでは一切動きません。
 - 外部のサーバーとは通信しません。設定はブラウザ内 (`chrome.storage`) にだけ保存されます。
 - **あなたがログインしているアカウントの名義でチャットに投稿します。** これが一番の注意点です。
 
@@ -192,7 +192,7 @@ YouTube のライブ配信で**他のチャンネルからライブリダイレ�
 正常な流れだとこう出ます:
 
 ```
-[yt-redirect-pin] 起動した https://www.youtube.com/live_chat?...
+[yt-redirect-pin] 起動した https://studio.youtube.com/live_chat?...
 [yt-redirect-pin] 投稿する (manual): ◯◯さんからリダイレクトありがとうございます! https://...
 [yt-redirect-pin] 固定結果: pinned
 ```

@@ -230,14 +230,17 @@ copy(document.querySelector('yt-live-chat-item-list-renderer')?.outerHTML)
 npm run package
 ```
 
-`release/yt-redirect-pin-test-<version>.zip` ができる(ビルドも一緒に走る)。
+`release/yt-redirect-pin-<version>.zip` ができる(ビルドも一緒に走る)。**Releases に添付するものと同じ。**
 
 ```
-yt-redirect-pin-test-0.1.0.zip
-  START-HERE.md   … テスター向けの手順書(この文書とは別物・相手向けに書いてある)
-  extension/      … 相手が chrome://extensions で読み込むフォルダ
-  source/         … ソース一式(何をしている拡張か相手が確認できるように)
+yt-redirect-pin-0.1.0.zip
+  yt-redirect-pin-0.1.0/
+    INSTALL.txt      … 展開した人がまず読むもの(警告 → 前提 → 手順)
+    manifest.json    … chrome://extensions で読み込むのはこのフォルダ
+    content.js / options.html / options.js / icons/
 ```
+
+テスト項目を渡す場合は [for-testers.md](for-testers.md) を別途送る(ZIP には同梱していない)。
 
 渡すときに口頭で伝えること:
 
@@ -245,7 +248,7 @@ yt-redirect-pin-test-0.1.0.zip
 - 投稿は**相手のアカウント名義**でチャットに流れる
 - Chrome ウェブストアを通していないので、**デベロッパーモードでの読み込み**が要る
   (「デベロッパー モードの拡張機能を無効にする」警告が出るが正常)
-- 動かなかった項目こそ知りたい。`START-HERE.md` 末尾の報告テンプレを埋めてもらう
+- 動かなかった項目こそ知りたい。[for-testers.md](for-testers.md) 末尾の報告テンプレを埋めてもらう
 
 > **Chrome ウェブストアの限定公開は今回は使わない。**開発者登録($5)と審査が要るうえ、
 > セレクタが推測のまま(T1 未実施)で審査に出す段階ではない。ZIP + デベロッパーモードで十分。

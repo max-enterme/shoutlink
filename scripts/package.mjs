@@ -32,7 +32,30 @@ if (manifest.version !== version) {
   process.exit(1)
 }
 
+// README を経由せず ZIP だけ手渡しされることがある。**この文書が唯一の告知になりうる**ので、
+// 警告を手順より先に置く。
 const INSTALL = `yt-redirect-pin ${version}
+
+■ 使う前に必ず読んでください
+
+この拡張は、あなたのアカウントの名義で YouTube のライブチャットへ自動投稿します。
+これは YouTube の規約上グレーな行為を含みます。処分の前例は見つかっていませんが、
+「安全である証拠」ではなく「証拠が無い」という状態です。
+何かあったとき失うのは、作者ではなくあなたのチャンネルです。
+
+リスクを自分で判断・管理できる人が、自己責任で使うことを想定しています。
+判断がつかない場合は、使わないでください。作者は結果について責任を負いません (MIT / 無保証)。
+
+また、実配信で動作を確認できているのは日本語 UI・1 環境だけです。
+既定の固定モード ifEmpty の判定は未検証です。
+
+  詳細: https://max-enterme.github.io/yt-redirect-pin/
+
+■ 前提
+
+・Chrome (確認しているのは Chrome だけです)
+・YouTube Studio のライブ管制室のチャットでのみ動きます (www.youtube.com では動きません)
+・Studio の表示言語が日本語であること (検知は通知の文言に依存しています)
 
 ■ 入れかた
 
@@ -42,17 +65,13 @@ const INSTALL = `yt-redirect-pin ${version}
 3. 右上の「デベロッパー モード」を ON にする
 4. 左上の「パッケージ化されていない拡張機能を読み込む」を押す
 5. このフォルダ (manifest.json が入っているフォルダ) を選ぶ
+6.「リダイレクト返礼ピン」のカードが出れば完了
 
 ■ 設定
 
 chrome://extensions のカード →「詳細」→「拡張機能のオプション」
 
-■ 使う前に
-
-この拡張は、あなたのアカウントの名義で YouTube のライブチャットへ自動投稿します。
-YouTube の規約上グレーな行為を含みます。リスクを理解した上で自己責任で使ってください。
-
-  https://max-enterme.github.io/yt-redirect-pin/
+「有効にする」を外すと、自動検知も手動の「↩ 返礼」も止まります。
 
 ■ 注意
 
@@ -65,6 +84,22 @@ YouTube の規約上グレーな行為を含みます。リスクを理解した
 const files = (await readdir(dist, { recursive: true, withFileTypes: true }))
   .filter((e) => e.isFile() && !e.name.startsWith('_') && !e.name.endsWith('.map'))
   .map((e) => path.relative(dist, path.join(e.parentPath ?? e.path, e.name)))
+
+// ZIP ライタもディレクトリ走査も自前なので、**取りこぼしても妥当な ZIP ができてしまう**。
+// 「開けるが読み込めない拡張」を配らないよう、要るものが揃っているかをここで見る。
+const REQUIRED = [
+  'manifest.json',
+  'content.js',
+  'options.html',
+  'options.js',
+  ...Object.values(manifest.icons),
+]
+const found = new Set(files.map((f) => f.split(path.sep).join('/')))
+const missing = REQUIRED.filter((f) => !found.has(f))
+if (missing.length > 0) {
+  console.error(`dist/ に足りないものがある: ${missing.join(', ')}`)
+  process.exit(1)
+}
 
 const top = `yt-redirect-pin-${version}`
 const entries = [{ name: `${top}/INSTALL.txt`, data: Buffer.from(INSTALL, 'utf8') }]

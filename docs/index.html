@@ -8,12 +8,19 @@
       name="description"
       content="YouTube のライブ配信で受け取ったライブリダイレクトを検知し、送信元チャンネルの URL をライブチャットへ投稿して固定する Chrome 拡張 (MV3)。"
     />
+    <meta property="og:type" content="website" />
     <meta property="og:title" content="yt-redirect-pin" />
     <meta
       property="og:description"
       content="ライブリダイレクトを検知して、送信元チャンネルの URL をチャットに投稿・固定する Chrome 拡張。"
     />
-    <meta property="og:image" content="assets/ogp-440x280.png" />
+    <!-- OG のクローラは絶対 URL でないと解決しないものが多い -->
+    <meta property="og:url" content="https://max-enterme.github.io/yt-redirect-pin/" />
+    <meta
+      property="og:image"
+      content="https://max-enterme.github.io/yt-redirect-pin/assets/ogp-440x280.png"
+    />
+    <meta name="twitter:card" content="summary" />
     <link
       rel="icon"
       href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='22' fill='%232447b5'/%3E%3Cpath d='M74 24 V56 H27' stroke='white' stroke-width='17' stroke-linecap='round' stroke-linejoin='round' fill='none'/%3E%3Cpath d='M19 56 L47 35 V77 Z' fill='white'/%3E%3C/svg%3E"
@@ -127,8 +134,15 @@
       .warn .close { margin-bottom: 0; font-weight: 700; }
 
       /* --- flow --- */
-      .flow { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin: 24px 0; }
-      .flow div {
+      .flow {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 12px;
+        margin: 24px 0;
+        padding: 0;
+        list-style: none;
+      }
+      .flow li {
         background: var(--card);
         border: 1px solid var(--line);
         border-radius: 10px;
@@ -136,7 +150,7 @@
         font-size: 14px;
         line-height: 1.7;
       }
-      .flow b { display: block; color: var(--brand); font-size: 13px; margin-bottom: 6px; }
+      .flow strong { display: block; color: var(--brand); font-size: 13px; margin-bottom: 6px; }
       @media (max-width: 620px) { .flow { grid-template-columns: 1fr; } }
 
       table { width: 100%; border-collapse: collapse; margin: 20px 0; font-size: 15px; }
@@ -195,7 +209,7 @@
       </div>
     </header>
 
-    <div class="wrap">
+    <main class="wrap">
       <div class="warn">
         <h2>⚠️ 使う前に読んでください</h2>
         <ul>
@@ -216,6 +230,11 @@
           <li>
             <b>YouTube の画面構造の変更で、ある日突然動かなくなります。</b>DOM に依存しているためです。
           </li>
+          <li>
+            <b>ほとんど検証されていません。</b>実配信で通ったのは
+            <b>日本語 UI・Studio のチャット・1 環境だけ</b>で、既定の固定モード
+            <code>ifEmpty</code> の判定は<b>未検証</b>です。受信から投稿までの所要時間も測っていません。
+          </li>
         </ul>
         <p class="close">
           リスクを自分で判断・管理できる人が、自己責任で使うことを想定しています。
@@ -224,11 +243,11 @@
       </div>
 
       <h2>何をするか</h2>
-      <div class="flow">
-        <div><b>① 検知</b>リダイレクトの受信通知を、ライブチャットの画面から検知する</div>
-        <div><b>② 投稿</b>「◯◯さんからリダイレクトありがとうございます! URL」をチャットへ投稿する</div>
-        <div><b>③ 固定</b>その投稿をチャット上部に固定する</div>
-      </div>
+      <ol class="flow">
+        <li><strong>① 検知</strong>リダイレクトの受信通知を、ライブチャットの画面から検知する</li>
+        <li><strong>② 投稿</strong>「◯◯さんからリダイレクトありがとうございます! URL」をチャットへ投稿する</li>
+        <li><strong>③ 固定</strong>その投稿をチャット上部に固定する</li>
+      </ol>
       <p>
         配信中に「誰から来たのか」を確認して、チャンネル URL をコピーして、投稿して、固定する ——
         この一連の操作を、リダイレクトを受け取った時点で肩代わりします。
@@ -236,12 +255,12 @@
       </p>
 
       <table>
-        <tr><th>投稿文</th><td>テンプレートで編集できる (<code>{name}</code> に表示名、<code>{url}</code> にチャンネル URL)</td></tr>
-        <tr><th>呼び名</th><td>送信元ごとに呼び名を登録できる。リダイレクトを受けた相手は自動で一覧に載る</td></tr>
-        <tr><th>固定モード</th><td><code>off</code> 固定しない / <code>ifEmpty</code> 既存の固定が無いときだけ (既定) / <code>always</code> 上書き</td></tr>
-        <tr><th>多重発火の抑止</th><td>同一送信元はクールダウン内 1 回まで (既定 10 分)</td></tr>
-        <tr><th>手動トリガー</th><td>チャット右下の「↩ 返礼」。自動検知が動かない環境でも実行できる</td></tr>
-        <tr><th>止める</th><td>設定の「有効にする」を外せば即止まる</td></tr>
+        <tr><th scope="row">投稿文</th><td>テンプレートで編集できる (<code>{name}</code> に表示名、<code>{url}</code> にチャンネル URL)</td></tr>
+        <tr><th scope="row">呼び名</th><td>送信元ごとに呼び名を登録できる。リダイレクトを受けた相手は自動で一覧に載る</td></tr>
+        <tr><th scope="row">固定モード</th><td><code>off</code> 固定しない / <code>ifEmpty</code> 既存の固定が無いときだけ (既定) / <code>always</code> 上書き</td></tr>
+        <tr><th scope="row">多重発火の抑止</th><td>同一送信元はクールダウン内 1 回まで (既定 10 分)</td></tr>
+        <tr><th scope="row">手動トリガー</th><td>チャット右下の「↩ 返礼」。自動検知が動かない環境でも実行できる</td></tr>
+        <tr><th scope="row">止める</th><td>設定の「有効にする」を外せば即止まる</td></tr>
       </table>
 
       <p>
@@ -251,12 +270,36 @@
       </p>
 
       <figure>
-        <img src="assets/screenshot-1-options.png" alt="設定画面。有効/無効の切り替えと投稿文テンプレートのプレビュー" />
-        <figcaption>設定画面。投稿文はプレビューを見ながら編集できる</figcaption>
+        <img
+          src="assets/screenshot-1-options.png"
+          width="1280"
+          height="800"
+          loading="lazy"
+          alt="設定画面の上部。「有効にする」のチェックボックス、投稿文テンプレートの入力欄、その下に差し込み後のプレビューが表示されている"
+        />
+        <figcaption>投稿文はプレビューを見ながら編集できる</figcaption>
       </figure>
       <figure>
-        <img src="assets/screenshot-3-directory.png" alt="呼び名の辞書。チャンネルごとに呼び名を登録できる" />
-        <figcaption>呼び名の辞書。リダイレクトを受けた相手は自動で載る (呼び名は空のまま)</figcaption>
+        <img
+          src="assets/screenshot-2-pin-mode.png"
+          width="1280"
+          height="800"
+          loading="lazy"
+          alt="固定モードのプルダウンで ifEmpty が選ばれている。その下にクールダウンの秒数入力欄"
+        />
+        <figcaption>
+          固定モードは事故の起きうる設定。<code>always</code> は告知などの既存の固定を消す
+        </figcaption>
+      </figure>
+      <figure>
+        <img
+          src="assets/screenshot-3-directory.png"
+          width="1280"
+          height="800"
+          loading="lazy"
+          alt="呼び名の辞書の表。ハンドルと呼び名が行ごとに並び、末尾に新規登録用の入力欄がある"
+        />
+        <figcaption>リダイレクトを受けた相手は自動で載る (呼び名は空のまま)</figcaption>
       </figure>
 
       <h2>入れかた</h2>
@@ -275,11 +318,10 @@
         にあります。
       </p>
 
-      <h3>自動投稿を使わないという選択</h3>
+      <h3>止めかた</h3>
       <p>
-        設定の「有効にする」を OFF にしても、<b>チャット右下の「↩ 返礼」パネルからは実行できます。</b>
-        この形なら、書き込みは自分がボタンを押したときにしか起きません。自動検知に任せるのが不安なら、
-        まずこの使い方から始めるのを勧めます。
+        設定の「有効にする」を外すと、<b>自動検知も手動の「↩ 返礼」も止まります。</b>
+        想定外の連投を止めたいときの唯一のスイッチで、経路を選り分ける設定は今のところありません。
       </p>
 
       <h2>なぜストアに出さないのか</h2>
@@ -308,16 +350,19 @@
         <a href="https://github.com/max-enterme/yt-redirect-pin/blob/main/docs/privacy-policy.md">プライバシーポリシー</a>
       </p>
 
-      <footer>
+    </main>
+
+    <footer class="wrap">
+      <div>
         <a href="https://github.com/max-enterme/yt-redirect-pin">GitHub</a>
         <a href="https://github.com/max-enterme/yt-redirect-pin/issues">Issues</a>
         <a href="https://github.com/max-enterme/yt-redirect-pin/releases">Releases</a>
         <a href="https://github.com/max-enterme/yt-redirect-pin/blob/main/LICENSE">MIT License</a>
-        <p>
-          本拡張は YouTube および Google の公式製品ではなく、これらから承認・提携を受けたものでもありません。
-          YouTube は Google LLC の商標です。<b>無保証です。</b>
-        </p>
-      </footer>
-    </div>
+      </div>
+      <p>
+        本拡張は YouTube および Google の公式製品ではなく、これらから承認・提携を受けたものでもありません。
+        YouTube は Google LLC の商標です。<b>無保証です。</b>
+      </p>
+    </footer>
   </body>
 </html>
