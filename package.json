@@ -4,12 +4,23 @@
   "private": true,
   "description": "YouTube ライブリダイレクトを検知して送信元 URL をライブチャットへ投稿・固定する Chrome 拡張 (MV3)",
   "type": "module",
+  "engines": {
+    "node": ">=20.1"
+  },
   "scripts": {
     "build": "node scripts/build.mjs",
-    "package": "node scripts/build.mjs && node scripts/package.mjs",
+    "package": "node scripts/build.mjs --release && node scripts/package.mjs",
+    "icons": "node scripts/make-icons.mjs",
+    "site-assets": "node scripts/build.mjs && node scripts/make-site-assets.mjs",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
   },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/max-enterme/yt-redirect-pin.git"
+  },
+  "homepage": "https://max-enterme.github.io/yt-redirect-pin/",
+  "license": "MIT",
   "devDependencies": {
     "@types/chrome": "^0.0.268",
     "esbuild": "^0.23.1",

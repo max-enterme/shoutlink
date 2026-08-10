@@ -1,0 +1,51 @@
+name: release
+
+# v* のタグを push すると、ビルドして Release に ZIP を添付する。
+#   npm version 0.2.0 で package.json と manifest を上げてから
+#   git tag v0.2.0 && git push origin v0.2.0
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      # タグと package.json の版が食い違ったまま出さない
+      - name: バージョンの照合
+        run: |
+          version=$(node -p "require('./package.json').version")
+          if [ "v$version" != "${GITHUB_REF_NAME}" ]; then
+            echo "タグ ${GITHUB_REF_NAME} と package.json の $version が食い違っている" >&2
+            exit 1
+          fi
+
+      # 壊れたものを配らない
+      - run: npm run typecheck
+      - run: npm test
+
+      - run: npm run package
+
+      - name: Release を作る
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version=$(node -p "require('./package.json').version")
+          gh release create "${GITHUB_REF_NAME}" \
+            "release/yt-redirect-pin-${version}.zip" \
+            --title "${GITHUB_REF_NAME}" \
+            --generate-notes \
+            --verify-tag

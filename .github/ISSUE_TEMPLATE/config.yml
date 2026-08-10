@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: 導入・設定・切り分け
+    url: https://github.com/max-enterme/yt-redirect-pin/blob/main/docs/install.md
+    about: 入れかた、設定の意味、動かないときに見るところ
+  - name: 規約まわりで調べたこと
+    url: https://github.com/max-enterme/yt-redirect-pin/blob/main/docs/d3-automation-policy.md
+    about: 「これ使って大丈夫?」の判断材料。結論は出していません

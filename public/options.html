@@ -2,7 +2,7 @@
 <html lang="ja">
   <head>
     <meta charset="utf-8" />
-    <title>yt-redirect-pin 設定</title>
+    <title>リダイレクト返礼ピン 設定</title>
     <style>
       body {
         font: 14px/1.7 system-ui, sans-serif;
@@ -38,7 +38,7 @@
       table.directory td:last-child, table.directory th:last-child { width: 2.5em; padding-right: 0; }
       table.directory .handle { word-break: break-all; }
       table.directory .unseen { color: #888; }
-      table.directory button { padding: 2px 8px; }
+      table.directory button { padding: 2px 8px; white-space: nowrap; }
       table.directory tfoot td { padding-top: 8px; border-top: 1px solid #eee; }
       table.postlog td:last-child, table.postlog th:last-child { width: auto; white-space: nowrap; color: #666; }
       table.postlog .text { word-break: break-all; }
@@ -46,22 +46,27 @@
     </style>
   </head>
   <body>
-    <h1>yt-redirect-pin 設定</h1>
+    <h1>リダイレクト返礼ピン 設定</h1>
 
     <p class="warn">
       この拡張は <strong><code>studio.youtube.com</code> のライブ管制室のチャットでしか動きません。</strong>
       <code>www.youtube.com</code> のライブチャットは他人の配信でも開けてしまい、自分の配信かどうかを
       判別できないためです(ポップアウトも Studio 側のものを使ってください)。<br />
-      自動検知が動かない場合は、チャット画面の右下に出る「↩ 返礼」から手動で実行できます。
+      自動検知が動かない場合や、自動投稿を使いたくない場合は、チャット画面の右下に出る
+      「↩ 返礼」から手動で実行できます。
     </p>
 
     <fieldset>
       <legend>動作</legend>
       <div class="row">
         <input id="enabled" type="checkbox" />
-        <label for="enabled" style="margin: 0">有効にする</label>
+        <label for="enabled" style="margin: 0">リダイレクトを自動検知して投稿する</label>
       </div>
-      <p class="hint">想定外の連投を止めたいときはここを外す。</p>
+      <p class="hint">
+        想定外の連投を止めたいときはここを外す。<br />
+        <strong>外しても、チャット右下の「↩ 返礼」からは実行できます。</strong>
+        自動投稿は使わず、自分で押したときだけ投稿したい場合はこの状態で使ってください。
+      </p>
     </fieldset>
 
     <fieldset>

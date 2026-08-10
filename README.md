@@ -1,61 +1,101 @@
 # yt-redirect-pin
 
-YouTube ライブ配信で**他チャンネルからライブリダイレクトを受け取ったとき**に検知し、
-送信元チャンネルの URL をライブチャットへ投稿して、そのメッセージを固定する。
+**YouTube のライブ配信で他チャンネルからライブリダイレクトを受け取ったとき、送信元チャンネルの
+URL をライブチャットへ投稿して固定する Chrome 拡張 (MV3)。**
 
-status: 実装中(T1–T7 完了 / **実配信で ①検知 → ②投稿 → ③固定 が通った** / T8 は一部残り)
+[![release](https://img.shields.io/github/v/release/max-enterme/yt-redirect-pin?label=release&sort=semver)](https://github.com/max-enterme/yt-redirect-pin/releases/latest)
+[![license](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-## ドキュメント
+説明ページ → **<https://max-enterme.github.io/yt-redirect-pin/>**
 
-規約は [SPEC-OPS.md](../../SPEC-OPS.md)。
+---
 
-| ファイル | 内容 |
+## ⚠️ 使う前に読んでください
+
+**この拡張は Chrome ウェブストアには出していません。** 出さないと決めました。
+
+ストアの審査は**単一用途・権限・データの扱い**を見るもので、**YouTube の規約に触れるかは見てくれません。**
+つまり審査を通っても「規約上セーフ」の裏付けにはならず、**通ったという事実が誤った安心になる。**
+そしてストアに出すというのは、自分がリスクを取ることではなく、**事情を知らない人にリスクを負わせること**でもあります。
+
+- **YouTube の規約上、グレーな行為を含みます。**
+  利用規約は「自動化された手段を使用して本サービスにアクセスすること」を禁じています。
+  本拡張がこれに当たるかは文言からは決まらず、**YouTube の公式見解も、この形での処分の前例も
+  見つかっていません。**「安全である証拠」ではなく「証拠が無い」という状態です。
+  → 調べたことは全部 [docs/d3-automation-policy.md](docs/d3-automation-policy.md) に置いてあります。
+- **投稿はあなた自身のアカウントの名義で行われます。** 何かあったとき失うのはあなたのチャンネルです。
+- **未署名の拡張です。** デベロッパーモードでの読み込みになり、自動更新もされません。
+- **YouTube の画面構造の変更で、ある日突然動かなくなります。** DOM に依存しているためです。
+- **ほとんど検証されていません。** 実配信で通ったのは**日本語 UI・Studio のチャット・1 環境だけ**で、
+  既定の固定モード `ifEmpty` の判定は**未検証**です (→ [状態](#状態))。
+
+**リスクを自分で判断・管理できる人が、自己責任で使うことを想定しています。**
+判断がつかない場合は、使わないでください。作者は結果について責任を負いません ([LICENSE](LICENSE))。
+
+なお、**自動投稿を切って「手動ボタンからだけ使う」こともできます。**
+設定で「リダイレクトを自動検知して投稿する」を外し、「ライブチャットの右下に『↩ 返礼』を出す」を
+入れてください (**このボタンは既定では出ません** — 配信画面への映り込み対策)。
+**その形なら書き込みは人が押したときにしか起きません。** 迷うならまずそちらを。
+
+---
+
+## 何をするか
+
+```
+① 検知          ② 投稿                        ③ 固定
+リダイレクトの   「◯◯さんからリダイレクト        その投稿を
+受信通知を検知    ありがとうございます! URL」    チャット上部に固定
+                 をチャットへ投稿
+```
+
+配信中に「誰から来たのか」を確認して、チャンネル URL をコピーして、投稿して、固定する ——
+この一連の操作を、リダイレクトを受け取った時点で肩代わりします。
+
+| | |
 |---|---|
-| [specs/001-redirect-pin/spec.md](specs/001-redirect-pin/spec.md) | 何を・なぜ / 受け入れ条件 / 降りる箇所 |
-| [specs/001-redirect-pin/plan.md](specs/001-redirect-pin/plan.md) | 構成・モジュール・テスト戦略・リスク |
-| [specs/001-redirect-pin/tasks.md](specs/001-redirect-pin/tasks.md) | 作業分解(T1–T8) |
-| [docs/setup-and-verify.md](docs/setup-and-verify.md) | **導入手順・設定・動作確認・切り分け・T1 の DOM 採取手順** |
-| [docs/security-review.md](docs/security-review.md) | **セキュリティ点検 / インシデント点検 (2026-08-06)。未対応の指摘 S1–S9** |
+| 投稿文 | テンプレートで編集できる (`{name}` に表示名、`{url}` にチャンネル URL) |
+| 呼び名 | 送信元ごとに呼び名を登録できる。リダイレクトを受けた相手は自動で一覧に載る |
+| 固定モード | `off` (固定しない) / `ifEmpty` (既存の固定が無いときだけ) / `always` (上書き) |
+| 多重発火の抑止 | 同一送信元はクールダウン内 1 回まで (既定 6 時間)。**同じ配信の中でだけ**効き、投稿履歴に基づくのでリロードをまたいでも引き継がれる |
+| 手動トリガー | チャット右下の「↩ 返礼」。**既定は OFF** (配信画面への映り込み対策)。設定で出せば、自動投稿を切っていても実行できる |
+| 止める | 設定の「リダイレクトを自動検知して投稿する」を外せば、自動投稿は即止まる |
 
-## 前提(調査済み)
+**動くのは `studio.youtube.com` のライブ管制室のチャットだけです。**
+`www.youtube.com` のライブチャットは他人の配信でも開けてしまい、自分の配信かどうかを
+判別できないため、意図的に対象外にしています。
 
-| 工程 | 公式 YouTube Data API | 判定 |
-|---|---|---|
-| ① リダイレクト受信の検知 | 該当イベント type が存在しない | ✗ |
-| ② コメント/チャットへ投稿 | `liveChatMessages.insert` / `commentThreads.insert` | ○ |
-| ③ そのコメントを固定 | エンドポイントが存在しない | ✗ |
+### 前提
 
-③がどのみち DOM 操作でしか実現できないため、**Chrome 拡張 (MV3) の content script で
-①②③を完結させる**方針。詳細は plan.md。
+| | |
+|---|---|
+| ブラウザ | Chrome (Chromium 系なら概ね動くはずですが、確認しているのは Chrome だけです) |
+| 画面 | YouTube Studio のライブ管制室のチャット |
+| **表示言語** | **YouTube Studio が日本語であること。** 検知はリダイレクト通知の**文言**に依存しているため、他言語では反応しません |
+
+![設定画面](docs/assets/screenshot-1-options.png)
+
+## 入れかた
+
+1. [Releases](https://github.com/max-enterme/yt-redirect-pin/releases/latest) から
+   `yt-redirect-pin-<version>.zip` を落とす
+2. 展開する。**消さない場所に置く** (Chrome はこのフォルダを読み続けます)
+3. Chrome で `chrome://extensions` を開き、右上の **「デベロッパー モード」** を ON
+4. **「パッケージ化されていない拡張機能を読み込む」** → 展開したフォルダを選ぶ
+
+詳しい手順・設定・動かないときの切り分けは **[docs/install.md](docs/install.md)**。
 
 ## 開発
 
 ```bash
 npm install
-npm run typecheck && npx vitest run
-npm run build
+npm run typecheck && npm test
+npm run build      # dist/ に読み込める形が出る
+npm run package    # release/yt-redirect-pin-<version>.zip
 ```
-
-`npm run build` が `dist/` に MV3 拡張を吐く(`chrome://extensions` の「パッケージ化されていない
-拡張機能を読み込む」で `dist/` を指定する)。設定は拡張機能のオプションページ。
-
-**導入から動作確認までの手順は [docs/setup-and-verify.md](docs/setup-and-verify.md)。**
-
-### 他人に渡してテストしてもらう
-
-```bash
-npm run package
-```
-
-`release/yt-redirect-pin-test-<version>.zip` ができる。中身は
-`START-HERE.md`(テスター向け手順書)/ `extension/`(読み込むフォルダ)/ `source/`(監査用のソース一式)。
-渡す相手向けの説明は [docs/for-testers.md](docs/for-testers.md)。
-
-### 構成
 
 | ファイル | 役割 |
 |---|---|
-| `src/selectors.ts` | **DOM 依存の集約点。**候補の配列を先頭から試す。他モジュールは `document.querySelector` を直接呼ばない |
+| `src/selectors.ts` | **DOM 依存の集約点。** 候補の配列を先頭から試す。他モジュールは `document.querySelector` を直接呼ばない |
 | `src/detector.ts` | MutationObserver → `RedirectEvent`。抽出部は純関数 (`extractRedirectEvent`) として分離 |
 | `src/composer.ts` | テンプレート差し込み (`{name}` `{url}`) |
 | `src/dedupe.ts` | 同一送信元・クールダウンの多重発火抑止。**クールダウンは同一配信内でのみ適用**(配信が違えば通す) |
@@ -67,31 +107,37 @@ npm run package
 | `src/config.ts` | `chrome.storage` 永続化 |
 | `src/main.ts` | 配線。全体を try/catch (AC6) |
 
-## 実配信で確認できたこと (2026-08-05)
+| ドキュメント | 内容 |
+|---|---|
+| [specs/001-redirect-pin/spec.md](specs/001-redirect-pin/spec.md) | 何を・なぜ / 受け入れ条件 / 降りる箇所 |
+| [specs/001-redirect-pin/plan.md](specs/001-redirect-pin/plan.md) | 構成・テスト戦略・リスク |
+| [docs/t1-findings.md](docs/t1-findings.md) | **実 DOM で確認できたこと・外れた推測・実害のある誤動作の記録** |
+| [docs/d3-automation-policy.md](docs/d3-automation-policy.md) | 規約まわりで調べたこと |
+| [docs/setup-and-verify.md](docs/setup-and-verify.md) | 開発者向けの導入・動作確認 |
+| [docs/for-testers.md](docs/for-testers.md) | 他人にテストを頼むときの手順書 |
+| [docs/privacy-policy.md](docs/privacy-policy.md) | データの扱い (外部送信は一切しません) |
 
-**①検知 → ②投稿 → ③固定が通った。**詳細は [docs/t1-findings.md](docs/t1-findings.md)。
+`v*` のタグを push すると GitHub Actions がビルドして Release に ZIP を添付します。
 
-要点(推測が外れていた箇所):
+## 状態
 
-- 通知の文言は `@<送信元> とその視聴者が参加しました。` で、**「リダイレクト」を含まない**
-- **ハンドルは日本語のことがある**(ASCII 前提の抽出では取れない)
-- 通知は**チャット項目リスト (`#items`) の外**に出る
-- 固定バナーの要素は**何も固定していなくても `hidden` で常駐する**
-- メニューは `click()` では開かない。**座標付きのポインタイベント**が要る
+実配信で **①検知 → ②投稿 → ③固定** が通ることを確認済み (2026-08-05)。ただし:
 
-## 次にやること
+- 確認できたのは**日本語 UI・Studio のチャット・1 環境だけ**
+- `ifEmpty` (既定) の「現在何かが固定されているか」の DOM 判定は**未検証**
+- 受信から投稿までの所要時間は未計測
 
-**T8 の残り**(AC2・AC3 は確認済み — 投稿された URL から送信元チャンネルへ遷移でき、
-**自動経路の通しで投稿したメッセージ自体が固定された** (2026-08-07)):
+**AC2・AC3 は確認済み** — 投稿された URL から送信元チャンネルへ遷移でき、
+**自動経路の通しで、投稿したメッセージ自体が固定された** (2026-08-07)。残っているのは:
 
-- 受信から投稿までの所要時間(AC1: 10 秒以内)
-- `ifEmpty` が実際の固定バナーを拾うか(plan.md R4)
+- 受信から投稿までの所要時間 (AC1: 10 秒以内)
+- `ifEmpty` が実際の固定バナーを拾うか (plan.md R4)
 
 ⚠️ `src/selectors.ts` には**確認済みの定義と推測のままの定義が混在**している。各定義のコメントに
 `✅ 確認済み` / `TODO(T1)` を書き分けてある。`tests/fixtures/live-chat.ts` は依然として合成 DOM。
 
-自動検知と並んで、**手動トリガーの経路がある**(設定「手動トリガーを出す」= ON でライブチャット
-画面右下に「↩ 返礼」。**既定は OFF** — 配信画面への映り込み対策 / security-review.md S8)。
-同じパネルの **「固定だけ試す」** は、投稿せずに固定だけを試す切り分け用の経路。
+詳細は [docs/t1-findings.md](docs/t1-findings.md) と [docs/security-review.md](docs/security-review.md)。
 
-**有効化の前に spec.md D3(自動投稿の是非)の判断が要る。**
+## ライセンス
+
+[MIT](LICENSE)。**無保証です。**

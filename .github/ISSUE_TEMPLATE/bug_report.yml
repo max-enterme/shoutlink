@@ -1,0 +1,82 @@
+name: 動かない・おかしい
+description: 検知されない / 投稿されない / 固定されない など
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ⚠️ **ログや DOM を貼るときは、視聴者のチャンネル名・ハンドル・ID が混ざっていないか
+        確認してください。** リダイレクトの送信元だけ分かれば十分です。
+
+  - type: input
+    id: version
+    attributes:
+      label: 拡張のバージョン
+      description: chrome://extensions のカードに出ています
+      placeholder: 0.1.0
+    validations:
+      required: true
+
+  - type: input
+    id: browser
+    attributes:
+      label: ブラウザとバージョン
+      placeholder: Chrome 140 / Windows 11
+    validations:
+      required: true
+
+  - type: input
+    id: language
+    attributes:
+      label: YouTube Studio の表示言語
+      description: 検知は通知の**文言**に依存しています。バージョンより切り分けに効きます
+      placeholder: 日本語
+    validations:
+      required: true
+
+  - type: dropdown
+    id: where
+    attributes:
+      label: どの画面で試したか
+      options:
+        - Studio のライブ管制室のチャット
+        - Studio のポップアウトしたチャット
+        - その他 (下に書いてください)
+    validations:
+      required: true
+
+  - type: dropdown
+    id: how
+    attributes:
+      label: どの経路か
+      options:
+        - 自動検知 (実際にリダイレクトを受けた)
+        - 手動トリガー「↩ 返礼」
+        - 「固定だけ試す」
+    validations:
+      required: true
+
+  - type: textarea
+    id: what
+    attributes:
+      label: 何が起きたか / 何を期待したか
+    validations:
+      required: true
+
+  - type: textarea
+    id: log
+    attributes:
+      label: コンソールのログ
+      description: |
+        チャットのウィンドウで F12 → Console。`[yt-redirect-pin]` で始まる行。
+        設定で「診断ログ」を ON にすると詳しく出ます。
+      render: text
+
+  - type: textarea
+    id: notice
+    attributes:
+      label: リダイレクト通知の文面 (自動検知が反応しなかった場合)
+      description: |
+        検知は通知の文言に依存しています。**文言が違うと検知できません。**
+        画面に出た文をそのまま貼ってください (送信元のハンドルは伏せて構いません)。
+      placeholder: "@◯◯ とその視聴者が参加しました。"
