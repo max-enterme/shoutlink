@@ -52,13 +52,14 @@ chrome://extensions のカード →「詳細」→「拡張機能のオプシ�
 この拡張は、あなたのアカウントの名義で YouTube のライブチャットへ自動投稿します。
 YouTube の規約上グレーな行為を含みます。リスクを理解した上で自己責任で使ってください。
 
-  https://github.com/max-enterme/yt-redirect-pin
+  https://max-enterme.github.io/yt-redirect-pin/
 
 ■ 注意
 
 ・Chrome が起動のたびに「デベロッパー モードの拡張機能を無効にする」と聞いてきます。
   未署名の拡張なので正常です。「キャンセル」で閉じてください。
-・自動更新はされません。新しい版は上の GitHub の Releases から取ってください。
+・自動更新はされません。新しい版はここから取ってください。
+  https://github.com/max-enterme/yt-redirect-pin/releases/latest
 `
 
 const files = (await readdir(dist, { recursive: true, withFileTypes: true }))

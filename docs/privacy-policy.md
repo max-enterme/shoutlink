@@ -54,7 +54,7 @@ YouTube は Google LLC の商標です。
 
 ## お問い合わせ
 
-max.enterme@gmail.com
+<https://github.com/max-enterme/yt-redirect-pin/issues>
 
 ## 変更
 
