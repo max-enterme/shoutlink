@@ -1,5 +1,30 @@
 import { describe, expect, it } from 'vitest'
-import { DEFAULT_CONFIG, normalizeConfig } from '../src/config'
+import { DEFAULT_CONFIG, isActionAllowed, normalizeConfig } from '../src/config'
+
+/**
+ * ここは**公開ドキュメントの主張を固定するテスト**。
+ * README / docs/install.md / docs/index.html は「『有効にする』を外しても
+ * 手動の『↩ 返礼』からは実行できる」と説明している。これが崩れたら文書が嘘になる。
+ */
+describe('isActionAllowed (AC7)', () => {
+  it('有効なら自動も手動も通す', () => {
+    expect(isActionAllowed(true, 'auto')).toBe(true)
+    expect(isActionAllowed(true, 'manual')).toBe(true)
+  })
+
+  it('無効なら自動検知は止まる', () => {
+    expect(isActionAllowed(false, 'auto')).toBe(false)
+  })
+
+  it('無効でも手動トリガーは通る', () => {
+    expect(isActionAllowed(false, 'manual')).toBe(true)
+  })
+
+  it('origin が無いものは自動として扱う (安全側に倒す)', () => {
+    expect(isActionAllowed(false, undefined)).toBe(false)
+    expect(isActionAllowed(true, undefined)).toBe(true)
+  })
+})
 
 describe('normalizeConfig', () => {
   it('空なら既定を返す', () => {

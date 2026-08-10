@@ -44,6 +44,20 @@ export function normalizeConfig(raw: unknown): Config {
   }
 }
 
+/**
+ * 投稿・固定まで進んでよいか (AC7)。
+ *
+ * **「有効にする」は自動検知のスイッチ。** 手動トリガーは人がボタンを押した時点で
+ * 意思表示なので、無効化中でも通す。AC7 が止めたいのは「想定外の連投」であって、
+ * 人の 1 クリックはそれに当たらない。
+ *
+ * ドキュメントが「OFF でも手動から使える」と説明している根拠がここ。
+ * **この関数の挙動を変えるなら README / docs/install.md / docs/index.html も直すこと。**
+ */
+export function isActionAllowed(enabled: boolean, origin?: 'auto' | 'manual'): boolean {
+  return enabled || origin === 'manual'
+}
+
 /** 保存先。chrome が無い環境(テスト等)では null */
 export function getStorageArea(): chrome.storage.StorageArea | null {
   if (typeof chrome === 'undefined') return null

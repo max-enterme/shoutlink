@@ -4,7 +4,7 @@
  */
 import { compose } from './composer'
 import { REDIRECT_TEXT_PATTERNS, getChatMessages, getMessageText } from './selectors'
-import { DEFAULT_CONFIG, loadConfig, onConfigChanged } from './config'
+import { DEFAULT_CONFIG, isActionAllowed, loadConfig, onConfigChanged } from './config'
 import { createDedupe } from './dedupe'
 import {
   findEntry,
@@ -63,9 +63,9 @@ async function main(): Promise<void> {
     directory = rememberSource(directory, event)
     void guardAsync('呼び名辞書の保存', () => saveDirectory(directory), undefined)
 
-    // AC7: 無効化されていれば何もしない
-    if (!config.enabled) {
-      log.info('無効化されているため何もしない', event.sourceChannelUrl)
+    // AC7: 自動検知は無効化で止まる。手動トリガーは人が押しているので通す
+    if (!isActionAllowed(config.enabled, event.origin)) {
+      log.info('自動検知が無効化されているためスキップ', event.sourceChannelUrl)
       return
     }
     // AC4: 同一送信元・クールダウン内の多重発火を抑止
