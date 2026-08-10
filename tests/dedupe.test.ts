@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { createDedupe } from '../src/dedupe'
+import { UNKNOWN_STREAM_MIN_COOLDOWN_SEC, createDedupe } from '../src/dedupe'
 import type { RedirectEvent } from '../src/types'
 import { FAKE_CHANNEL, FAKE_OTHER_CHANNEL } from './fixtures/live-chat'
 
@@ -51,5 +51,82 @@ describe('createDedupe (AC4)', () => {
     dedupe.tryAcquire(ev(FAKE_CHANNEL.url), 0)
     dedupe.setCooldownSec(60)
     expect(dedupe.tryAcquire(ev(FAKE_CHANNEL.url), 1_000)).toBe(false)
+  })
+})
+
+/**
+ * 2026-08-06 の不具合: チャットを再読み込みすると、残っているリダイレクトの通知を
+ * 初期走査が拾い直し、同じ相手へ何度も投稿していた。抑止の記録がメモリ上にしか
+ * 無かったため、リロードのたびに白紙に戻っていた。
+ */
+describe('createDedupe — 保存済みの投稿履歴からの復元', () => {
+  const history = [{ url: FAKE_CHANNEL.url, postedAt: 1_000, streamId: 'stream-1' }]
+
+  it('同じ配信で投稿済みなら、クールダウン内は投稿しない(リロードをまたいでも)', () => {
+    const dedupe = createDedupe(60, { streamId: 'stream-1', history })
+    expect(dedupe.tryAcquire(ev(FAKE_CHANNEL.url), 2_000)).toBe(false)
+  })
+
+  it('同じ配信でも、クールダウンが明ければ投稿する', () => {
+    const dedupe = createDedupe(60, { streamId: 'stream-1', history })
+    expect(dedupe.tryAcquire(ev(FAKE_CHANNEL.url), 61_000)).toBe(true)
+  })
+
+  it('配信が違えば、クールダウン内でも投稿する', () => {
+    const dedupe = createDedupe(60, { streamId: 'stream-2', history })
+    expect(dedupe.tryAcquire(ev(FAKE_CHANNEL.url), 2_000)).toBe(true)
+  })
+
+  it('配信 ID が取れないときは、履歴に対してだけクールダウンを長い方へ倒す', () => {
+    const floorMs = UNKNOWN_STREAM_MIN_COOLDOWN_SEC * 1_000
+    // 設定どおりの 60 秒が明けても、前回の起動での投稿なら止める(通知は消えずに残るため)
+    expect(createDedupe(60, { streamId: '', history }).tryAcquire(ev(FAKE_CHANNEL.url), 61_000)).toBe(
+      false,
+    )
+    expect(
+      createDedupe(60, { streamId: '', history }).tryAcquire(ev(FAKE_CHANNEL.url), floorMs + 2_000),
+    ).toBe(true)
+  })
+
+  it('同じ画面のまま連続で発火した場合は、設定どおりのクールダウンで判定する', () => {
+    const dedupe = createDedupe(60, { streamId: '' })
+    expect(dedupe.tryAcquire(ev(FAKE_CHANNEL.url), 0)).toBe(true)
+    expect(dedupe.tryAcquire(ev(FAKE_CHANNEL.url), 59_000)).toBe(false)
+    expect(dedupe.tryAcquire(ev(FAKE_CHANNEL.url), 60_000)).toBe(true)
+  })
+
+  it('履歴に無い送信元は通す', () => {
+    const dedupe = createDedupe(60, { streamId: 'stream-1', history })
+    expect(dedupe.tryAcquire(ev(FAKE_OTHER_CHANNEL.url), 2_000)).toBe(true)
+  })
+
+  it('クールダウン 0(抑止なし)は履歴があっても通す', () => {
+    const dedupe = createDedupe(0, { streamId: 'stream-1', history })
+    expect(dedupe.tryAcquire(ev(FAKE_CHANNEL.url), 2_000)).toBe(true)
+  })
+
+  it('他の配信の履歴は抑止に使わない(複数の配信の記録が混ざっていても)', () => {
+    const mixed = [
+      { url: FAKE_CHANNEL.url, postedAt: 1_000, streamId: 'stream-1' },
+      { url: FAKE_CHANNEL.url, postedAt: 5_000, streamId: 'stream-2' },
+    ]
+    // 今は stream-1。stream-2 の新しい記録に引きずられてはいけない
+    expect(createDedupe(60, { streamId: 'stream-1', history: mixed }).tryAcquire(
+      ev(FAKE_CHANNEL.url),
+      61_500,
+    )).toBe(true)
+    expect(createDedupe(60, { streamId: 'stream-1', history: mixed }).tryAcquire(
+      ev(FAKE_CHANNEL.url),
+      2_000,
+    )).toBe(false)
+  })
+
+  it('壊れた履歴は無視する (AC6)', () => {
+    const broken = [
+      { url: '', postedAt: 1_000 },
+      { url: FAKE_CHANNEL.url, postedAt: Number.NaN, streamId: 'stream-1' },
+    ]
+    const dedupe = createDedupe(60, { streamId: 'stream-1', history: broken })
+    expect(dedupe.tryAcquire(ev(FAKE_CHANNEL.url), 2_000)).toBe(true)
   })
 })

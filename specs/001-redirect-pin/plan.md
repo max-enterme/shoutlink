@@ -81,7 +81,8 @@ src/
   composer.ts    # テンプレート + RedirectEvent → 投稿文
   poster.ts      # チャット入力欄へ投稿し、投稿された自分のメッセージ要素を返す
   pinner.ts      # pinMode を解釈し、メッセージ要素 → メニュー → 「固定」クリック
-  dedupe.ts      # 同一送信元・クールダウンの多重発火抑止
+  dedupe.ts      # 同一送信元の多重発火抑止(クールダウンは同一配信内でのみ適用)
+  post-log.ts    # 投稿履歴 (chrome.storage.local)。リロードをまたいで抑止を引き継ぐ
   config.ts      # テンプレート / 有効無効 / クールダウン / pinMode (chrome.storage)
   main.ts        # 上記を配線。全体を try/catch で包む(AC6)
 options/         # 設定 UI(テンプレート編集・ON/OFF)
@@ -131,7 +132,8 @@ async function pin(el: HTMLElement, mode: PinMode): Promise<'pinned' | 'skipped'
 |---|---|
 | `detector` | 採取した live_chat DOM の fixture を jsdom に流し、`RedirectEvent` が正しく出るか |
 | `composer` | テンプレート差し込み(`{name}` `{url}`、エスケープ、長さ上限) |
-| `dedupe` | 同一送信元の連続発火 / クールダウン明け / 配信をまたいだ場合 |
+| `dedupe` | 同一送信元の連続発火 / クールダウン明け / 配信をまたいだ場合 / **保存済み履歴からの復元(リロード後の再投稿)** |
+| `post-log` | 投稿履歴の upsert(配信 × 送信元)・剪定・壊れた保存内容の正規化 |
 | `pinner` | `PinMode` × 既存固定バナーの有無 → 期待する戻り値(`pinned`/`skipped`/`unavailable`)の分岐を fixture + スタブで検証 |
 | `poster` | 単体テストは骨組みのみ。**実際の合否は実配信での通し確認 (T8)** に依存 |
 

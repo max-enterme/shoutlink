@@ -8,7 +8,14 @@
  *   固定 UI が見つからない → 'unavailable'(投稿は成立しているので処理は継続 / AC6)
  */
 import { log } from './log'
-import { findPinMenuItem, getMessageMenuButton, getPinnedBanner, textOf } from './selectors'
+import {
+  findPinMenuItem,
+  getMessageMenuButton,
+  getOpenMenuItems,
+  getPinnedBanner,
+  hasUnpinMenuItem,
+  textOf,
+} from './selectors'
 import type { PinMode, PinResult } from './types'
 import { waitFor } from './wait'
 
@@ -83,6 +90,9 @@ function describeMenuState(root: ParentNode): Record<string, unknown> {
   const isItem = (e: Element) => /item-renderer$|paper-item$/.test(e.tagName.toLowerCase())
   const popups = Array.from(root.querySelectorAll('tp-yt-iron-dropdown, ytd-menu-popup-renderer'))
   return {
+    // **実際に開いていると判定した項目。**空なら「メニューが開いていない」。
+    // 下の roleMenuItems には閉じたメニューの項目も混ざるので、判断はこちらで行う。
+    openMenuItems: getOpenMenuItems(root).map((e) => textOf(e).slice(0, 24)),
     popupCount: popups.length,
     popups: popups.slice(0, 6).map((d) => ({
       tag: d.tagName.toLowerCase(),
@@ -141,17 +151,43 @@ export async function pin(
 
   for (const target of menuOpenTargets(menuButton)) {
     pressLikeAHuman(target)
-    const item = await waitFor(() => findPinMenuItem(root), { timeoutMs, intervalMs })
-    if (item) {
-      item.click()
+    // 「固定」と「固定を解除」のどちらが出るかを待つ。
+    // ⚠️ **既に固定されているメッセージのメニューには「固定」が無い** (2026-08-07 確認)。
+    //    「固定」だけを待つと、固定済みなのにタイムアウトして `unavailable` を警告する。
+    const found = await waitFor(
+      () => {
+        const item = findPinMenuItem(root)
+        if (item) return { kind: 'pin', item } as const
+        return hasUnpinMenuItem(root) ? ({ kind: 'already' } as const) : null
+      },
+      { timeoutMs, intervalMs },
+    )
+    if (found?.kind === 'pin') {
+      found.item.click()
       // TODO(T1): 固定に確認ダイアログが挟まる場合、もう一段の確定操作が要る。未確認。
+      return 'pinned'
+    }
+    if (found?.kind === 'already') {
+      // 「固定を解除」があるということは、そのメッセージは既に固定されている。
+      // 目的の状態(このメッセージが固定されている)は満たされているので成功として返す。
+      closeMenu(root)
+      log.info('このメッセージは既に固定されている(メニューが「固定を解除」)。何もしない')
       return 'pinned'
     }
     closeMenu(root)
   }
 
-  // popupCount が 0 / visible が false なら「メニューが開いていない」、
-  // items にラベルが並んでいるのに固定が無いなら「固定できない権限・画面」。
-  log.warn('メニューに「固定」項目が見つからない。固定をスキップする', describeMenuState(root))
+  // 「メニューが開かなかった」のか「開いたが固定が無い」のかを言い分ける。
+  // 2026-08-07: ここを一括で「固定項目が無い」と報告していたため、実際には
+  // **メニューが開いていなかった**ケースを取り違えていた。
+  const state = describeMenuState(root)
+  if ((state.openMenuItems as string[]).length === 0) {
+    log.warn('メッセージのメニューが開かなかった。固定をスキップする', {
+      ...state,
+      message: textOf(el).slice(0, 40),
+    })
+  } else {
+    log.warn('メニューに「固定」項目が見つからない。固定をスキップする', state)
+  }
   return 'unavailable'
 }

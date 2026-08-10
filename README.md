@@ -33,9 +33,9 @@ URL をライブチャットへ投稿して固定する Chrome 拡張 (MV3)。**
 判断がつかない場合は、使わないでください。作者は結果について責任を負いません ([LICENSE](LICENSE))。
 
 なお、**自動投稿を切って「手動ボタンからだけ使う」こともできます。**
-設定の「リダイレクトを自動検知して投稿する」を外すと自動投稿は止まりますが、
-チャット右下の「↩ 返礼」からは実行できます。**その形なら書き込みは人が押したときにしか起きません。**
-迷うならまずそちらを。
+設定で「リダイレクトを自動検知して投稿する」を外し、「ライブチャットの右下に『↩ 返礼』を出す」を
+入れてください (**このボタンは既定では出ません** — 配信画面への映り込み対策)。
+**その形なら書き込みは人が押したときにしか起きません。** 迷うならまずそちらを。
 
 ---
 
@@ -56,8 +56,8 @@ URL をライブチャットへ投稿して固定する Chrome 拡張 (MV3)。**
 | 投稿文 | テンプレートで編集できる (`{name}` に表示名、`{url}` にチャンネル URL) |
 | 呼び名 | 送信元ごとに呼び名を登録できる。リダイレクトを受けた相手は自動で一覧に載る |
 | 固定モード | `off` (固定しない) / `ifEmpty` (既存の固定が無いときだけ) / `always` (上書き) |
-| 多重発火の抑止 | 同一送信元はクールダウン内 1 回まで (既定 10 分) |
-| 手動トリガー | チャット右下の「↩ 返礼」。**自動投稿を切っていても実行できる** |
+| 多重発火の抑止 | 同一送信元はクールダウン内 1 回まで (既定 6 時間)。**同じ配信の中でだけ**効き、投稿履歴に基づくのでリロードをまたいでも引き継がれる |
+| 手動トリガー | チャット右下の「↩ 返礼」。**既定は OFF** (配信画面への映り込み対策)。設定で出せば、自動投稿を切っていても実行できる |
 | 止める | 設定の「リダイレクトを自動検知して投稿する」を外せば、自動投稿は即止まる |
 
 **動くのは `studio.youtube.com` のライブ管制室のチャットだけです。**
@@ -97,13 +97,15 @@ npm run package    # release/yt-redirect-pin-<version>.zip
 |---|---|
 | `src/selectors.ts` | **DOM 依存の集約点。** 候補の配列を先頭から試す。他モジュールは `document.querySelector` を直接呼ばない |
 | `src/detector.ts` | MutationObserver → `RedirectEvent`。抽出部は純関数 (`extractRedirectEvent`) として分離 |
-| `src/composer.ts` | テンプレート差し込み |
-| `src/dedupe.ts` | 同一送信元・クールダウンの多重発火抑止 |
+| `src/composer.ts` | テンプレート差し込み (`{name}` `{url}`) |
+| `src/dedupe.ts` | 同一送信元・クールダウンの多重発火抑止。**クールダウンは同一配信内でのみ適用**(配信が違えば通す) |
+| `src/post-log.ts` | 投稿履歴 (`chrome.storage.local`)。**リロードをまたいで再投稿を止める土台。**誰に・何を・いつ・どの配信で |
 | `src/poster.ts` | チャット入力欄への投稿と、投稿した自分のメッセージ要素の特定 |
 | `src/pinner.ts` | `PinMode` の解釈と「固定」の実行 |
-| `src/manual-trigger.ts` | 手動トリガー UI (常設) |
-| `src/config.ts` / `src/directory.ts` | `chrome.storage` 永続化 |
-| `src/main.ts` | 配線。全体を try/catch |
+| `src/manual-trigger.ts` | 手動トリガー UI(設定 `showManualTrigger` / **既定 OFF**)。自動検知と同じ `RedirectEvent` を同じパイプラインに流す |
+| `src/self-echo.ts` | 自分の投稿(とその固定バナー)を通知として拾い直す自己ループの抑止。**設定と独立** |
+| `src/config.ts` | `chrome.storage` 永続化 |
+| `src/main.ts` | 配線。全体を try/catch (AC6) |
 
 | ドキュメント | 内容 |
 |---|---|
@@ -125,7 +127,16 @@ npm run package    # release/yt-redirect-pin-<version>.zip
 - `ifEmpty` (既定) の「現在何かが固定されているか」の DOM 判定は**未検証**
 - 受信から投稿までの所要時間は未計測
 
-詳細は [docs/t1-findings.md](docs/t1-findings.md)。
+**AC2・AC3 は確認済み** — 投稿された URL から送信元チャンネルへ遷移でき、
+**自動経路の通しで、投稿したメッセージ自体が固定された** (2026-08-07)。残っているのは:
+
+- 受信から投稿までの所要時間 (AC1: 10 秒以内)
+- `ifEmpty` が実際の固定バナーを拾うか (plan.md R4)
+
+⚠️ `src/selectors.ts` には**確認済みの定義と推測のままの定義が混在**している。各定義のコメントに
+`✅ 確認済み` / `TODO(T1)` を書き分けてある。`tests/fixtures/live-chat.ts` は依然として合成 DOM。
+
+詳細は [docs/t1-findings.md](docs/t1-findings.md) と [docs/security-review.md](docs/security-review.md)。
 
 ## ライセンス
 

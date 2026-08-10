@@ -24,6 +24,14 @@ export type Config = {
   pinMode: PinMode
   cooldownSec: number
   /**
+   * ライブチャット画面の右下に手動トリガー (`↩ 返礼`) を出すか。
+   *
+   * **既定は false。**配信画面にチャット窓を載せていると常時映り込むため
+   * ([docs/security-review.md](../docs/security-review.md) S8)。自動検知が空振りしたときの
+   * 逃げ道 (plan.md R1) と、投稿・固定の切り分け経路としては必要なので、機能自体は残す。
+   */
+  showManualTrigger: boolean
+  /**
    * 診断ログ。チャットに現れた「通常のメッセージ以外」のノードをすべてコンソールに出す。
    * リダイレクト通知の DOM が未確認(T1 未完)の間、その正体を掴むための唯一の手段。
    */

@@ -149,8 +149,11 @@ export const SELECTORS = {
  *    `@ハンドル とその視聴者が参加しました。挨拶しましょう`
  *    **「リダイレクト」という語は入っていない。**これが初回に検知できなかった直接の原因。
  *
- * TODO(T1): 英語 UI の文言は未確認(下の英語パターンは推測)。
- *           「リダイレクト」を含む別形式の通知が存在するかも未確認のため、旧パターンも残す。
+ * パターンは 2 つに分けてある:
+ *   `REDIRECT_TEXT_PATTERNS`             … 自動発火させてよい文言
+ *   `UNCONFIRMED_REDIRECT_TEXT_PATTERNS` … 診断ログに出すだけの推測
+ *
+ * TODO(T1): 英語 UI の文言は未確認。「リダイレクト」を含む別形式の通知が存在するかも未確認。
  */
 /**
  * **通知とみなしてはいけない文言。**文言パターンより優先して除外する。
@@ -167,15 +170,43 @@ export const EXCLUDED_TEXT_PATTERNS: readonly RegExp[] = [
   /promote .{0,20}content/i,
 ]
 
+/**
+ * **自動発火の対象にしてよい文言。**
+ *
+ * ⚠️ ここに置いてよいのは「リダイレクトを**受けた**ことだけを意味する文言」に限る。
+ *    ここに当たった要素は、そのまま投稿まで走る。
+ *
+ * - `とその視聴者が参加しました` は実配信で確認済み (2026-08-05)。
+ * - 英語 2 つは**未確認**だが、確認済みの文言をそのまま英訳した形であり、
+ *   「受けた」以外の意味では出てこない。
+ */
 export const REDIRECT_TEXT_PATTERNS: readonly RegExp[] = [
   // 確認済みの形
   /とその視聴者が参加しました/,
   /視聴者が参加しました/,
-  // 未確認(推測)
-  /リダイレクト/,
-  /誘導されました/,
+  // 未確認だが、確認済みの文言と同じ形(受信のみを意味する)
   /and their viewers?\b/i,
   /viewers? (have )?joined/i,
+]
+
+/**
+ * **自動発火させない文言。診断ログに「候補」として出すだけ。**
+ *
+ * ⚠️ 2026-08-06 の②の教訓「未確認の推測を、チェックを飛ばす強い経路に置かない」を、
+ *    セレクタだけでなく文言にも適用したもの (security-review.md S2)。
+ *
+ * ここにあるのは**リダイレクトという話題に触れているだけ**の語で、
+ * 「受けた」とは限らない。実際に踏んだ事故:
+ *
+ * - 送信側のバナー(`この機会に、@<送信先> …`)— 送った側にも出る
+ * - 自分が投稿する返礼文そのもの(既定テンプレートに「リダイレクト」が入る / S1)
+ *
+ * 別形式の通知を実際に観測したら、その文言を上の
+ * `REDIRECT_TEXT_PATTERNS` へ**確認済みとして昇格**させる。
+ */
+export const UNCONFIRMED_REDIRECT_TEXT_PATTERNS: readonly RegExp[] = [
+  /リダイレクト/,
+  /誘導されました/,
   /redirect(ed|ing)?\b/i,
   /\braid(ed|ing)?\b/i,
 ]
@@ -336,8 +367,43 @@ export function getMessageMenuButton(message: ParentNode): HTMLElement | null {
   return queryFirst<HTMLElement>(message, SELECTORS.messageMenuButton)
 }
 
+/**
+ * 祖先までさかのぼって表示されているか。
+ *
+ * ⚠️ **要素自身の `display` だけを見ても足りない。**`display:none` の親の中にいる子要素は、
+ *    `getComputedStyle(子).display` が `none` にならない(継承される値ではない)ため、
+ *    「閉じているドロップダウンの中の項目」を表示中と誤判定する。
+ */
+function isDisplayedDeep(el: Element): boolean {
+  let node: Element | null = el
+  while (node) {
+    if (!isDisplayed(node)) return false
+    node = node.parentElement
+  }
+  return true
+}
+
+/**
+ * **実際に開いている**メニューの項目。
+ *
+ * ⚠️ 2026-08-07 の不具合: 閉じたままのドロップダウン(チャットの
+ *    `["Q&A を開始…", "アンケートを開始…", "閉じる"]`)の項目を「開いているメニュー」として
+ *    読み、**メッセージのメニューが開いていないのに「固定項目が無い」と誤って報告**していた。
+ *    このドロップダウンには `aria-hidden="true"` が付かないため、セレクタ側の除外をすり抜ける。
+ *    → 表示状態を祖先までさかのぼって確認する。
+ *
+ * 候補セレクタは順に試すが、**表示されている項目が取れた候補**だけを採用する。
+ */
 export function getOpenMenuItems(root: ParentNode): HTMLElement[] {
-  return queryAll<HTMLElement>(root, SELECTORS.menuItems)
+  for (const selector of SELECTORS.menuItems) {
+    try {
+      const found = Array.from(root.querySelectorAll<HTMLElement>(selector)).filter(isDisplayedDeep)
+      if (found.length > 0) return found
+    } catch {
+      // 環境が解釈できないセレクタは飛ばす
+    }
+  }
+  return []
 }
 
 /**
@@ -374,4 +440,19 @@ export function findPinMenuItem(root: ParentNode): HTMLElement | null {
     if (PIN_MENU_LABELS.some((l) => label.includes(l))) return item
   }
   return null
+}
+
+/**
+ * 開いているメニューに「固定を解除」があるか。
+ *
+ * ✅ **確認済み (2026-08-07): 既に固定されているメッセージのメニューには
+ * 「メッセージを固定」が無く、代わりに「固定を解除」が出る。**
+ * これを見ないと、**固定済みのメッセージを「固定 UI が見つからない」(`unavailable`)と
+ * 誤って警告する。**「解除」があること自体が「そのメッセージは固定されている」証拠。
+ */
+export function hasUnpinMenuItem(root: ParentNode): boolean {
+  return getOpenMenuItems(root).some((item) => {
+    const label = textOf(item)
+    return !!label && UNPIN_MENU_LABELS.some((l) => label.includes(l))
+  })
 }

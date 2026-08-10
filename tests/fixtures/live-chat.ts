@@ -29,13 +29,20 @@ function frag(html: string): HTMLElement {
   return wrapper.firstElementChild as HTMLElement
 }
 
-/** リダイレクト通知ノード(合成) */
+/**
+ * リダイレクト通知ノード(合成)。
+ *
+ * ⚠️ 既定の文言は**実配信で確認済みのもの**を使う。以前は `からリダイレクトされました` を
+ *    既定にしていたが、これは推測でしかなく、`/リダイレクト/` のパターンが
+ *    自動発火から外れた時点で「通知ですらない」文字列になった
+ *    (→ [docs/security-review.md](../../docs/security-review.md) S2)。
+ */
 export function makeRedirectNotice(
   opts: { name?: string; href?: string; text?: string } = {},
 ): HTMLElement {
   const name = opts.name ?? FAKE_CHANNEL.name
   const href = opts.href ?? `/${FAKE_CHANNEL.handle}`
-  const text = opts.text ?? 'からリダイレクトされました'
+  const text = opts.text ?? 'とその視聴者が参加しました'
   return frag(`
     <yt-live-chat-viewer-engagement-message-renderer>
       <div id="content">

@@ -1,6 +1,8 @@
 node_modules/
 dist/
 release/
+# セッションの作業ディレクトリ(worktree 等)。公開リポジトリに混ぜない
+.claude/
 *.log
 .DS_Store
 .playwright-mcp/

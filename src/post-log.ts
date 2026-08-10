@@ -1,0 +1,193 @@
+/**
+ * 投稿履歴のローカル保存(再投稿の抑止)。
+ *
+ * ⚠️ **2026-08-06 の不具合: チャットを再読み込みすると同じ相手に何度も投稿していた。**
+ *    リダイレクトの通知/バナーはチャット文書に残り続けるため、リロード後の初期走査
+ *    (`detector.scanExisting`) がそれを「新しい通知」として拾い直す。
+ *    抑止の記録 (`dedupe`) がメモリ上にしか無く、文書のライフサイクルと一緒に消えるので、
+ *    リロードのたびに抑止が白紙に戻っていた。
+ *
+ * → **投稿したら「誰に・何を・いつ・どの配信で」を残し、起動時に読み戻して
+ *    クールダウン判定の初期値にする。**
+ *
+ * 記録するのは**実際に投稿できたとき**だけ。投稿に失敗した回は残さない
+ * (残すと、投稿できていないのに抑止だけ効いてしまう)。
+ *
+ * 純関数と保存を分けてあり、純関数側だけが単体テストの対象(directory.ts と同じ作り)。
+ */
+import { getLocalStorageArea } from './config'
+import { handleFromChannelUrl } from './detector'
+import type { RedirectEvent } from './types'
+
+export type PostRecord = {
+  /** 正規化済みチャンネル URL。同一性の鍵 */
+  url: string
+  /** 表示用のハンドル(人がログ・設定画面で読むため) */
+  handle: string
+  /** 実際に投稿した文面 */
+  text: string
+  /** 投稿した時刻 (epoch ms) */
+  postedAt: number
+  /** どの配信で投稿したか(動画 ID)。**取れなければ空文字** */
+  streamId: string
+}
+
+export type PostLog = PostRecord[]
+
+const STORAGE_KEY = 'ytRedirectPin.postLog'
+
+/** 保存件数の上限。古いものから捨てる */
+export const POST_LOG_MAX_ENTRIES = 200
+/** これより古い記録は捨てる。クールダウンは秒〜分単位なので 7 日あれば十分 */
+export const POST_LOG_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000
+/** 保存する文面の長さの上限(storage を無駄に食わないため) */
+export const POST_LOG_MAX_TEXT_LENGTH = 500
+
+/** URL の表記ゆれを吸収した鍵(dedupe / directory と同じ考え方) */
+export function postLogKey(url: string): string {
+  return url.trim().toLowerCase()
+}
+
+/**
+ * live_chat の `v=` パラメータ。ポップアウト
+ * (`studio.youtube.com/live_chat?is_popout=1&v=...`) はこれで取れる。
+ */
+export function streamIdFromUrl(href: string): string {
+  try {
+    return new URL(href).searchParams.get('v')?.trim() ?? ''
+  } catch {
+    return ''
+  }
+}
+
+/** Studio の管制室 URL (`studio.youtube.com/video/<id>/livestreaming`) から動画 ID を取る */
+export function streamIdFromStudioPath(href: string): string {
+  try {
+    return new URL(href).pathname.match(/^\/video\/([\w-]+)/)?.[1] ?? ''
+  } catch {
+    return ''
+  }
+}
+
+/**
+ * 今見ているチャットがどの配信のものか。
+ *
+ * 1. **自分の URL の `v=`** — ポップアウトはこれで取れる
+ * 2. **親フレームの URL** — 管制室の埋め込みチャットは iframe で、`v=` を持たないことがある。
+ *    親は同じ `studio.youtube.com`(同一オリジン)なので読める
+ * 3. **取れなければ空文字** — 「同一配信」の判定を諦め、時間のクールダウンだけで抑止する
+ *    (この状態は起動ログに `streamId: '(不明)'` として出る)
+ */
+export function currentStreamId(win: Window = window): string {
+  const own = streamIdFromUrl(win.location.href)
+  if (own) return own
+  try {
+    if (!win.top || win.top === win) return ''
+    // クロスオリジンならここで例外になる。その場合は諦める
+    const parentHref = win.top.location.href
+    return streamIdFromUrl(parentHref) || streamIdFromStudioPath(parentHref)
+  } catch {
+    return ''
+  }
+}
+
+/** 投稿できた事実を 1 件の記録にする */
+export function makePostRecord(
+  event: RedirectEvent,
+  text: string,
+  options: { streamId: string; postedAt: number },
+): PostRecord {
+  return {
+    url: event.sourceChannelUrl,
+    handle: handleFromChannelUrl(event.sourceChannelUrl),
+    text,
+    postedAt: options.postedAt,
+    streamId: options.streamId,
+  }
+}
+
+/** 記録の同一性は「どの配信で・どの送信元に」。同じ組み合わせは最新で上書きする */
+function entryKey(streamId: string, url: string): string {
+  return `${streamId} ${postLogKey(url)}`
+}
+
+/** 古い記録・多すぎる記録を捨てる */
+export function prunePostLog(log: PostLog, now: number): PostLog {
+  return [...log]
+    .filter((record) => now - record.postedAt < POST_LOG_MAX_AGE_MS)
+    .sort((a, b) => b.postedAt - a.postedAt)
+    .slice(0, POST_LOG_MAX_ENTRIES)
+}
+
+/** 投稿を記録する(同じ配信・同じ送信元の記録があれば置き換える) */
+export function rememberPost(log: PostLog, record: PostRecord): PostLog {
+  const key = entryKey(record.streamId, record.url)
+  const rest = log.filter((entry) => entryKey(entry.streamId, entry.url) !== key)
+  return prunePostLog([record, ...rest], record.postedAt)
+}
+
+/** この配信で、この送信元に既に投稿しているか */
+export function findPostInStream(
+  log: PostLog,
+  streamId: string,
+  url: string,
+): PostRecord | undefined {
+  if (!streamId) return undefined
+  const key = entryKey(streamId, url)
+  return log.find((entry) => entryKey(entry.streamId, entry.url) === key)
+}
+
+/** 配信を問わず、この送信元への最後の投稿 */
+export function findLastPost(log: PostLog, url: string): PostRecord | undefined {
+  const key = postLogKey(url)
+  return log
+    .filter((entry) => postLogKey(entry.url) === key)
+    .reduce<PostRecord | undefined>(
+      (latest, entry) => (latest == null || entry.postedAt > latest.postedAt ? entry : latest),
+      undefined,
+    )
+}
+
+/** 壊れた保存内容で拡張ごと死なせない (AC6) */
+export function normalizePostLog(raw: unknown): PostLog {
+  if (!Array.isArray(raw)) return []
+  const seen = new Set<string>()
+  const out: PostLog = []
+  for (const item of raw) {
+    if (!item || typeof item !== 'object') continue
+    const { url, handle, text, postedAt, streamId } = item as Partial<PostRecord>
+    if (typeof url !== 'string' || !url.trim()) continue
+    if (!Number.isFinite(postedAt)) continue
+    const stream = typeof streamId === 'string' ? streamId : ''
+    const key = entryKey(stream, url)
+    if (seen.has(key)) continue
+    seen.add(key)
+    out.push({
+      url: url.trim(),
+      handle: typeof handle === 'string' && handle ? handle : handleFromChannelUrl(url.trim()),
+      text: typeof text === 'string' ? text.slice(0, POST_LOG_MAX_TEXT_LENGTH) : '',
+      postedAt: Number(postedAt),
+      streamId: stream,
+    })
+  }
+  return out
+}
+
+// --- 保存 -----------------------------------------------------------------
+
+export async function loadPostLog(): Promise<PostLog> {
+  const area = getLocalStorageArea()
+  if (!area) return []
+  const stored = await area.get(STORAGE_KEY)
+  return normalizePostLog(stored?.[STORAGE_KEY])
+}
+
+export async function savePostLog(log: PostLog): Promise<void> {
+  const area = getLocalStorageArea()
+  if (area) await area.set({ [STORAGE_KEY]: normalizePostLog(log) })
+}
+
+export async function clearPostLog(): Promise<void> {
+  const area = getLocalStorageArea()
+  if (area) await area.set({ [STORAGE_KEY]: [] })
+}
