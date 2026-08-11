@@ -1,6 +1,6 @@
 ---
 feature: i18n
-issue: TBD
+issue: 3
 release: r2
 priority: could
 status: 未着手
