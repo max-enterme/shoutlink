@@ -1,0 +1,165 @@
+---
+feature: per-source-message
+test: npm run typecheck && npx vitest run
+---
+
+# 実装計画 — 003 送信元ごとの自由文
+
+> plan.md — 「どう作るか」。spec.md の受け入れ条件を満たす設計。
+
+## アプローチ
+
+**既存の呼び名辞書にフィールドを 1 つ足すだけで成立させる。** 新しい保存キーも、
+新しい同一性の鍵も作らない。辞書は既に正規化済みチャンネル URL を鍵にしていて、
+`dedupe` / `post-log` と同じ考え方で揃っている。
+
+差し込みの流れは**呼び名と同じ経路をなぞる**。今の [main.ts:117](../../src/main.ts) は
+
+```ts
+const named = { ...event, sourceChannelName: resolveDisplayName(directory, event) }
+const text = compose(config.template, named)
+```
+
+と、**辞書から値を解決してから純関数の `compose` に渡す**形になっている。自由文も同じく
+`resolveMessage(directory, event)` で解決して `compose` の第 3 引数で渡す。
+**`composer.ts` は辞書を知らないまま**でいる(単体テストの容易さを壊さない)。
+
+```ts
+const text = compose(config.template, named, { message: resolveMessage(directory, event) })
+```
+
+### プレースホルダを `{msg}` にする理由
+
+`{自由文}` のような日本語のプレースホルダは、[002](../002-i18n/spec.md) が UI を多言語化したとき
+**そこだけ翻訳できない**(翻訳すると既存利用者の保存済みテンプレートが壊れる)。
+`{name}` / `{url}` と同じ英字にそろえる。
+
+`{msg}` の差し込みは**既存の 1 パス置換に相乗りする**(`PLACEHOLDER` の正規表現に `msg` を足し、
+置換関数の分岐を 1 本増やすだけ)。**先に `{msg}` だけ別の `replace` で埋めない** —
+そうすると自由文の中の `{url}` が後段で展開され、AC9 が破れる。
+
+### 上限と削り順
+
+**2 つの上限を混同しない。**
+
+| 定数 | 値 | 意味 |
+|---|---|---|
+| `MAX_MESSAGE_LENGTH` | 200 | **投稿文全体**の上限(既存・未検証 → R1) |
+| `MAX_ENTRY_MESSAGE_LENGTH` | 200 | **自由文 1 件**の保存上限(新規) |
+
+同じ 200 だが**別の定数として切る。** 片方を動かしたときにもう片方が黙って変わらないようにする。
+なお定型部分と URL が先に場所を食うため、**自由文が 200 字まるごと投稿に載ることは構造上あり得ない**
+(既定テンプレート + ハンドル 16 字で展開部分が約 77 字 → 実効は約 120 字)。
+だから設定画面の残り文字数は **展開後の投稿文全体に対する残り**を出す(AC8)。
+保存上限のほうを表示すると、**「あと 0 字」まで書けたのに本番で末尾が切られる**という嘘になる。
+
+削り順は現状「超過分を表示名から削る」だが、**自由文が入ると溢れる主因は自由文側**になる。
+利用者が自分で書いたものより、相手の名前が消えるほうが事故として大きい。
+
+1. 自由文を末尾から削る(`…` を付ける)。**残せる長さが 10 字未満になるなら自由文ごと落とす**
+   (前後の空白は `sanitize` が畳む → AC2 と同じ形になる)。「あ…」だけが残る文面を作らない
+2. それでも収まらなければ表示名を削る(現状の挙動)
+3. それでも収まらなければ末尾を切る(現状の最終手段。**ここでは URL が壊れうる** — 現状どおり)
+
+**削り出しは `Array.from()` でコードポイント単位に分解してから行う。**
+`String.prototype.slice` はサロゲートペアの中間で切れるため、末尾が絵文字の自由文で
+壊れた文字(U+FFFD)が投稿される(AC4)。自由文は呼び名と違って絵文字が入るのが普通。
+
+### 保存先の移行
+
+`loadDirectory` / `saveDirectory` を `getLocalStorageArea()`(既に [config.ts](../../src/config.ts)
+にある)へ向ける。移行の条件は **`local` にキーが存在しないときだけ**(`undefined` かどうか)。
+
+**「空配列かどうか」で判定しない。** それだと、利用者が設定画面で辞書を全件削除した
+(= `local` に `[]` が入った)次の起動で `sync` の古い辞書が丸ごと復活する。
+**「もう残したくない相手を消した」という意図が無言で覆る。**
+
+さらに、キー有無の判定だけでは「`loadDirectory` より先に設定画面で 1 件登録 → 以後 `sync` を
+永久に引き継げない」経路が残るため、**移行済みフラグ**(`ytRedirectPin.directoryMigratedAt`、
+`local`)を持たせて「1 度きり」を保証する(AC5)。`sync` 側は消さない(spec.md 参照)。
+
+**フラグは `local` への書き込みが成功した後にだけ立てる。** 失敗したまま立てると、
+`sync` に呼び名が残っているのに二度と取り込まれず、**設定画面に再移行の導線も無い。**
+R3 が避けようとしている「消えたように見える」の、実際に消えている版になる。
+失敗時はフラグを立てず、次回起動で再試行する。
+
+`onDirectoryChanged` は現在 `chrome.storage.onChanged` を**エリアを問わず**拾っている。
+移行後は `sync` にも同名のキーが残るため、**実際に使っているエリア名で絞らないと**
+別 PC の `sync` 更新で辞書が巻き戻る。ただし `getLocalStorageArea()` は `local` が無ければ
+`sync` に落ちる作りなので、**`'local'` 決め打ちにすると、そのフォールバック時に変更通知が
+1 件も届かなくなる**(設定画面での編集がチャット側に反映されなくなる)。
+**選んだエリア名を返す関数**(`getLocalStorageAreaName()`)を用意して、その値で絞る。
+
+## 主要コンポーネント / 変更点
+
+| 層 | 変更 |
+|---|---|
+| [src/config.ts](../../src/config.ts) | `getLocalStorageAreaName()` を足す(`onChanged` の絞り込み用) |
+| [src/directory.ts](../../src/directory.ts) | `DirectoryEntry.message` 追加 / `resolveMessage` / `normalizeDirectory` の後方互換(欠損・非文字列 → `''`、200 字で切り詰め)/ 保存先を `local` へ / `sync` からの 1 度きりの移行 + 移行済みフラグ / `onDirectoryChanged` のエリア絞り |
+| [src/composer.ts](../../src/composer.ts) | `MAX_ENTRY_MESSAGE_LENGTH` / `ComposeOptions.message` / `PLACEHOLDER` に `msg` / 削り順を 自由文 → 表示名 → 末尾 へ / コードポイント単位の切り出し / 残り文字数を出すための長さ計算を export |
+| [src/main.ts](../../src/main.ts) | `resolveMessage` の結果を `compose` に渡す / 移行の成否を起動ログに出す |
+| [public/options.html](../../public/options.html) | 辞書テーブルに自由文の列 / 残り文字数と警告の表示先 / テンプレート説明に `{msg}` / 辞書セクションの説明文の更新 |
+| [src/options/options.ts](../../src/options/options.ts) | 自由文の編集・保存(200 字の検証と理由表示)/ 残り文字数(展開後基準)/ `{msg}` 不在の警告 / プレビューのサンプルに自由文を含める。**判定ロジック(200 字の検証・`{msg}` 不在判定・残り文字数の算出)は純関数として export し、DOM 配線と分ける**(下記) |
+| [tests/](../../tests) | `composer.test.ts` / `directory.test.ts` に AC1–AC5 / AC9 / AC10 / AC11 の回帰。**`tests/options.test.ts` を新設**して AC6 / AC7 / AC8 を固定する |
+| [scripts/make-site-assets.mjs](../../scripts/make-site-assets.mjs) | 撮影版下の見本データに `message` を足す(T8 で撮り直す絵の自由文列が空にならないように) |
+| docs | README / install.md / privacy-policy.md / setup-and-verify.md / index.html / for-testers.md / security-review.md(S7 を対応済みに)/ 001 の tasks.md の S7 の行 |
+
+### options のテストを書けるようにする
+
+`src/options/options.ts` は **export を 1 つも持たない副作用モジュール**で、import した時点で
+17 個の要素 id を要求して無ければ throw し、`loadDirectory()` / `loadPostLog()` を発火する。
+`manual-trigger.test.ts` は名前付き export を呼ぶ形の前例であって、**この構造には使えない。**
+既存テストに `chrome` をスタブした前例も無い。
+
+したがって AC6 / AC7 / AC8 は、**判定ロジックを純関数として切り出して export し、それを直接テストする**
+(`composer.ts` から長さ計算を export するのと同じ方針)。DOM 配線側はテストしない。
+
+## 依存 / 前提
+
+- **[002-i18n](../002-i18n/spec.md) と同じファイルを触る**(`public/options.html`、テンプレートの説明文)。
+  どちらも main 未マージ。**順序で作業量が変わる**(→ spec.md D2 / T7):
+  - **003 が先**: T4 はベタ書きの日本語で足りる。002 側が後から `_locales/` へ拾う
+  - **002 が先**: T4 が足す UI 文言(自由文の列見出し / 残り文字数 / 200 字超のエラー / `{msg}` 不在の警告)は
+    **すべて `_locales/{ja,en}/messages.json` へのキー追加 + `data-i18n` 化**になる。
+    ベタ書きで足すと 002 の AC1 / AC6 を壊す
+- `chrome.storage.local` の上限は 10MB(`unlimitedStorage` なしでも)。`sync` の 8KB とは桁が違うため、
+  自由文 200 字 × 実用的な件数では問題にならない。
+- テストは jsdom + vitest。`chrome` が無い環境でも純関数側は動く(既存の作り)。
+
+## リスク / 降りる箇所
+
+- **R1: `MAX_MESSAGE_LENGTH = 200` は未検証のまま。**
+  [composer.ts](../../src/composer.ts) のコメントどおり、200 という値は一般に知られているだけで
+  この拡張では確認できていない。**削り順を変えると「どこが削れるか」は変わるが、
+  「実際に何字まで通るか」は変わらない。** 実値の確定は本フィーチャーのスコープ外。
+  なお `compose` は必ず上限以下に切り詰めて返すため、**この拡張が 200 字超を投稿することはあり得ない** —
+  「超えたら弾かれるか」は拡張経由では観測できない(T6 の手順はこれを踏まえて書く)。
+
+- **R2: 自由文の中身は検査しない。**
+  制御文字・改行は既存の `sanitize` が 1 行に潰すが、**内容そのもの(URL・宣伝・他者への言及)は
+  素通しする。** ただし**宛先を間違えたときの被害は呼び名と質が違う**(spec.md D3)。
+  誤配への対処方針は人間が決めるまで実装しない。
+
+- **R3: 移行の失敗を無言で握らない。**
+  `sync` → `local` のコピーが失敗した場合、既存の `guardAsync` は例外を握って空配列を返す。
+  **「辞書が消えた」ように見える。** 移行の成否は起動ログに 1 行出す
+  (この repo が繰り返し踏んでいる「無言で捨てる分岐が実機の往復を消費する」の轍を踏まない)。
+
+- **R4: 実配信での通し確認は自動化できない**(spec.md D1 / SPEC-OPS §08)。
+  T6 は PR を分け、人間の確認を経る。**いつ実施できるかは送る側に依存する**ため、
+  T6 を main マージのブロッカーにするかどうかも人間の判断(spec.md D1)。
+
+- **R5: スクリーンショットの差し替えは非コード成果物**(SPEC-OPS §08)。
+  辞書テーブルに列が増えると `docs/assets/screenshot-3-directory.png` と
+  `docs/index.html` の alt が嘘になる。`scripts/make-site-assets.mjs` は撮影用の HTML を
+  `dist/` に吐くだけで**画像は生成しない** — 撮るのはブラウザでの手作業。
+  **版下の見本データを直すのはコード作業なので T5、撮影は T8** と分ける。
+  順序を逆にすると、自由文の列が空のままの絵を撮ることになる。
+
+- **R6: SPEC-OPS §10(GUI モックの併置)に免除条項が無い。**
+  本フィーチャーは「既存テーブルへの列追加」に収め、レイアウトの決めどころを
+  受け入れ条件で潰したうえで**モックを併置しない判断を人間が行った**(spec.md 末尾)。
+  ただし §10 / §12 の文面は無条件なので、**次に `/dashboard-scaffold`(モード B)や
+  別のレビュアーが §12 を機械適用すると、また同じ箇所で停止する。**
+  恒久的に解くなら SPEC-OPS.md §10 側に免除条項を足す(規約を変えるときは
+  SPEC-OPS.md だけを編集する)。**この判断は本フィーチャーのスコープ外。**
