@@ -13,21 +13,21 @@ feature: per-source-message
 > T9 の (a)(b) はどちらも「自由文を差し込むかどうかの分岐」で、差し込みは
 > `main.ts` → `compose` の経路(= T3)に載る。設定画面の話ではない。
 
-- [ ] T7: **002-i18n との調整の判断** — `public/options.html` とテンプレート説明文をどちらが先に main へ載せるか、`{msg}` を i18n の対象に含めるか。**決定を spec.md D2 と plan.md の依存節に追記してコミットするまでが完了条件** (spec.md D2)
-- [ ] T9: **誤検知時に自由文を誤配するリスクへの方針決定** — (a) 投稿履歴に実績のある送信元にだけ差し込む / (b) 起動時の初期走査由来では差し込まない / (c) 開示だけして実装は変えない。**決定を spec.md D3 に追記し、(a)(b) を選んだ場合は実装タスクを起こす。(c) なら開示の記述を T5 に含める** (spec.md D3)
+- [ ] T7: **002-i18n との調整の判断** — `public/options.html` とテンプレート説明文をどちらが先に main へ載せるか、`{msg}` を i18n の対象に含めるか。**決定を spec.md D2 と plan.md の依存節に追記してコミットするまでが完了条件** (spec.md D2)  <!-- #21 -->
+- [ ] T9: **誤検知時に自由文を誤配するリスクへの方針決定** — (a) 投稿履歴に実績のある送信元にだけ差し込む / (b) 起動時の初期走査由来では差し込まない / (c) 開示だけして実装は変えない。**決定を spec.md D3 に追記し、(a)(b) を選んだ場合は実装タスクを起こす。(c) なら開示の記述を T5 に含める** (spec.md D3)  <!-- #23 -->
 
 ## 自動実装できるもの
 
-- [ ] T1: 辞書の保存先を `chrome.storage.local` へ移す。**`local` にキーが存在しないときだけ** `sync` から片方向コピーし、移行済みフラグで 1 度きりにする。`sync` 側は消さない。`getLocalStorageAreaName()` を足して `onDirectoryChanged` をそのエリアで絞る。移行の成否を起動ログに出す (AC5 / plan.md R3 / security-review S7)
-- [ ] T2: `DirectoryEntry.message` を足す。`resolveMessage` を `resolveDisplayName` と同じ形で実装し、`normalizeDirectory` は欠損・非文字列を `''`、`MAX_ENTRY_MESSAGE_LENGTH` 超を切り詰めて受ける (AC6 の正規化側 / AC10)
-- [ ] T3: `composer.ts` に `{msg}` を足し、削り順を 自由文 → 表示名 → 末尾 にする。切り出しはコードポイント単位、残せる長さが 10 字未満なら自由文ごと落とす。`main.ts` から `resolveMessage` の結果を渡す。**`{msg}` を含まないテンプレートの出力が変わらないこと**と**自由文が再展開されないこと**を回帰テストで固定。あわせて `composer.ts` の `MAX_MESSAGE_LENGTH` のコメントを更新する(参照先が **001 の T8** のままで、しかも「実配信で弾かれないかを見る」という内容が「拡張経由では 200 字超を投稿しないので観測できない」という結論と食い違っている → 003 の T6 と `docs/003-findings.md` を指す形に直す) (AC1 / AC2 / AC3 / AC4 / AC9 / AC11)
-- [ ] T4: 設定画面 — 辞書テーブルに自由文の欄、**展開後基準の残り文字数**、200 字超は保存せず理由を出す、**自由文があるのにテンプレートに `{msg}` が無いときの警告**、プレビューのサンプルに自由文を含める。テンプレート説明と辞書セクションの説明文を更新 (AC6 / AC7 / AC8)。**T7 の決着後に着手する**
-- [ ] T5: ドキュメント — README(文面テンプレートの表)/ docs/install.md(保存先と同期の説明)/ docs/privacy-policy.md(保存項目と保存先)/ docs/setup-and-verify.md / **docs/index.html(機能表・保存先の説明・スクリーンショットの alt)** / **docs/for-testers.md(テスト F に自由文の手順)** / **docs/security-review.md** — S7 の本文と、末尾の対応状況表の `S6 / S7` 行を**分割**して S7 側を対応済みにする / **specs/001-redirect-pin/tasks.md** — L32 の `S6 / S7` の行を分割して S7 側を「003 で対応」に、あわせて **T9 の見出し「対応は S3/S4/S6/S7 が残り」から S7 を落とす**(片方だけ直すと「S7 未対応」と言い続ける)/ **`scripts/make-site-assets.mjs` の見本データに `message` を足す**(撮影版下 `dist/_site-options.html` の辞書 3 件が空のままだと、T8 で撮り直しても自由文の列が空の絵になる。実在チャンネルを使わない既存方針は維持)
+- [ ] T1: 辞書の保存先を `chrome.storage.local` へ移す。**`local` にキーが存在しないときだけ** `sync` から片方向コピーし、移行済みフラグで 1 度きりにする。`sync` 側は消さない。`getLocalStorageAreaName()` を足して `onDirectoryChanged` をそのエリアで絞る。移行の成否を起動ログに出す (AC5 / plan.md R3 / security-review S7)  <!-- #15 -->
+- [ ] T2: `DirectoryEntry.message` を足す。`resolveMessage` を `resolveDisplayName` と同じ形で実装し、`normalizeDirectory` は欠損・非文字列を `''`、`MAX_ENTRY_MESSAGE_LENGTH` 超を切り詰めて受ける (AC6 の正規化側 / AC10)  <!-- #16 -->
+- [ ] T3: `composer.ts` に `{msg}` を足し、削り順を 自由文 → 表示名 → 末尾 にする。切り出しはコードポイント単位、残せる長さが 10 字未満なら自由文ごと落とす。`main.ts` から `resolveMessage` の結果を渡す。**`{msg}` を含まないテンプレートの出力が変わらないこと**と**自由文が再展開されないこと**を回帰テストで固定。あわせて `composer.ts` の `MAX_MESSAGE_LENGTH` のコメントを更新する(参照先が **001 の T8** のままで、しかも「実配信で弾かれないかを見る」という内容が「拡張経由では 200 字超を投稿しないので観測できない」という結論と食い違っている → 003 の T6 と `docs/003-findings.md` を指す形に直す) (AC1 / AC2 / AC3 / AC4 / AC9 / AC11)  <!-- #17 -->
+- [ ] T4: 設定画面 — 辞書テーブルに自由文の欄、**展開後基準の残り文字数**、200 字超は保存せず理由を出す、**自由文があるのにテンプレートに `{msg}` が無いときの警告**、プレビューのサンプルに自由文を含める。テンプレート説明と辞書セクションの説明文を更新 (AC6 / AC7 / AC8)。**T7 の決着後に着手する**  <!-- #18 -->
+- [ ] T5: ドキュメント — README(文面テンプレートの表)/ docs/install.md(保存先と同期の説明)/ docs/privacy-policy.md(保存項目と保存先)/ docs/setup-and-verify.md / **docs/index.html(機能表・保存先の説明・スクリーンショットの alt)** / **docs/for-testers.md(テスト F に自由文の手順)** / **docs/security-review.md** — S7 の本文と、末尾の対応状況表の `S6 / S7` 行を**分割**して S7 側を対応済みにする / **specs/001-redirect-pin/tasks.md** — L32 の `S6 / S7` の行を分割して S7 側を「003 で対応」に、あわせて **T9 の見出し「対応は S3/S4/S6/S7 が残り」から S7 を落とす**(片方だけ直すと「S7 未対応」と言い続ける)/ **`scripts/make-site-assets.mjs` の見本データに `message` を足す**(撮影版下 `dist/_site-options.html` の辞書 3 件が空のままだと、T8 で撮り直しても自由文の列が空の絵になる。実在チャンネルを使わない既存方針は維持)  <!-- #19 -->
 
 ## 人手・実機が要るもの(SPEC-OPS §08 — `/spec-implement` に投げても止まる)
 
-- [ ] T6: **実配信で自由文入りの通し確認**(検知 → 投稿 → 固定)。手順は ①自由文入りの文面が投稿・固定まで通ること ②**展開後ちょうど 200 字**の文面が通ること の 2 点。**「200 字超が弾かれるか」は拡張経由では観測できない**(`compose` が必ず切り詰めるため / plan.md R1)。上限の実値を見たい場合はチャット入力欄へ直接貼って確かめ、分かったことを `docs/003-findings.md` に残す (spec.md D1 / plan.md R4)
-- [ ] T8: **スクリーンショットの撮り直し** — 辞書テーブルの列が増えるため `docs/assets/screenshot-3-directory.png` を撮り直す。`scripts/make-site-assets.mjs` は撮影用 HTML を `dist/` に吐くだけで**画像は生成しない**ので、ブラウザで撮って置く手作業(SPEC-OPS §08 非コード成果物 / plan.md R5)。**T5 の見本データ更新が入った後に撮る**
+- [ ] T6: **実配信で自由文入りの通し確認**(検知 → 投稿 → 固定)。手順は ①自由文入りの文面が投稿・固定まで通ること ②**展開後ちょうど 200 字**の文面が通ること の 2 点。**「200 字超が弾かれるか」は拡張経由では観測できない**(`compose` が必ず切り詰めるため / plan.md R1)。上限の実値を見たい場合はチャット入力欄へ直接貼って確かめ、分かったことを `docs/003-findings.md` に残す (spec.md D1 / plan.md R4)  <!-- #20 -->
+- [ ] T8: **スクリーンショットの撮り直し** — 辞書テーブルの列が増えるため `docs/assets/screenshot-3-directory.png` を撮り直す。`scripts/make-site-assets.mjs` は撮影用 HTML を `dist/` に吐くだけで**画像は生成しない**ので、ブラウザで撮って置く手作業(SPEC-OPS §08 非コード成果物 / plan.md R5)。**T5 の見本データ更新が入った後に撮る**  <!-- #22 -->
 
 ## 実装フロー(SPEC-OPS §11)
 
