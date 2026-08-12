@@ -35,7 +35,7 @@ test: npm run typecheck && npx vitest run
   (メンバー加入)を含み、**除外用に使われている**定数でもある。
   コメント経路には**通常のテキストメッセージだけ**の定数を別に持つ (AC3)
 - **タイムスタンプで新旧を切る** (AC9)。要素からタイムスタンプが取れるかは T1 の採取項目。
-  取れない場合は「監視開始から N 秒は投稿しない」猶予に落とす
+  取れない場合は「監視開始から 10 秒は投稿しない」猶予に落とす
 
 ```ts
 export type CommentAuthor = {
@@ -75,6 +75,10 @@ export type DirectoryEntry = {
 (既存の出力が 1 文字も変わらないことをテストで固定 / AC15)。
 渡す値は**辞書の呼び名と辞書の URL**だけで、コメント側の表示名は入れない (AC5)。
 
+> **`resolveDisplayName` を使い回さない。**あれは呼び名が空なら `event.sourceChannelName`
+> (= コメント経路では**コメントの表示名**)に落ちるので、そのまま使うと AC5 が静かに破れる。
+> 「呼び名 → `handleFromChannelUrl(entry.url)`」に落ちる別関数を `directory.ts` に足す。
+
 > 003 が `{msg}` と削り順(自由文 → 表示名 → 末尾)を入れる。**先に載ったほうに合わせる**
 > (下の「依存 / 前提」)。コメント用テンプレートで `{msg}` を使うかは spec.md D4。
 
@@ -83,7 +87,7 @@ export type DirectoryEntry = {
 ```ts
 export type PostRecord = {
   …
-  /** 投稿の種別。**欠損は 'redirect' / 壊れた値は 'comment'**(AC14) */
+  /** 投稿の種別。**'comment' に完全一致したときだけ comment、それ以外は redirect**(AC14) */
   kind: 'redirect' | 'comment'
 }
 ```
@@ -103,6 +107,17 @@ export type PostRecord = {
   — リダイレクト側が同じ穴を埋めているのと同じ扱いにする
 - **`cooldownSec` は見ない。**コメント返しは「同一配信で 1 回」だけで判定する
   (`cooldownSec = 0` を抑止の逃げ道として使う運用を、コメント側に持ち込まない)
+- **`kind` は `'comment'` に完全一致したときだけ `comment`、それ以外はすべて `redirect`** (AC14)。
+  `comment` に倒すと `absorb` の除外に引っかかって**リダイレクト側の抑止から記録が消える**ため、
+  由来の分からない記録は**両方を止める `redirect` 側**へ倒す
+- **`streamId` が空のときの 6 時間下限は `cooldownSec` から独立させる。** `dedupe.ts` は
+  `cooldown <= 0` で先に `return true` するので、`createDedupe` をそのまま流用すると
+  **`cooldownSec = 0` で下限ごと外れる**(テスターにはこの値を指示している)
+- **`findLastPost` の扱いも決める。** `main.ts` は「なぜ止めたか」の説明に
+  `findPostInStream(…) ?? findLastPost(postLog, url)` を使っており、`findLastPost` は
+  `streamId` も `kind` も見ない。そのままだと**コメント返しの記録を「前回のリダイレクト返礼」として**
+  ログに出す。種別で絞るか、ログに種別を併記する(実害はログの文言だけだが、
+  ここは「投稿されない」の切り分け専用の窓なので誤読させない)
 - **保存件数の食い合いに注意** (`POST_LOG_MAX_ENTRIES = 200`)。1 配信・1 人につき
   `redirect` と `comment` で最大 2 レコードになり、**古い `redirect` が押し出されると
   001 の「リロードで再投稿しない」が戻る。** `prunePostLog` を**種別ごとの枠**にするか、
@@ -113,7 +128,11 @@ export type PostRecord = {
 
 該当者が同時に複数現れたときのために、**逐次処理 + 最低間隔**の小さなキューを作る (AC11)。
 
-- 最低 5 秒間隔 / **1 配信あたり 20 件の上限**(超過分は投稿せずログ)
+- 最低 5 秒間隔 / **1 配信あたり 20 件の上限**(超過分は投稿せずログ)。
+  **どちらも定数で、設定には出さない**(`Config` に足すのは `commentReplyEnabled` と `commentTemplate` の 2 つだけ)
+- **上限の数え方はメモリのカウンタにしない。**投稿履歴の「今の配信 かつ `kind='comment'`」の
+  件数で数える (AC11)。メモリだと開き直しのたびに枠がリセットされ、上限が事実上効かない
+  (2026-08-06 ④で一度踏んだ形)
 - **`commentReplyEnabled` が OFF になったら未処理を捨てる**
 - `now` を注入できる純粋なロジックにして単体テストする(実時間で待つテストにしない)
 
@@ -142,7 +161,7 @@ export type PostRecord = {
 | `src/selectors.ts` | コメント専用の要素定数と、投稿者 / タイムスタンプ / 自分の判別のアクセサ。**T1 の採取結果だけを入れる**(推測は入れない) |
 | `src/types.ts` | `Config` に `commentReplyEnabled` / `commentTemplate`。`CommentAuthor` |
 | `src/config.ts` | 既定値(**`commentReplyEnabled: false`**)と正規化 (AC1 / AC14) |
-| `src/directory.ts` | `DirectoryEntry.replyToComment`(既定 false)、`setReplyToComment`、`normalizeDirectory` / `rememberSource` / `upsertNickname` の追従 |
+| `src/directory.ts` | `DirectoryEntry.replyToComment`(既定 false)、`setReplyToComment`、**辞書側の値だけで名前を決める関数**(`resolveDisplayName` とは別 / AC5)、`normalizeDirectory` / `rememberSource` / `upsertNickname` の追従 |
 | `src/composer.ts` | `{ name, url }` を受ける形へ広げる(既存の出力は不変 / AC15) |
 | `src/post-log.ts` | `PostRecord.kind`。鍵・検索・`prune` を種別込みに。**欠損は `redirect` / 壊れた値は `comment`** |
 | `src/dedupe.ts` | `PriorPost.kind`。**`absorb` で `comment` を取り込まない** (AC8) |
@@ -162,6 +181,8 @@ export type PostRecord = {
   - `directory.ts` — 003 T2 が `message`、004 T3 が `replyToComment` を足す
   - `composer.ts` — 003 T3 が `{msg}` と削り順、004 T4 が `{ name, url }` 化
   - `public/options.html` — 辞書テーブルに 003 が自由文列、004 がフラグ列
+  - `scripts/make-site-assets.mjs` — **同じ見本データの配列**を 003 T5 と 004 T10 が書き換える
+    (撮影版下。スクリーンショット 003 T8 / 004 T13 と同じく、後に入るほうが引き取る)
   - **辞書の保存先** — 003 T1 が `sync` → `local`。**004 は保存先に触らない。**
     004 が先に入ると、辞書に真偽値が 1 つ増えた状態で `sync` の 8KB 上限に近づく期間ができる
     (件数上限の実装はしない / security-review S7)
