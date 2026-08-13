@@ -95,9 +95,9 @@ R3 が避けようとしている「消えたように見える」の、実際�
 | 層 | 変更 |
 |---|---|
 | [src/config.ts](../../src/config.ts) | `getLocalStorageAreaName()` を足す(`onChanged` の絞り込み用) |
-| [src/directory.ts](../../src/directory.ts) | `DirectoryEntry.message` 追加 / `resolveMessage` / `normalizeDirectory` の後方互換(欠損・非文字列 → `''`、200 字で切り詰め)/ 保存先を `local` へ / `sync` からの 1 度きりの移行 + 移行済みフラグ / `onDirectoryChanged` のエリア絞り |
+| [src/directory.ts](../../src/directory.ts) | `DirectoryEntry.message` 追加 / `resolveMessage` / `normalizeDirectory` の後方互換(欠損・非文字列 → `''`、200 コードポイントで切り詰め)/ 保存先を `local` へ / `sync` からの 1 度きりの移行 + 移行済みフラグ / **移行の成否のログ**(`loadDirectory` はチャットと設定ページの両方から呼ばれるので、**どちらの入口でも 1 行出るよう `migrateDirectoryToLocal` の中で出す**。T1 の実装時に `main.ts` から移した)/ `onDirectoryChanged` のエリア絞り |
 | [src/composer.ts](../../src/composer.ts) | `MAX_ENTRY_MESSAGE_LENGTH` / `ComposeOptions.message` / `PLACEHOLDER` に `msg` / 削り順を 自由文 → 表示名 → 末尾 へ / コードポイント単位の切り出し / 残り文字数を出すための長さ計算を export |
-| [src/main.ts](../../src/main.ts) | `resolveMessage` の結果を `compose` に渡す / 移行の成否を起動ログに出す |
+| [src/main.ts](../../src/main.ts) | `resolveMessage` の結果を `compose` に渡す(**移行のログは `directory.ts` 側。ここに足さない** — T1 で移した) |
 | [public/options.html](../../public/options.html) | 辞書テーブルに自由文の列 / 残り文字数と警告の表示先 / テンプレート説明に `{msg}` / 辞書セクションの説明文の更新 |
 | [src/options/options.ts](../../src/options/options.ts) | 自由文の編集・保存(200 字の検証と理由表示)/ 残り文字数(展開後基準)/ `{msg}` 不在の警告 / プレビューのサンプルに自由文を含める。**判定ロジック(200 字の検証・`{msg}` 不在判定・残り文字数の算出)は純関数として export し、DOM 配線と分ける**(下記) |
 | [tests/](../../tests) | `composer.test.ts` / `directory.test.ts` に AC1–AC5 / AC9 / AC10 / AC11 の回帰。**`tests/options.test.ts` を新設**して AC6 / AC7 / AC8 を固定する |

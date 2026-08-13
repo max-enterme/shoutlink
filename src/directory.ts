@@ -8,8 +8,10 @@
  *
  * 純関数と保存を分けてあり、純関数側だけが単体テストの対象。
  */
-import { getStorageArea } from './config'
+import { MAX_ENTRY_MESSAGE_LENGTH } from './composer'
+import { getLocalStorageArea, getLocalStorageAreaName, getStorageArea } from './config'
 import { handleFromChannelUrl } from './detector'
+import { log } from './log'
 import type { RedirectEvent } from './types'
 
 export type DirectoryEntry = {
@@ -17,6 +19,13 @@ export type DirectoryEntry = {
   url: string
   /** 置き換える呼び名。**空文字は「未設定」** */
   nickname: string
+  /**
+   * **リダイレクト返礼用**の自由文。**空文字は「未設定」**。自動登録では付けない。
+   *
+   * 用途を名前で限定してあるのは、004(コメント返し)が 2 本目の自由文を足す前提のため。
+   * どちらがどちらか読んで分かる形にしておく。
+   */
+  message: string
   /** 最後にリダイレクトを受けた時刻。0 は「まだ受けていない」(手動登録) */
   lastSeenAt: number
 }
@@ -24,6 +33,12 @@ export type DirectoryEntry = {
 export type Directory = DirectoryEntry[]
 
 const STORAGE_KEY = 'ytRedirectPin.directory'
+/**
+ * `sync` → `local` の移行済みフラグ(`local` に置く / AC5)。
+ * キーの有無だけで判定すると「`loadDirectory` より先に設定画面で 1 件登録 → 以後 `sync` を
+ * 永久に引き継げない」経路が残るため、フラグで「1 度きり」を保証する。
+ */
+const MIGRATED_KEY = 'ytRedirectPin.directoryMigratedAt'
 
 /** URL の表記ゆれを吸収した鍵 */
 export function directoryKey(url: string): string {
@@ -50,6 +65,14 @@ export function resolveDisplayName(directory: Directory, event: RedirectEvent): 
 }
 
 /**
+ * 文面に差し込む自由文を決める(`resolveDisplayName` と同じ形)。
+ * 登録が無い・空白だけなら**空文字**。`{msg}` をどう畳むかは composer 側の役目。
+ */
+export function resolveMessage(directory: Directory, event: RedirectEvent): string {
+  return findEntry(directory, event.sourceChannelUrl)?.message.trim() ?? ''
+}
+
+/**
  * リダイレクトしてきた相手を辞書に載せる(既にあれば `lastSeenAt` を更新)。
  * **ニックネームは付けない。**後から人が付ける前提。
  */
@@ -61,7 +84,11 @@ export function rememberSource(directory: Directory, event: RedirectEvent): Dire
       entry === existing ? { ...entry, lastSeenAt: event.detectedAt } : entry,
     )
   }
-  return [...directory, { url: event.sourceChannelUrl, nickname: '', lastSeenAt: event.detectedAt }]
+  // 自由文も付けない(呼び名と同じく、後から人が書く前提)
+  return [
+    ...directory,
+    { url: event.sourceChannelUrl, nickname: '', message: '', lastSeenAt: event.detectedAt },
+  ]
 }
 
 /** 手動登録・呼び名の変更 */
@@ -71,7 +98,7 @@ export function upsertNickname(directory: Directory, url: string, nickname: stri
   if (existing) {
     return directory.map((entry) => (entry === existing ? { ...entry, nickname } : entry))
   }
-  return [...directory, { url, nickname, lastSeenAt: 0 }]
+  return [...directory, { url, nickname, message: '', lastSeenAt: 0 }]
 }
 
 export function removeEntry(directory: Directory, url: string): Directory {
@@ -87,14 +114,28 @@ export function sortForDisplay(directory: Directory): Directory {
   })
 }
 
-/** 壊れた保存内容で拡張ごと死なせない (AC6) */
+/**
+ * 保存済みの自由文を上限まで切り詰める (AC6 の正規化側)。
+ *
+ * **数える単位はコードポイント**(`Array.from`)。`String.prototype.length` で数えると
+ * 絵文字が 2 と数えられ、**設定画面が通した入力が保存時に黙って半分に切られる。**
+ * composer 側の削り (AC4) も `Array.from` と定められているので、単位をそちらへそろえる。
+ * 結果としてサロゲートペアも割れない(壊れた文字 U+FFFD を作らない)。
+ */
+function clampMessage(value: string): string {
+  const chars = Array.from(value)
+  if (chars.length <= MAX_ENTRY_MESSAGE_LENGTH) return value
+  return chars.slice(0, MAX_ENTRY_MESSAGE_LENGTH).join('')
+}
+
+/** 壊れた保存内容で拡張ごと死なせない (AC6 / AC10) */
 export function normalizeDirectory(raw: unknown): Directory {
   if (!Array.isArray(raw)) return []
   const seen = new Set<string>()
   const out: Directory = []
   for (const item of raw) {
     if (!item || typeof item !== 'object') continue
-    const { url, nickname, lastSeenAt } = item as Partial<DirectoryEntry>
+    const { url, nickname, message, lastSeenAt } = item as Partial<DirectoryEntry>
     if (typeof url !== 'string' || !url.trim()) continue
     const key = directoryKey(url)
     if (seen.has(key)) continue
@@ -102,6 +143,8 @@ export function normalizeDirectory(raw: unknown): Directory {
     out.push({
       url: url.trim(),
       nickname: typeof nickname === 'string' ? nickname : '',
+      // 003 より前に保存された辞書には message が無い。欠損・非文字列は空文字で埋める
+      message: typeof message === 'string' ? clampMessage(message) : '',
       lastSeenAt: Number.isFinite(lastSeenAt) ? Number(lastSeenAt) : 0,
     })
   }
@@ -109,24 +152,136 @@ export function normalizeDirectory(raw: unknown): Directory {
 }
 
 // --- 保存 -----------------------------------------------------------------
+//
+// **保存先は `chrome.storage.local`** (T1 / AC5 / security-review.md S7)。
+// `sync` は 1 アイテム 8KB 上限で、辞書は配列まるごと 1 アイテムなので、自由文が加わると
+// 数十件で頭打ちになる。超えると `set` が reject し、`guardAsync` が握るため
+// **コンソールに 1 行出るだけで以後の登録が保存されない。**
+// 代償として**端末間で同期されなくなる**(配信は 1 台で回す前提。投稿履歴と同じ判断)。
+
+/**
+ * `sync` → `local` の移行の結果。**どちらの入口から走っても必ず 1 行ログに出す** (plan.md R3)。
+ * ログは `migrateDirectoryToLocal` の中で出す — 辞書はチャット (`main.ts`) と設定画面
+ * (`options.ts`) の両方から読まれ、**設定画面を先に開けば移行はそちらで走る**ため。
+ * 呼び出し側に任せると、その経路だけ無言になる。
+ */
+export type DirectoryMigration = {
+  status: 'migrated' | 'skipped' | 'failed'
+  /** 引き継いだ件数(`migrated` のときだけ意味を持つ) */
+  count: number
+  /** なぜその結果になったか。切り分け用にそのままログへ出す */
+  reason: string
+}
+
+/**
+ * 辞書を `sync` から `local` へ**1 度だけ**引き継ぐ (AC5)。
+ *
+ * - **`local` にキーが存在しないときだけ**引き継ぐ。**「空配列かどうか」で判定しない** —
+ *   それだと利用者が設定画面で全件削除した(`local` に `[]` が入った)次の起動で
+ *   `sync` の古い辞書が丸ごと復活し、「もう残したくない相手を消した」意図が無言で覆る。
+ * - **`sync` 側のキーは消さない**(片方向コピー)。消すと、まだ移行していない別 PC の
+ *   Chrome から辞書が消えて復元できない。
+ * - **例外を投げない。** 呼び出し側の `guardAsync` に握らせると空配列になり、
+ *   「辞書が消えた」ようにしか見えないため、失敗も結果として返す。
+ * - **結果は必ずログに 1 行出す**(下の `logMigration`)。呼ぶのは `loadDirectory` で、
+ *   チャットと設定ページの両方が通るため、どちらの入口から走っても同じ 1 行が出る。
+ *   **`main.ts` 側で出さない**(二重に出る)。
+ *   例外は `loadDirectory` が `chrome.storage` 無しで早期 return する場合 — 拡張として
+ *   成立していない状態なので、`loadConfig` が黙って既定値を返すのと同じ扱いにしてある。
+ */
+export async function migrateDirectoryToLocal(): Promise<DirectoryMigration> {
+  const result = await runMigration()
+  logMigration(result)
+  return result
+}
+
+async function runMigration(): Promise<DirectoryMigration> {
+  const local = getLocalStorageArea()
+  const legacy = getStorageArea()
+  if (!local) return { status: 'skipped', count: 0, reason: 'chrome.storage が無い' }
+  // `local` が無い環境では両方が `sync` に落ちる。その場合は移行するものが無い
+  if (!legacy || legacy === local) {
+    return { status: 'skipped', count: 0, reason: '移行元と移行先が同じエリア' }
+  }
+
+  try {
+    const stored = await local.get([STORAGE_KEY, MIGRATED_KEY])
+    if (stored?.[STORAGE_KEY] !== undefined) {
+      return { status: 'skipped', count: 0, reason: '既に local に辞書がある' }
+    }
+    if (stored?.[MIGRATED_KEY] !== undefined) {
+      return { status: 'skipped', count: 0, reason: '移行済み(引き継ぎは 1 度きり)' }
+    }
+
+    const source = normalizeDirectory((await legacy.get(STORAGE_KEY))?.[STORAGE_KEY])
+    await local.set({ [STORAGE_KEY]: source })
+
+    // **フラグは辞書の書き込みが成功した後にだけ立てる。** 先に立てて辞書の書き込みが失敗すると、
+    // `sync` に呼び名が残っているのに二度と取り込まれず、設定画面に再移行の導線も無い。
+    //
+    // 逆に**フラグだけ書けなかった場合は `failed` にしない** — 辞書は既に `local` にあり、
+    // 次回は「既に local に辞書がある」で skip される。再試行は起きないし要らないので、
+    // 「移行できなかった / 次回再試行する」と出すと事実と食い違う。
+    try {
+      await local.set({ [MIGRATED_KEY]: Date.now() })
+    } catch (err) {
+      return {
+        status: 'migrated',
+        count: source.length,
+        reason: `sync から引き継いだ(移行済みフラグの記録には失敗: ${String(err)})`,
+      }
+    }
+    return { status: 'migrated', count: source.length, reason: 'sync から引き継いだ' }
+  } catch (err) {
+    // フラグを立てずに返す。次回の起動で再試行する
+    return { status: 'failed', count: 0, reason: String(err) }
+  }
+}
+
+/**
+ * 移行の成否を 1 行出す。**無言で失敗すると「辞書が消えた」ようにしか見えない** (plan.md R3)。
+ * この repo は「無言で捨てる分岐が実機の往復を消費する」を繰り返し踏んでいる。
+ */
+function logMigration(result: DirectoryMigration): void {
+  if (result.status === 'failed') {
+    log.warn(
+      '呼び名辞書を chrome.storage.local へ移行できなかった。sync 側は消していないので、次回の起動で再試行する:',
+      result.reason,
+    )
+  } else if (result.status === 'migrated') {
+    log.info(`呼び名辞書を chrome.storage.local へ引き継いだ: ${result.count} 件 (${result.reason})`)
+  } else {
+    log.info('呼び名辞書の引き継ぎはしていない:', result.reason)
+  }
+}
 
 export async function loadDirectory(): Promise<Directory> {
-  const area = getStorageArea()
+  const area = getLocalStorageArea()
   if (!area) return []
+  // **設定画面から先に開かれる導線がある**(docs/install.md)ので、読み込みの度に通す。
+  // 2 回目以降はフラグを見て何もしない
+  await migrateDirectoryToLocal()
   const stored = await area.get(STORAGE_KEY)
   return normalizeDirectory(stored?.[STORAGE_KEY])
 }
 
 export async function saveDirectory(directory: Directory): Promise<void> {
-  const area = getStorageArea()
+  const area = getLocalStorageArea()
   if (area) await area.set({ [STORAGE_KEY]: normalizeDirectory(directory) })
 }
 
 /** 辞書の変更の購読。戻り値を呼ぶと解除する */
 export function onDirectoryChanged(handler: (directory: Directory) => void): () => void {
   if (typeof chrome === 'undefined' || !chrome.storage?.onChanged) return () => {}
+  // 移行後も `sync` に同名のキーが残るため、**実際に使っているエリアだけ**を見る。
+  // 絞らないと、別 PC の `sync` 更新でこちらの辞書が巻き戻る
+  const areaName = getLocalStorageAreaName()
 
-  const listener = (changes: Record<string, chrome.storage.StorageChange>): void => {
+  const listener = (
+    changes: Record<string, chrome.storage.StorageChange>,
+    changedArea: string,
+  ): void => {
+    if (areaName && changedArea !== areaName) return
     const change = changes[STORAGE_KEY]
     if (change) handler(normalizeDirectory(change.newValue))
   }

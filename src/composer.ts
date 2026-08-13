@@ -11,6 +11,19 @@ import type { RedirectEvent } from './types'
  */
 export const MAX_MESSAGE_LENGTH = 200
 
+/**
+ * **自由文 1 件**の保存上限 (`DirectoryEntry.message` / AC6)。
+ *
+ * ⚠️ `MAX_MESSAGE_LENGTH`(**投稿文全体**の上限)とは別物。同じ 200 だが意味が違うので、
+ *    片方を動かしたときにもう片方が黙って変わらないよう**別の定数として切ってある。**
+ *    定型部分と URL が先に場所を食うため、自由文が 200 字まるごと投稿に載ることは構造上あり得ない。
+ *
+ * ⚠️ **単位はコードポイント**(`Array.from(value).length`)。`String.prototype.length` ではない。
+ *    自由文は絵文字が入るのが普通で、UTF-16 コードユニットで数えると絵文字が 2 と数えられ、
+ *    **設定画面の検証と保存時の切り詰めで数が食い違う。**この定数を使う側は全部この単位で数える。
+ */
+export const MAX_ENTRY_MESSAGE_LENGTH = 200
+
 const PLACEHOLDER = /\{(name|url)\}/g
 const CONTROL_CHARS = new RegExp('[\\u0000-\\u001f\\u007f]+', 'g')
 
