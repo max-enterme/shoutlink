@@ -56,8 +56,12 @@ export type DirectoryEntry = {
   url: string
   nickname: string
   lastSeenAt: number
+  /** リダイレクト返礼用の自由文(003)。**004 は読まない** */
+  message: string
   /** コメントに反応するか。**既定 false**(自動登録でも false) */
   replyToComment: boolean
+  /** コメント返し用の自由文(spec.md D4 の決定)。既定 `''`。**003 の `message` とは別物** */
+  commentMessage: string
 }
 ```
 
@@ -79,8 +83,18 @@ export type DirectoryEntry = {
 > (= コメント経路では**コメントの表示名**)に落ちるので、そのまま使うと AC5 が静かに破れる。
 > 「呼び名 → `handleFromChannelUrl(entry.url)`」に落ちる別関数を `directory.ts` に足す。
 
-> 003 が `{msg}` と削り順(自由文 → 表示名 → 末尾)を入れる。**先に載ったほうに合わせる**
-> (下の「依存 / 前提」)。コメント用テンプレートで `{msg}` を使うかは spec.md D4。
+> **003 が先に main へ載る**(spec.md D2 の決定 / 下の「依存 / 前提」)。`{msg}` の展開・削り順
+> (自由文 → 表示名 → 末尾)・コードポイント単位の切り出し・再展開しないことは **003 が作ったものをそのまま使う。**
+> **004 は規則を新設しない。**
+
+**`{msg}` に渡す値だけを差し替える** (spec.md D4 / AC16)。`compose` を `{ name, url }` へ広げるのと同じ形で、
+自由文も**呼び出し側が解決して渡す**:
+
+- リダイレクト返礼: `resolveMessage(directory, url)` → `entry.message`
+- コメント返し: `resolveCommentMessage(directory, url)` → `entry.commentMessage`
+
+`composer.ts` は**どちらの自由文かを知らないまま**でいる(003 が `composer.ts` を辞書から切り離した方針の維持)。
+**`resolveMessage` にフラグ引数を足して分岐させない** — 呼び出し側で解決先を選ぶ形にする。
 
 ### 4. 抑止 — `post-log.ts` に種別を足し、`dedupe.ts` の入力を絞る
 
@@ -161,12 +175,12 @@ export type PostRecord = {
 | `src/selectors.ts` | コメント専用の要素定数と、投稿者 / タイムスタンプ / 自分の判別のアクセサ。**T1 の採取結果だけを入れる**(推測は入れない) |
 | `src/types.ts` | `Config` に `commentReplyEnabled` / `commentTemplate`。`CommentAuthor` |
 | `src/config.ts` | 既定値(**`commentReplyEnabled: false`**)と正規化 (AC1 / AC14) |
-| `src/directory.ts` | `DirectoryEntry.replyToComment`(既定 false)、`setReplyToComment`、**辞書側の値だけで名前を決める関数**(`resolveDisplayName` とは別 / AC5)、`normalizeDirectory` / `rememberSource` / `upsertNickname` の追従 |
-| `src/composer.ts` | `{ name, url }` を受ける形へ広げる(既存の出力は不変 / AC15) |
+| `src/directory.ts` | `DirectoryEntry.replyToComment`(既定 false)、**`DirectoryEntry.commentMessage`(既定 `''` / AC16)**、`setReplyToComment`、**`resolveCommentMessage`**(003 の `resolveMessage` と同じ形・別関数)、**辞書側の値だけで名前を決める関数**(`resolveDisplayName` とは別 / AC5)、`normalizeDirectory` / `rememberSource` / `upsertNickname` の追従 |
+| `src/composer.ts` | `{ name, url }` を受ける形へ広げる(既存の出力は不変 / AC15)。**自由文まわりは 003 の規則をそのまま使い、新設しない**(渡す値だけ呼び出し側で選ぶ / AC16) |
 | `src/post-log.ts` | `PostRecord.kind`。鍵・検索・`prune` を種別込みに。**欠損は `redirect` / 壊れた値は `comment`** |
 | `src/dedupe.ts` | `PriorPost.kind`。**`absorb` で `comment` を取り込まない** (AC8) |
 | `src/main.ts` | コメント経路の配線。投稿は共通処理へ。起動ログに `commentReplyEnabled` と ON 件数を載せる |
-| `public/options.html` / `src/options/options.ts` | 有効化スイッチ / コメント用テンプレート + プレビュー / 辞書テーブルのフラグ列 / 不整合の常時表示 / 投稿履歴の種別列 (AC13) |
+| `public/options.html` / `src/options/options.ts` | 有効化スイッチ / コメント用テンプレート + プレビュー / 辞書テーブルの**フラグ列とコメント返し用の自由文列** / 不整合の常時表示 / 投稿履歴の種別列 (AC13 / AC16)。**003 の自由文列と合わせて辞書テーブルが 3 列増える** — 詰まるなら畳む(R9) |
 | `scripts/make-site-assets.mjs` | 撮影版下の見本データにフラグを足す(列が空の絵にしないため) |
 | `tests/comment-detector.test.ts` ほか | 新規 + 既存の回帰(001 の挙動が変わらないこと) |
 | `README.md` / `docs/install.md` / `docs/index.html` / `docs/for-testers.md` / `docs/privacy-policy.md` / `docs/setup-and-verify.md` | 引き金が増えたこと・既定 OFF・保存項目の追加 |
@@ -187,6 +201,21 @@ export type PostRecord = {
     004 が先に入ると、辞書に真偽値が 1 つ増えた状態で `sync` の 8KB 上限に近づく期間ができる
     (件数上限の実装はしない / security-review S7)
   **どちらを先に main へ載せるかは実装順の判断**で、後から載るほうがコンフリクトを引き取る。
+
+  > **決定(2026-08-13 / 人間 / spec.md D4 と 003 spec.md D2): 003 → 004 の順で main へ載せる。**
+  > **004 がコンフリクトを引き取る側。** 具体的に 004 が 003 の後に積む前提:
+  > - `directory.ts` — 003 の `message` の**隣に** `commentMessage` を足す(名前で用途が分かる形)。
+  >   保存先はすでに `local` に移っている前提(003 T1)なので、**004 は保存先に触らない**
+  > - `composer.ts` — 003 の `{msg}` 展開・削り順・切り出しを**再利用**する。004 は
+  >   `{ name, url }` 化と、`{msg}` に渡す値の選択(`resolveMessage` / `resolveCommentMessage`)だけを足す
+  > - `public/options.html` — 003 の自由文列がある状態に、004 のフラグ列と自由文列を足す
+  > - `scripts/make-site-assets.mjs` — 003 T5 が `message` を入れた見本データに、004 T10 が
+  >   `replyToComment` と `commentMessage` を足す
+  > - **`{msg}` の UI 文言はベタ書きの日本語**(003 D2 の決定に合わせる。`data-i18n` 化しない)
+
+- **002(i18n)は 003 / 004 のどちらより後**(003 spec.md D2 の決定)。002 は T5 / T6 が
+  英語圏の実データ待ちで自力では閉じられないため、**待たない。** 003 / 004 が足す UI 文言は
+  ベタ書きの日本語で入れ、**002 が後から `_locales/` へ拾う。**
 - **002(i18n)が先に載る場合**、004 が足す UI 文言はすべて `_locales/` へのキー追加になる(T9 / T10)。
 
 ## テスト戦略
@@ -231,6 +260,9 @@ export type PostRecord = {
 
 - **R5(中): 頻度が上がることの規約上の判断。** spec.md D3。
   実装で下げられるのは頻度だけで、判断そのものは人間が行う。
+  → **2026-08-13 に決着(001 D3 の結論を維持)。** 実装側の前提は変わらない
+  (既定 OFF・1 配信 1 人 1 回・5 秒間隔・20 件上限は**すべて据え置き。緩めない**)。
+  T11 は `docs/d3-automation-policy.md` への追記で閉じる。
 
 - **R6(中): 投稿のたびにチャット入力欄を上書きする。**
   [poster.ts](../../src/poster.ts) の `setInputValue` は入力欄の中身を丸ごと置き換えて送信する。
@@ -244,3 +276,12 @@ export type PostRecord = {
 - **R8(低): 設定の増加で options 画面が混む。**
   「有効にする」(自動検知)と「コメントに反応する」の 2 つのスイッチができる。
   どちらが何を止めるかを画面上で明示しないと、切ったつもりで動く/動かないが起きる。
+
+- **R9(中): 辞書テーブルの列が 3 つ増える**(003 の自由文 + 004 のフラグ + 004 の自由文 / spec.md D4)。
+  現状は「URL / 呼び名 / 最終検知」の 3 列で、**倍になる。**自由文 2 列は
+  どちらも長い文字列で、横に並べると 1 行が読めなくなる。
+  **T9 の中で畳む形(行の展開・アコーディオン等)まで含めて作る。**別 feature に切り出さない
+  (spec.md D4 の決定)。**畳んだ場合でも「フラグが ON なのに自由文が空」のような
+  不整合が隠れない**ようにする(AC13 の常時表示と同じ考え方)。
+  なお **003 の T8 と 004 の T13 のスクリーンショットは同じ絵**なので、
+  **列を畳む形にしたなら 004 側で撮り直す**(後に入るほうが引き取る)。

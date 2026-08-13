@@ -19,8 +19,8 @@ feature: comment-link
 ## 自動実装できるもの(DOM に依存しない — T1 の前に進めてよい)
 
 - [ ] T2: 設定に `commentReplyEnabled`(**既定 OFF**)と `commentTemplate`(既定 `{name}さん、来てくれてありがとうございます! {url}`)を足す。正規化と既定の回帰 (AC1 / AC5 / AC14 / AC15)  <!-- #26 -->
-- [ ] T3: `DirectoryEntry.replyToComment`(既定 false / 自動登録でも false)、`setReplyToComment`、`normalizeDirectory` の追従 (AC2 / AC14)  <!-- #27 -->
-- [ ] T4: `composer` を `{ name, url }` を受ける形へ広げる。**既存の出力が 1 文字も変わらないことをテストで固定** (AC5 / AC15)  <!-- #28 -->
+- [ ] T3: `DirectoryEntry.replyToComment`(既定 false / 自動登録でも false)、`setReplyToComment`、`normalizeDirectory` の追従 (AC2 / AC14)。あわせて **`DirectoryEntry.commentMessage`(コメント返し用の自由文 / 既定 `''`)と `resolveCommentMessage`** を足す。**003 の `message` とは別フィールド**で、正規化は 003 と同じ規則(欠損・非文字列は `''`、上限超は切り詰め)を再利用する (AC16 / spec.md D4)  <!-- #27 -->
+- [ ] T4: `composer` を `{ name, url }` を受ける形へ広げる。**既存の出力が 1 文字も変わらないことをテストで固定** (AC5 / AC15)。`{msg}` に渡す値は**呼び出し側で選ぶ**(リダイレクト返礼は `resolveMessage` / コメント返しは `resolveCommentMessage`)。**`composer.ts` に自由文の規則を新設しない** — 展開・削り順・切り出しは 003 のものをそのまま使う。**リダイレクト返礼の `{msg}` に `commentMessage` が入らないこと(逆も)を回帰テストで固定** (AC16)  <!-- #28 -->
 - [ ] T5: 抑止の土台 — `post-log` に `kind` を足して鍵・検索・`prune` を種別込みにし(**`'comment'` に完全一致したときだけ `comment`、それ以外は `redirect`**)、`dedupe` の `absorb` から `comment` を除き、`main.ts` が渡す履歴を絞る。`streamId` が空のときは `cooldownSec` から独立した 6 時間の下限を適用する。**`findLastPost`(切り分けログ用)が種別をまたいで拾わないようにする。**件数の食い合いの回帰も置く (AC7 / AC8 / AC14 / plan.md R4)  <!-- #29 -->
 - [ ] T6: `src/post-queue.ts` — 逐次処理 / 最低 5 秒間隔 / 1 配信 20 件の上限 / 無効化時の破棄。`now` を注入して実時間で待たないテストにする (AC11)  <!-- #30 -->
 
@@ -31,13 +31,19 @@ feature: comment-link
 
 ## 仕上げ
 
-- [ ] T9: 設定画面 — 有効化スイッチ / コメント用テンプレート + プレビュー / 辞書テーブルのフラグ列(**行編集で即保存**)/ 不整合の常時表示 / **投稿履歴の表に種別列**。002 が先に載っている場合は文言を `_locales/` へのキー追加で入れる (AC13)  <!-- #33 -->
-- [ ] T10: ドキュメント — README / `docs/install.md` / `docs/index.html` / `docs/for-testers.md` / `docs/privacy-policy.md` / `docs/setup-and-verify.md` に、**引き金が増えたこと・既定 OFF・保存項目の追加**を反映する。`scripts/make-site-assets.mjs` の見本データにフラグを足す。**T11 の決定を書く作業なので、T11 の後に着手する**  <!-- #34 -->
+- [ ] T9: 設定画面 — 有効化スイッチ / コメント用テンプレート + プレビュー / 辞書テーブルの**フラグ列とコメント返し用の自由文列**(**どちらも行編集で即保存**)/ 不整合の常時表示 / **投稿履歴の表に種別列** (AC13 / AC16)。**文言はベタ書きの日本語**(003 spec.md D2 の決定により 002 は後に載るため、`_locales/` 化はしない)。**辞書テーブルが 003 の自由文列と合わせて 3 列増えるので、畳む形(行の展開等)まで含めて作る**(plan.md R9)  <!-- #33 -->
+- [ ] T10: ドキュメント — README / `docs/install.md` / `docs/index.html` / `docs/for-testers.md` / `docs/privacy-policy.md` / `docs/setup-and-verify.md` に、**引き金が増えたこと・既定 OFF・保存項目の追加**(`replyToComment` と `commentMessage`)を反映する。`scripts/make-site-assets.mjs` の見本データに**フラグと自由文**を足す。**T11 は決着済み(2026-08-13)** — 書くのは「**引き金が増えても 001 D3 の結論は変わらない**」という判断と、**D5 の決定に基づく未検証の明記**(README・docs/install.md に「実配信での通し確認は未実施」。T12 が済んだら外す)  <!-- #34 -->
 
 ## 人手・実機が要るもの(SPEC-OPS §08 — `/spec-implement` に投げても止まる)
 
-- [ ] T11: **spec.md D3 の判断** — 引き金が増えて投稿頻度が上がることが、001 D3 の結論  <!-- #35 -->
+- [x] T11: **spec.md D3 の判断** — 引き金が増えて投稿頻度が上がることが、001 D3 の結論  <!-- #35 -->
       ([d3-automation-policy.md](../../docs/d3-automation-policy.md))を変えないか。**人間が決める**
+  - **決定(2026-08-13): 結論を維持する。開示した上で自己責任。**
+    既定 OFF + 辞書フラグも既定 false なので、**何もしなければ配布先の挙動は 001 と同じ**。
+    ON にしても 1 配信 1 人 1 回 / 5 秒間隔 / 20 件上限で、スパムポリシーが撃つ像からは遠いまま。
+    争点は 001 と同じく経路(API か DOM か)で、引き金の数はそこを動かさない。
+    **頻度を抑える設計は据え置き(緩めない)。** 公式 API へ寄せる案は引き続き未採用・004 のスコープ外
+  - **`docs/d3-automation-policy.md` への追記で閉じる**(004 で前提が変わったことと再判断の結果)
 - [ ] T12: **実配信での通し確認。**確認するのは 5 点 — ① 登録者のコメントで投稿されること  <!-- #36 -->
       ② **固定されないこと** ③ 同じ配信で 2 回目が出ないこと ④ **自分の投稿を引き金に再投稿しないこと**
       (plan.md R2) ⑤ **ポップアウトを開き直しても過去のコメントに一斉投稿しないこと**(plan.md R3)。
@@ -52,8 +58,11 @@ feature: comment-link
 ## 実装フロー(SPEC-OPS §11)
 
 - 集約ブランチ **`004-comment-link`**(main から切る)。タスクの PR は**これを base**にする
-- **T2–T6 は 1 PR に束ねてよい**(DOM に依存せず、降りる箇所に触れない範囲)
-- **T1 / T11 / T12 / T13 はタスク単位で PR を分け、人が確認してからマージ**する
+- **003 が main へ載ったあとに切る**(spec.md D4 / plan.md 依存節)。004 がコンフリクトを引き取る側
+- **T2–T6 は 1 PR に束ねてよい**(DOM に依存せず、降りる箇所に触れない範囲)。
+  ただし **T3 の `commentMessage` と T4 の `{msg}` の値の選択は 003 の実装が前提**なので、
+  **003 の T2 / T3 が main に入ってから**着手する
+- **T1 / T12 / T13 はタスク単位で PR を分け、人が確認してからマージ**する
 - **T7 は T1 の後**、**T8 は T7 の後**(T8 は R2 に触れるので単独 PR)。**T9 → T10 → T13** の順
 - 最終的に `004-comment-link` → `main` で feature をまとめてマージ
 
@@ -61,3 +70,8 @@ feature: comment-link
 > (`tests/fixtures/live-chat.ts` で一度やっている)。
 > **T12 が閉じるまで「コメントに反応する」を検証済みとして書かない**(plan.md R2 / R3 の歯止めが
 > 効いているかは実配信でしか分からない)。
+
+> **決定(2026-08-13 / 人間 / spec.md D5): T12 を main マージのブロッカーにしない。**
+> 相手が要るので自分では作れないため。代わりに **T10 で README / docs/install.md に
+> 「実配信での通し確認は未実施」と明記**し、**T12 の issue は開けたまま残す**。
+> **これは D2(歯止めが 1 枚欠けた状態で出すか)とは別の判断で、D2 は据え置き** — T1 の採取結果を見てから決める。
