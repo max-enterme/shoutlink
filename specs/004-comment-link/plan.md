@@ -177,7 +177,7 @@ export type PostRecord = {
 | `src/selectors.ts` | コメント専用の要素定数と、投稿者 / タイムスタンプ / 自分の判別のアクセサ。**T1 の採取結果だけを入れる**(推測は入れない) |
 | `src/types.ts` | `Config` に `commentReplyEnabled` / `commentTemplate`。`CommentAuthor` |
 | `src/config.ts` | 既定値(**`commentReplyEnabled: false`**)と正規化 (AC1 / AC14) |
-| `src/directory.ts` | `DirectoryEntry.replyToComment`(既定 false)、**`DirectoryEntry.commentMessage`(既定 `''` / AC16)**、`setReplyToComment`、**`resolveCommentMessage`**(003 の `resolveMessage` と同じ形・別関数)、**辞書側の値だけで名前を決める関数**(`resolveDisplayName` とは別 / AC5)、`normalizeDirectory` / `rememberSource` / `upsertNickname` の追従 |
+| `src/directory.ts` | `DirectoryEntry.replyToComment`(既定 false)、**`DirectoryEntry.commentMessage`(既定 `''` / AC16)**、`setReplyToComment`、**`resolveCommentMessage`**(003 の `resolveMessage` と対になる別関数。**引数は URL を受ける** — コメント経路に `RedirectEvent` が無いため / 上記「3. 文面」)、**辞書側の値だけで名前を決める関数**(`resolveDisplayName` とは別 / AC5)、`normalizeDirectory` / `rememberSource` / `upsertNickname` の追従 |
 | `src/composer.ts` | `{ name, url }` を受ける形へ広げる(既存の出力は不変 / AC15)。**自由文まわりは 003 の規則をそのまま使い、新設しない**(渡す値だけ呼び出し側で選ぶ / AC16) |
 | `src/post-log.ts` | `PostRecord.kind`。鍵・検索・`prune` を種別込みに。**欠損・壊れた値ともに `redirect`**(`'comment'` に完全一致したときだけ `comment` / AC14) |
 | `src/dedupe.ts` | `PriorPost.kind`。**`absorb` で `comment` を取り込まない** (AC8) |
@@ -280,14 +280,21 @@ export type PostRecord = {
   「有効にする」(自動検知)と「コメントに反応する」の 2 つのスイッチができる。
   どちらが何を止めるかを画面上で明示しないと、切ったつもりで動く/動かないが起きる。
 
-- **R9(中): 辞書テーブルの列が 3 → 6 になる**(003 の自由文 + 004 のフラグ + 004 の自由文 / spec.md D4)。
-  現状は「URL / 呼び名 / 最終検知」の 3 列で、**倍になる。**自由文 2 列は
-  どちらも長い文字列で、横に並べると 1 行が読めなくなる。
+- **R9(中): 辞書テーブルの 1 行が持つ編集項目が 3 → 6 になる**(003 の自由文 + 004 のフラグ +
+  004 の自由文 / spec.md D4)。現状は **「ハンドル / 呼び名 / 削除ボタン」の 3 列**
+  ([public/options.html](../../public/options.html) の `table.directory`。`lastSeenAt` は
+  **列ではなく**ハンドルセルの `unseen` クラスと `title`)で、**倍になる。**
+  自由文 2 つはどちらも長い文字列で、横に並べると 1 行が読めなくなる。
   **行を畳む表示を 004 のスコープに入れる**(AC13)。別 feature に切り出さない(spec.md D4 の決定)。
-  **畳んだ状態でも「フラグが ON なのに自由文が空」のような不整合が隠れない**ようにする
-  (AC13 の常時表示と同じ考え方)。
+  **畳んだ状態でも「設定したのに効かない」行が隠れない**ようにする
+  — `commentMessage` があるのに `replyToComment` が false / 自由文があるのに対応するテンプレートに
+  `{msg}` が無い。**「フラグ ON で自由文が空」は正常なので撃たない**(AC16 の既定であり、
+  フラグを付けた直後の全行がこれに当たる。ここを撃つと辞書全体が警告で埋まり、
+  AC13 の常時表示ごと読み飛ばされる)。**削除ボタンは畳んだ状態でも押せること。**
   **これで「既存パターンへの列追加」から外れるため、SPEC-OPS §10 に従い GUI モックを併置する**
   — **T14(人手)でレイアウトを確定させてから T9 を実装する。**
+  **モックの URL は T14 の完了時にこの行へ書く**(§10「置き方」。`published/yt-redirect-pin/` 配下)。
+  **モックは正本ではない** — 確定した挙動・値は AC13 と本 R9 に落とし、T9 はその確定値を実装する。
   R8(2 つのスイッチの並び)も同じ画面に乗るので**モックの対象に含める。**
   なお **003 の T8 と 004 の T13 のスクリーンショットは同じ絵**なので、
   **畳む形にした 004 側で撮り直す**(後に入るほうが引き取る)。
