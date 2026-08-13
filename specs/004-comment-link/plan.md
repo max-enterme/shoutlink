@@ -90,8 +90,10 @@ export type DirectoryEntry = {
 **`{msg}` に渡す値だけを差し替える** (spec.md D4 / AC16)。`compose` を `{ name, url }` へ広げるのと同じ形で、
 自由文も**呼び出し側が解決して渡す**:
 
-- リダイレクト返礼: `resolveMessage(directory, url)` → `entry.message`
+- リダイレクト返礼: `resolveMessage(directory, event)` → `entry.message`
+  (003 が `resolveDisplayName(directory, event)` と同じ形で足す)
 - コメント返し: `resolveCommentMessage(directory, url)` → `entry.commentMessage`
+  (**コメント経路に `RedirectEvent` が無いので URL を受ける。**引数の形が違うのは意図的)
 
 `composer.ts` は**どちらの自由文かを知らないまま**でいる(003 が `composer.ts` を辞書から切り離した方針の維持)。
 **`resolveMessage` にフラグ引数を足して分岐させない** — 呼び出し側で解決先を選ぶ形にする。
@@ -177,11 +179,11 @@ export type PostRecord = {
 | `src/config.ts` | 既定値(**`commentReplyEnabled: false`**)と正規化 (AC1 / AC14) |
 | `src/directory.ts` | `DirectoryEntry.replyToComment`(既定 false)、**`DirectoryEntry.commentMessage`(既定 `''` / AC16)**、`setReplyToComment`、**`resolveCommentMessage`**(003 の `resolveMessage` と同じ形・別関数)、**辞書側の値だけで名前を決める関数**(`resolveDisplayName` とは別 / AC5)、`normalizeDirectory` / `rememberSource` / `upsertNickname` の追従 |
 | `src/composer.ts` | `{ name, url }` を受ける形へ広げる(既存の出力は不変 / AC15)。**自由文まわりは 003 の規則をそのまま使い、新設しない**(渡す値だけ呼び出し側で選ぶ / AC16) |
-| `src/post-log.ts` | `PostRecord.kind`。鍵・検索・`prune` を種別込みに。**欠損は `redirect` / 壊れた値は `comment`** |
+| `src/post-log.ts` | `PostRecord.kind`。鍵・検索・`prune` を種別込みに。**欠損・壊れた値ともに `redirect`**(`'comment'` に完全一致したときだけ `comment` / AC14) |
 | `src/dedupe.ts` | `PriorPost.kind`。**`absorb` で `comment` を取り込まない** (AC8) |
 | `src/main.ts` | コメント経路の配線。投稿は共通処理へ。起動ログに `commentReplyEnabled` と ON 件数を載せる |
-| `public/options.html` / `src/options/options.ts` | 有効化スイッチ / コメント用テンプレート + プレビュー / 辞書テーブルの**フラグ列とコメント返し用の自由文列** / 不整合の常時表示 / 投稿履歴の種別列 (AC13 / AC16)。**003 の自由文列と合わせて辞書テーブルが 3 列増える** — 詰まるなら畳む(R9) |
-| `scripts/make-site-assets.mjs` | 撮影版下の見本データにフラグを足す(列が空の絵にしないため) |
+| `public/options.html` / `src/options/options.ts` | 有効化スイッチ / コメント用テンプレート + プレビュー / 辞書テーブルの**フラグ列とコメント返し用の自由文列** / 不整合の常時表示 / 投稿履歴の種別列 (AC13 / AC16)。**003 の自由文列と合わせて辞書テーブルが 3 → 6 列**になるため**行を畳む表示にする**(R9 / T14 のモックで確定してから) |
+| `scripts/make-site-assets.mjs` | 撮影版下の見本データに**フラグと `commentMessage`** を足す(列が空の絵にしないため) |
 | `tests/comment-detector.test.ts` ほか | 新規 + 既存の回帰(001 の挙動が変わらないこと) |
 | `README.md` / `docs/install.md` / `docs/index.html` / `docs/for-testers.md` / `docs/privacy-policy.md` / `docs/setup-and-verify.md` | 引き金が増えたこと・既定 OFF・保存項目の追加 |
 
@@ -216,7 +218,8 @@ export type PostRecord = {
 - **002(i18n)は 003 / 004 のどちらより後**(003 spec.md D2 の決定)。002 は T5 / T6 が
   英語圏の実データ待ちで自力では閉じられないため、**待たない。** 003 / 004 が足す UI 文言は
   ベタ書きの日本語で入れ、**002 が後から `_locales/` へ拾う。**
-- **002(i18n)が先に載る場合**、004 が足す UI 文言はすべて `_locales/` へのキー追加になる(T9 / T10)。
+- ~~**002(i18n)が先に載る場合**、004 が足す UI 文言はすべて `_locales/` へのキー追加になる(T9 / T10)。~~
+  → **上の決定により 002 は後。** 004 の UI 文言は**ベタ書きの日本語**で入れる(T9 / T10)。
 
 ## テスト戦略
 
@@ -277,11 +280,14 @@ export type PostRecord = {
   「有効にする」(自動検知)と「コメントに反応する」の 2 つのスイッチができる。
   どちらが何を止めるかを画面上で明示しないと、切ったつもりで動く/動かないが起きる。
 
-- **R9(中): 辞書テーブルの列が 3 つ増える**(003 の自由文 + 004 のフラグ + 004 の自由文 / spec.md D4)。
+- **R9(中): 辞書テーブルの列が 3 → 6 になる**(003 の自由文 + 004 のフラグ + 004 の自由文 / spec.md D4)。
   現状は「URL / 呼び名 / 最終検知」の 3 列で、**倍になる。**自由文 2 列は
   どちらも長い文字列で、横に並べると 1 行が読めなくなる。
-  **T9 の中で畳む形(行の展開・アコーディオン等)まで含めて作る。**別 feature に切り出さない
-  (spec.md D4 の決定)。**畳んだ場合でも「フラグが ON なのに自由文が空」のような
-  不整合が隠れない**ようにする(AC13 の常時表示と同じ考え方)。
+  **行を畳む表示を 004 のスコープに入れる**(AC13)。別 feature に切り出さない(spec.md D4 の決定)。
+  **畳んだ状態でも「フラグが ON なのに自由文が空」のような不整合が隠れない**ようにする
+  (AC13 の常時表示と同じ考え方)。
+  **これで「既存パターンへの列追加」から外れるため、SPEC-OPS §10 に従い GUI モックを併置する**
+  — **T14(人手)でレイアウトを確定させてから T9 を実装する。**
+  R8(2 つのスイッチの並び)も同じ画面に乗るので**モックの対象に含める。**
   なお **003 の T8 と 004 の T13 のスクリーンショットは同じ絵**なので、
-  **列を畳む形にしたなら 004 側で撮り直す**(後に入るほうが引き取る)。
+  **畳む形にした 004 側で撮り直す**(後に入るほうが引き取る)。
