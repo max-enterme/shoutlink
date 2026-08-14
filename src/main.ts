@@ -12,6 +12,7 @@ import {
   onDirectoryChanged,
   rememberSource,
   resolveDisplayName,
+  resolveMessage,
   saveDirectory,
 } from './directory'
 import type { Directory } from './directory'
@@ -49,6 +50,8 @@ async function main(): Promise<void> {
     return
   }
 
+  // `sync` → `local` の 1 度きりの移行は `loadDirectory` の中で走り、**成否はその中で 1 行出る**
+  // (設定画面から先に開かれても同じログが出るように / plan.md R3)。
   let directory: Directory = await guardAsync('呼び名辞書の読み込み', loadDirectory, [])
 
   // **リロードをまたいで再投稿を止めるための土台。**
@@ -113,9 +116,11 @@ async function main(): Promise<void> {
       return
     }
 
-    // 辞書に呼び名があればそれを使う。無ければ検知した表示名のまま
+    // 辞書に呼び名があればそれを使う。無ければ検知した表示名のまま。
+    // 自由文も同じく**ここで辞書から解決してから**純関数の `compose` へ渡す
+    // (`composer.ts` は辞書を知らないままでいる)
     const named = { ...event, sourceChannelName: resolveDisplayName(directory, event) }
-    const text = compose(config.template, named)
+    const text = compose(config.template, named, { message: resolveMessage(directory, event) })
     log.info(`投稿する (${event.origin ?? 'auto'}):`, text)
 
     // 投稿する**前に**覚える。投稿・固定の途中で observer が発火しても取りこぼさないため

@@ -20,7 +20,7 @@ feature: redirect-pin
     受信から投稿までの所要時間(AC1) / `ifEmpty` が実際の固定バナーを拾うか(plan.md R4)
 
 - [ ] T9: セキュリティ点検 / インシデント点検の指摘への対応。結果は
-      [docs/security-review.md](../../docs/security-review.md)(2026-08-06 実施)。**点検は完了、対応は S3/S4/S6/S7 が残り。**
+      [docs/security-review.md](../../docs/security-review.md)(2026-08-06 実施)。**点検は完了、対応は S3/S4/S6 が残り。**
   - [x] S2 (高): 未確認の文言パターン (`/リダイレクト/` `/raid/i` 等) を自動発火から外し、診断ログ専用に降格した。
         2026-08-06 の②と同型の再発経路だった
   - [x] S1 (高): 自分が投稿した返礼が**固定バナー**として再検知される自己ループを止めた。
@@ -29,7 +29,10 @@ feature: redirect-pin
   - [ ] S3 / S4 (**低に格下げ**): 表示名と `safeDecode` 後の URL の検査。初版は「中・任意の文字列が投稿に載る」と
         書いたが、**合成 DOM での再現であって実配信の観測ではなかった**(実際の観測では名前はハンドルになっており、
         ハンドルに空白・`/`・`:` は入らない)。T1 で通知 DOM を採るときに一緒に見る
-  - [ ] S6 / S7 (低): `host_permissions` を `live_chat*` へ絞る / 呼び名辞書に件数上限(`storage.sync` 8KB)
+  - [ ] S6 (低): `host_permissions` を `live_chat*` へ絞る
+  - [x] S7 (低): 呼び名辞書が `storage.sync` の 8KB 上限で黙って保存に失敗する →
+        **003 で対応**([specs/003-per-source-message](../003-per-source-message/spec.md) T1)。
+        件数上限ではなく `chrome.storage.local` への退避を採った(`sync` からは 1 度だけ引き継ぎ、`sync` 側は消さない)
   - [x] S5: ドキュメントが `www.youtube.com` でも動くと書いていた食い違いを修正
 - [ ] T10: **①の対策の前提を実機で確認する** — 他人のライブの videoId で
       `studio.youtube.com/live_chat?is_popout=1&v=<他人>` を開いたときにチャットが描画されるか。

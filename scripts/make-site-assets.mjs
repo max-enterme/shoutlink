@@ -70,20 +70,36 @@ const MOCK = `
       const sample = {
         'ytRedirectPin.config': {
           enabled: true,
-          template: '{name}さんからリダイレクトありがとうございます! {url}',
+          // **見本のテンプレートには {msg} を入れる。** 見本の辞書に自由文が入っているので、
+          // {msg} が無いと設定画面が AC7 の警告を出し、撮影版下が「警告が出ている画面」になる
+          template: '{name}さん {msg} リダイレクトありがとうございます! {url}',
           pinMode: 'ifEmpty',
           cooldownSec: 600,
           debug: false,
         },
+        // 自由文 (message) は空の行も混ぜる。「未設定でも成立する」ことが絵で分かるように
         'ytRedirectPin.directory': [
-          { url: 'https://www.youtube.com/@example-live', nickname: 'れい', lastSeenAt: 1 },
-          { url: 'https://www.youtube.com/@sample-channel', nickname: '', lastSeenAt: 2 },
-          { url: 'https://www.youtube.com/@demo-streamer', nickname: 'でも先輩', lastSeenAt: 0 },
+          {
+            url: 'https://www.youtube.com/@example-live',
+            nickname: 'れい',
+            message: 'いつも遊びに来てくれてありがとう!',
+            lastSeenAt: 1,
+          },
+          { url: 'https://www.youtube.com/@sample-channel', nickname: '', message: '', lastSeenAt: 2 },
+          {
+            url: 'https://www.youtube.com/@demo-streamer',
+            nickname: 'でも先輩',
+            message: '今日もお疲れさまです',
+            lastSeenAt: 0,
+          },
         ],
       }
+      // 辞書の保存先は local。local が無ければ sync に落ちる作りなので、両方に同じ見本を返させる
+      const area = { get: async (key) => ({ [key]: sample[key] }), set: async () => {} }
       globalThis.chrome = {
         storage: {
-          sync: { get: async (key) => ({ [key]: sample[key] }), set: async () => {} },
+          sync: area,
+          local: area,
           onChanged: { addListener() {}, removeListener() {} },
         },
       }
