@@ -26,14 +26,16 @@ export type SkipReason =
   | 'limit'
   /** キューを捨てた(スイッチが OFF になった / 配信が変わった) */
   | 'discarded'
+  /** 投稿が例外を投げた (AC12)。**無言で消さないための窓** */
+  | 'failed'
 
 export type PostQueueOptions<T> = {
   /** 実際の投稿。**投稿できたら true**(false は間隔の起点にしない) */
   post: (item: T) => Promise<boolean>
   /** 今の配信で既に出したコメント返しの件数 (AC11)。**投稿履歴から数える** */
   countPosted: () => number
-  /** 投稿しなかったときの通知(ログ用) */
-  onSkip?: (item: T, reason: SkipReason) => void
+  /** 投稿しなかったときの通知(ログ用)。`failed` のときだけ原因が付く */
+  onSkip?: (item: T, reason: SkipReason, error?: unknown) => void
   now?: () => number
   /** 待つ手段。テストでは偽の時計を進めるだけの関数を渡す */
   wait?: (ms: number) => Promise<void>
@@ -76,7 +78,7 @@ export function createPostQueue<T>(options: PostQueueOptions<T>): PostQueue<T> {
       const generationAtStart = generation
       const item = queue.shift() as T
 
-      // **上限は投稿の直前に見る。**積んだ時点で見ると、待っている間に増えた分を数え落とす
+      // **上限は取り出すたびに見る。**積んだ時点で見ると、待っている間に増えた分を数え落とす
       if (options.countPosted() >= maxPerStream) {
         onSkip(item, 'limit')
         continue
@@ -92,7 +94,17 @@ export function createPostQueue<T>(options: PostQueueOptions<T>): PostQueue<T> {
         }
       }
 
-      if (await options.post(item)) lastPostedAt = now()
+      // **例外はここで握る (AC12)。**握らないと ① この 1 件が `onSkip` も呼ばれず無言で消え、
+      // ② `running` に付いたプロミスが unhandledrejection になり、③ `idle()` が reject する。
+      // このキューは「投稿が失敗しても配信に影響させない」ための層なので、ここで落ちては本末転倒。
+      // 失敗は**間隔の起点にしない**(次の 1 件を無駄に待たせない)
+      let posted = false
+      try {
+        posted = await options.post(item)
+      } catch (err) {
+        onSkip(item, 'failed', err)
+      }
+      if (posted) lastPostedAt = now()
     }
   }
 

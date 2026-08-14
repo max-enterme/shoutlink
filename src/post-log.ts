@@ -225,23 +225,40 @@ export function findCommentReplyBlocker(
 ): PostRecord | undefined {
   const key = postLogKey(params.url)
   const sameChannel = log.filter((entry) => postLogKey(entry.url) === key)
-  if (params.streamId) {
-    return sameChannel.find((entry) => entry.streamId === params.streamId)
-  }
   const floorMs = UNKNOWN_STREAM_MIN_COOLDOWN_SEC * 1000
-  return sameChannel.find((entry) => params.now - entry.postedAt < floorMs)
+  const withinFloor = (entry: PostRecord): boolean => params.now - entry.postedAt < floorMs
+
+  if (params.streamId) {
+    return sameChannel.find(
+      (entry) =>
+        entry.streamId === params.streamId ||
+        // **配信 ID が空のまま残った記録も 6 時間は見る。**
+        // 管制室の埋め込みチャット(ID が取れない)で投稿 → ポップアウトを開き直す
+        // (ID が取れる)と、**同じ配信・同じ相手に 2 回目が出る。**
+        // コメント側は「同一配信 1 回」が唯一の歯止めなので、取りこぼすより二重投稿を避ける
+        (entry.streamId === '' && withinFloor(entry)),
+    )
+  }
+  return sameChannel.find(withinFloor)
 }
 
 /**
  * この配信で既に出したコメント返しの件数 (AC11 の 20 件上限の分母)。
  *
  * ⚠️ **メモリのカウンタで数えない。**開き直しのたびに枠がリセットされ、上限が事実上効かなくなる
- *    (2026-08-06 ④ で一度踏んだ形)。**配信 ID が取れないときは数えられない**ので
- *    `0` を返す — この状態では 1 人 1 回の抑止(上の 6 時間の下限)が主な歯止めになる。
+ *    (2026-08-06 ④ で一度踏んだ形)。
+ *
+ * ⚠️ **配信 ID が取れないときは「直近 6 時間のコメント返し」を数える。**`0` を返すと
+ *    `countPosted() >= 上限` が永久に成立せず、**20 件の上限が丸ごと無効になる。**
+ *    そのとき残る歯止めは「1 人 6 時間 1 回」だけなので、ON にした人が 21 人以上
+ *    コメントすれば上限を超えて投稿する。AC7 が同じ穴(配信 ID が無い)に対して
+ *    6 時間の下限を当てているので、**同じ形に揃える**(判定材料が無いときは長い方に倒す)。
  */
-export function countCommentPostsInStream(log: PostLog, streamId: string): number {
-  if (!streamId) return 0
-  return log.filter((entry) => entry.kind === 'comment' && entry.streamId === streamId).length
+export function countCommentPostsInStream(log: PostLog, streamId: string, now: number): number {
+  const comments = log.filter((entry) => entry.kind === 'comment')
+  if (streamId) return comments.filter((entry) => entry.streamId === streamId).length
+  const floorMs = UNKNOWN_STREAM_MIN_COOLDOWN_SEC * 1000
+  return comments.filter((entry) => now - entry.postedAt < floorMs).length
 }
 
 /**

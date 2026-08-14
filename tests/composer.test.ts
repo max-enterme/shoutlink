@@ -256,6 +256,25 @@ describe('composeText (004 / AC5 / AC15)', () => {
     }
   })
 
+  it('**001 / 003 の代表的な出力をリテラルで固定する**(ラッパ同士の比較だけにしない)', () => {
+    // 001: {msg} を含まないテンプレート
+    expect(compose('{name}さんからリダイレクトありがとうございます! {url}', event)).toBe(
+      `${FAKE_CHANNEL.name}さんからリダイレクトありがとうございます! ${FAKE_CHANNEL.url}`,
+    )
+    // 003: 自由文あり
+    expect(compose('{name}さん {msg} {url}', event, { message: 'いつもありがとう' })).toBe(
+      `${FAKE_CHANNEL.name}さん いつもありがとう ${FAKE_CHANNEL.url}`,
+    )
+    // 003: 自由文が未設定なら {msg} が消え、前後の空白が 1 つに畳まれる
+    expect(compose('{name}さん {msg} {url}', event, { message: '' })).toBe(
+      `${FAKE_CHANNEL.name}さん ${FAKE_CHANNEL.url}`,
+    )
+    // 004: 同じ入力を composeText に直接渡しても同じ
+    expect(
+      composeText('{name}さん {msg} {url}', target, { message: 'いつもありがとう' }),
+    ).toBe(`${FAKE_CHANNEL.name}さん いつもありがとう ${FAKE_CHANNEL.url}`)
+  })
+
   it('RedirectEvent が無くても { name, url } だけで組み立てられる', () => {
     expect(composeText('{name}さん、来てくれてありがとうございます! {url}', target)).toBe(
       `${FAKE_CHANNEL.name}さん、来てくれてありがとうございます! ${FAKE_CHANNEL.url}`,

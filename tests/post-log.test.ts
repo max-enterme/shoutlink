@@ -317,6 +317,22 @@ describe('findCommentReplyBlocker (AC7 / AC8)', () => {
     expect(findCommentReplyBlocker(log, { streamId: '', url: FAKE_CHANNEL.url, now })).toBeUndefined()
   })
 
+  it('**配信 ID が空のまま残った記録も、ID が取れてから 6 時間は見る**(開き直しでの二重投稿)', () => {
+    // 管制室の埋め込みチャット(ID が取れない)で投稿 → ポップアウト(ID が取れる)を開き直した状況
+    const log = [rec({ kind: 'comment', streamId: '', postedAt: now - 1_000 })]
+    expect(
+      findCommentReplyBlocker(log, { streamId: 'stream-1', url: FAKE_CHANNEL.url, now }),
+    ).toBeDefined()
+  })
+
+  it('配信 ID が空の記録でも、6 時間より古ければ止めない', () => {
+    const postedAt = now - UNKNOWN_STREAM_MIN_COOLDOWN_SEC * 1000 - 1
+    const log = [rec({ kind: 'comment', streamId: '', postedAt })]
+    expect(
+      findCommentReplyBlocker(log, { streamId: 'stream-1', url: FAKE_CHANNEL.url, now }),
+    ).toBeUndefined()
+  })
+
   it('**cooldownSec = 0 でも下限は外れない**(dedupe と独立していること)', () => {
     // findCommentReplyBlocker は cooldownSec を引数に取らない = 逃げ道が構造上ない
     const log = [rec({ kind: 'comment', streamId: '', postedAt: now - 1_000 })]
@@ -325,6 +341,8 @@ describe('findCommentReplyBlocker (AC7 / AC8)', () => {
 })
 
 describe('countCommentPostsInStream (AC11)', () => {
+  const now = 10_000_000
+
   it('今の配信のコメント返しだけを数える', () => {
     const log = [
       rec({ kind: 'comment', streamId: 'stream-1' }),
@@ -332,11 +350,25 @@ describe('countCommentPostsInStream (AC11)', () => {
       rec({ kind: 'comment', streamId: 'stream-2' }),
       rec({ kind: 'redirect', streamId: 'stream-1' }),
     ]
-    expect(countCommentPostsInStream(log, 'stream-1')).toBe(2)
+    expect(countCommentPostsInStream(log, 'stream-1', now)).toBe(2)
   })
 
-  it('配信 ID が取れなければ 0(数えようがない)', () => {
-    expect(countCommentPostsInStream([rec({ kind: 'comment', streamId: '' })], '')).toBe(0)
+  it('**配信 ID が取れないときは直近 6 時間のコメント返しを数える**(上限を無効にしない)', () => {
+    const log = [
+      rec({ kind: 'comment', streamId: '', postedAt: now - 1_000 }),
+      rec({ kind: 'comment', streamId: '', postedAt: now - 2_000, url: FAKE_OTHER_CHANNEL.url }),
+      // 6 時間より古い / 種別が違うものは数えない
+      rec({ kind: 'comment', streamId: '', postedAt: now - UNKNOWN_STREAM_MIN_COOLDOWN_SEC * 1000 - 1 }),
+      rec({ kind: 'redirect', streamId: '', postedAt: now - 1_000 }),
+    ]
+    expect(countCommentPostsInStream(log, '', now)).toBe(2)
+  })
+
+  it('0 を返すと 20 件の上限が丸ごと無効になるので、そうしない', () => {
+    const log = Array.from({ length: 25 }, (_, i) =>
+      rec({ kind: 'comment', streamId: '', url: FAKE_CHANNEL.url + '/' + i, postedAt: now - i }),
+    )
+    expect(countCommentPostsInStream(log, '', now)).toBe(25)
   })
 })
 

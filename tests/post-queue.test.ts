@@ -294,6 +294,57 @@ describe('createPostQueue (AC11)', () => {
     expect(h.posted).toEqual(['a', 'b'])
   })
 
+  it('**post が例外を投げても飲み込み、キューは止まらない** (AC12)', async () => {
+    const clock = fakeClock()
+    const h = harness()
+    const errors: unknown[] = []
+    const queue = createPostQueue<string>({
+      now: clock.now,
+      wait: clock.wait,
+      countPosted: () => h.posted.length,
+      post: async (item) => {
+        if (item === 'a') throw new Error('投稿でこけた')
+        h.posted.push(item)
+        return true
+      },
+      onSkip: (item, reason, error) => {
+        h.skipped.push({ item, reason })
+        if (error) errors.push(error)
+      },
+    })
+
+    queue.enqueue('a')
+    queue.enqueue('b')
+    // idle() が reject しないこと(reject すると呼び出し側まで巻き込む)
+    await expect(queue.idle()).resolves.toBeUndefined()
+
+    expect(h.posted).toEqual(['b'])
+    expect(h.skipped).toEqual([{ item: 'a', reason: 'failed' }])
+    expect(errors).toHaveLength(1)
+  })
+
+  it('例外で終わった回は間隔の起点にしない(次の 1 件を無駄に待たせない)', async () => {
+    const clock = fakeClock()
+    const h = harness()
+    const queue = createPostQueue<string>({
+      now: clock.now,
+      wait: clock.wait,
+      countPosted: () => h.posted.length,
+      post: async (item) => {
+        if (item === 'a') throw new Error('投稿でこけた')
+        h.posted.push(item)
+        return true
+      },
+      onSkip: (item, reason) => h.skipped.push({ item, reason }),
+    })
+
+    queue.enqueue('a')
+    queue.enqueue('b')
+    await queue.idle()
+
+    expect(clock.waited).toEqual([])
+  })
+
   it('定数は spec のとおり(5 秒 / 20 件)', () => {
     expect(COMMENT_REPLY_INTERVAL_MS).toBe(5_000)
     expect(COMMENT_REPLY_MAX_PER_STREAM).toBe(20)
