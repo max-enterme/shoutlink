@@ -70,7 +70,9 @@ const MOCK = `
       const sample = {
         'ytRedirectPin.config': {
           enabled: true,
-          template: '{name}さんからリダイレクトありがとうございます! {url}',
+          // **見本のテンプレートには {msg} を入れる。** 見本の辞書に自由文が入っているので、
+          // {msg} が無いと設定画面が AC7 の警告を出し、撮影版下が「警告が出ている画面」になる
+          template: '{name}さん {msg} リダイレクトありがとうございます! {url}',
           pinMode: 'ifEmpty',
           cooldownSec: 600,
           debug: false,

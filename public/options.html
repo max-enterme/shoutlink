@@ -38,6 +38,12 @@
       table.directory td:last-child, table.directory th:last-child { width: 2.5em; padding-right: 0; }
       table.directory .handle { word-break: break-all; }
       table.directory .unseen { color: #888; }
+      /* 自由文は一番長い入力なので、呼び名より広く取る */
+      table.directory .msg { width: 40%; }
+      table.directory .remaining { display: block; color: #666; font-size: 11px; margin-top: 2px; }
+      /* 負(超過)は色でも分かるようにする。投稿時に削られるが保存は妨げない (AC8) */
+      table.directory .remaining.over { color: #b3261e; }
+      table.directory input.invalid { border-color: #b3261e; background: #fff6f6; }
       table.directory button { padding: 2px 8px; white-space: nowrap; }
       table.directory tfoot td { padding-top: 8px; border-top: 1px solid #eee; }
       table.postlog td:last-child, table.postlog th:last-child { width: auto; white-space: nowrap; color: #666; }
@@ -86,8 +92,15 @@
 
     <fieldset>
       <legend>投稿文テンプレート</legend>
-      <label for="template">`{name}` に表示名、`{url}` にチャンネル URL が入る</label>
+      <label for="template">
+        `{name}` に表示名、`{url}` にチャンネル URL、`{msg}` に<strong>送信元ごとの自由文</strong>が入る
+      </label>
       <textarea id="template"></textarea>
+      <p class="warn" id="templateWarning" hidden></p>
+      <p class="hint">
+        `{msg}` は「呼び名の辞書」で相手ごとに登録します。<strong>未登録の相手では `{msg}` ごと消え、
+        前後の空白は 1 つに畳まれます。</strong>全体が 200 字を超えると、自由文 → 表示名 → 末尾 の順に削られます。
+      </p>
       <p class="hint">プレビュー:</p>
       <p class="preview" id="preview"></p>
     </fieldset>
@@ -142,18 +155,29 @@
     <fieldset>
       <legend>呼び名の辞書</legend>
       <p class="hint">
-        `{name}` を置き換える呼び名。<strong>リダイレクトを受けた相手は自動でこの一覧に追加されます</strong>
-        (呼び名は空のまま)。呼び名が空の間はハンドルがそのまま使われます。
+        `{name}` を置き換える呼び名と、`{msg}` に入る<strong>その相手への自由文</strong>。
+        <strong>リダイレクトを受けた相手は自動でこの一覧に追加されます</strong>(どちらも空のまま)。
+        呼び名が空の間はハンドルがそのまま使われ、自由文が空なら `{msg}` は消えます。<br />
+        自由文は<strong>1 件 200 字まで</strong>。「残り N 字」は<strong>投稿文全体</strong>(200 字)に対する残りで、
+        テンプレートを書き換えると即座に変わります。<strong>超過していても保存できます</strong>
+        (投稿時に 自由文 → 表示名 → 末尾 の順で削られます)。
+      </p>
+      <p class="warn">
+        <strong>送信元の検知は推測を含みます。取り違えると、その人に宛てて書いた一文がそのまま
+        別の相手への投稿に載ります。</strong>
+        呼び名の取り違えなら「誰かの名前」が出るだけですが、自由文は宛先を間違えると内容そのものが
+        事故になります。<strong>取り違えて別の人に読まれても困らない内容だけを書いてください。</strong>
       </p>
       <table class="directory">
         <thead>
-          <tr><th>ハンドル</th><th>呼び名</th><th></th></tr>
+          <tr><th>ハンドル</th><th>呼び名</th><th>自由文 (`{msg}`)</th><th></th></tr>
         </thead>
         <tbody id="directoryRows"></tbody>
         <tfoot>
           <tr>
             <td><input id="newHandle" type="text" placeholder="@example-channel または URL" /></td>
             <td><input id="newNickname" type="text" placeholder="呼び名" /></td>
+            <td class="msg"><input id="newMessage" type="text" placeholder="自由文 (任意)" /></td>
             <td><button id="addEntry" type="button" title="登録する">＋</button></td>
           </tr>
         </tfoot>

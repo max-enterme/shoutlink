@@ -101,6 +101,21 @@ export function upsertNickname(directory: Directory, url: string, nickname: stri
   return [...directory, { url, nickname, message: '', lastSeenAt: 0 }]
 }
 
+/**
+ * 自由文の変更(`upsertNickname` と同じ形)。登録が無ければ**呼び名は空のまま**行を作る。
+ *
+ * **切り詰めはここでしない。**上限超過は設定画面が保存前に弾いて理由を出す (AC6)。
+ * ここで黙って詰めると、書いた本人が消えた部分に気づけない。
+ */
+export function upsertMessage(directory: Directory, url: string, message: string): Directory {
+  const key = directoryKey(url)
+  const existing = directory.find((entry) => directoryKey(entry.url) === key)
+  if (existing) {
+    return directory.map((entry) => (entry === existing ? { ...entry, message } : entry))
+  }
+  return [...directory, { url, nickname: '', message, lastSeenAt: 0 }]
+}
+
 export function removeEntry(directory: Directory, url: string): Directory {
   const key = directoryKey(url)
   return directory.filter((entry) => directoryKey(entry.url) !== key)
