@@ -29,6 +29,7 @@ import {
   findPostInStream,
   loadPostLog,
   makePostRecord,
+  redirectHistory,
   rememberPost,
   savePostLog,
 } from './post-log'
@@ -59,7 +60,10 @@ async function main(): Promise<void> {
   // 抑止の記録をメモリだけに持っていると、そのたびに白紙に戻って再投稿していた (2026-08-06)。
   const streamId = guard('配信 ID の取得', () => currentStreamId(), '')
   let postLog: PostLog = await guardAsync('投稿履歴の読み込み', loadPostLog, [])
-  const dedupe = createDedupe(config.cooldownSec, { streamId, history: postLog })
+  // **リダイレクト側の抑止にはリダイレクト返礼の記録だけを渡す** (004 / AC8)。
+  // コメント返しの記録まで渡すと、それが起動時からクールダウンを埋め、
+  // 「コメント返し済みでもリダイレクト返礼はする」が壊れる(`absorb` 側でも弾いている)
+  const dedupe = createDedupe(config.cooldownSec, { streamId, history: redirectHistory(postLog) })
   // 設定と独立した自己ループの歯止め (security-review.md S1)
   const selfEcho = createSelfEchoGuard()
 
@@ -103,9 +107,11 @@ async function main(): Promise<void> {
     // AC4: 同じ配信の中での、同一送信元・クールダウン内の多重発火を抑止
     if (!dedupe.tryAcquire(event)) {
       // なぜ止めたかを保存済みの履歴から説明する(「投稿されない」の切り分け用)
+      // **種別を指定する** (004)。指定しないとコメント返しの記録を
+      // 「前回のリダイレクト返礼」として出し、切り分けの窓が嘘をつく
       const prior =
-        findPostInStream(postLog, streamId, event.sourceChannelUrl) ??
-        findLastPost(postLog, event.sourceChannelUrl)
+        findPostInStream(postLog, streamId, event.sourceChannelUrl, 'redirect') ??
+        findLastPost(postLog, event.sourceChannelUrl, 'redirect')
       log.info(
         'クールダウン中のためスキップ',
         event.sourceChannelUrl,

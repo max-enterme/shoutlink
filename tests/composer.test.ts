@@ -1,6 +1,14 @@
 import { describe, expect, it } from 'vitest'
-import { MAX_MESSAGE_LENGTH, compose, composedLength, remainingLength } from '../src/composer'
+import {
+  MAX_MESSAGE_LENGTH,
+  compose,
+  composeText,
+  composedLength,
+  remainingLength,
+} from '../src/composer'
 import { DEFAULT_CONFIG } from '../src/config'
+import { resolveCommentMessage, resolveMessage } from '../src/directory'
+import type { Directory } from '../src/directory'
 import type { RedirectEvent } from '../src/types'
 import { FAKE_CHANNEL } from './fixtures/live-chat'
 
@@ -223,5 +231,81 @@ describe('composedLength / remainingLength (AC8 の材料)', () => {
     expect(remainingLength('{name}さん {msg} {url}', values)).toBe(
       MAX_MESSAGE_LENGTH - 'れいさん https://www.youtube.com/@rei'.length,
     )
+  })
+})
+
+// --- 004: composeText への一般化 ---------------------------------------------
+
+describe('composeText (004 / AC5 / AC15)', () => {
+  const target = { name: FAKE_CHANNEL.name, url: FAKE_CHANNEL.url }
+
+  it('compose は composeText の薄いラッパで、出力が 1 文字も変わらない', () => {
+    const templates = [
+      DEFAULT_CONFIG.template,
+      '{name}さんからリダイレクトありがとうございます! {url}',
+      '{msg} {name} {url}',
+      '{name}',
+      '{url}',
+      'プレースホルダなし',
+      '{foo} は残る {name}',
+    ]
+    for (const template of templates) {
+      for (const message of ['', 'いつもありがとう', 'あ'.repeat(300)]) {
+        expect(composeText(template, target, { message })).toBe(compose(template, event, { message }))
+      }
+    }
+  })
+
+  it('RedirectEvent が無くても { name, url } だけで組み立てられる', () => {
+    expect(composeText('{name}さん、来てくれてありがとうございます! {url}', target)).toBe(
+      `${FAKE_CHANNEL.name}さん、来てくれてありがとうございます! ${FAKE_CHANNEL.url}`,
+    )
+  })
+
+  it('既定のコメント用テンプレートに呼び名と URL が入る', () => {
+    const text = composeText(DEFAULT_CONFIG.commentTemplate, target)
+    expect(text).toContain(FAKE_CHANNEL.name)
+    expect(text).toContain(FAKE_CHANNEL.url)
+  })
+
+  it('削り順・切り出し・再展開しないことは 003 の規則をそのまま使う', () => {
+    // 自由文 → 表示名 → 末尾。自由文が削られても URL は壊れない
+    const long = 'あ'.repeat(300)
+    const text = composeText('{name}さん {msg} {url}', target, { message: long })
+    expect(text.length).toBeLessThanOrEqual(MAX_MESSAGE_LENGTH)
+    expect(text).toContain(FAKE_CHANNEL.url)
+    // 自由文の中のプレースホルダは再展開しない (AC9)
+    expect(composeText('{msg}', target, { message: '{url}' })).toBe('{url}')
+  })
+})
+
+describe('{msg} に渡す値の選択 (004 / AC16)', () => {
+  const directory: Directory = [
+    {
+      url: FAKE_CHANNEL.url,
+      nickname: 'れい',
+      message: 'リダイレクトの自由文',
+      replyToComment: true,
+      commentMessage: 'コメントの自由文',
+      lastSeenAt: 0,
+    },
+  ]
+
+  it('リダイレクト返礼の {msg} に commentMessage は入らない', () => {
+    const text = compose('{name} {msg}', event, { message: resolveMessage(directory, event) })
+    expect(text).toContain('リダイレクトの自由文')
+    expect(text).not.toContain('コメントの自由文')
+  })
+
+  it('コメント返しの {msg} に message(003 の自由文)は入らない', () => {
+    const text = composeText('{name} {msg}', { name: 'れい', url: FAKE_CHANNEL.url }, {
+      message: resolveCommentMessage(directory, FAKE_CHANNEL.url),
+    })
+    expect(text).toContain('コメントの自由文')
+    expect(text).not.toContain('リダイレクトの自由文')
+  })
+
+  it('composer 自身はどちらの自由文かを知らない(渡された値をそのまま使う)', () => {
+    expect(composeText('{msg}', { name: 'x', url: 'y' }, { message: 'なんでも' })).toBe('なんでも')
   })
 })

@@ -30,7 +30,15 @@ import type { RedirectEvent } from '../src/types'
 import { FAKE_CHANNEL } from './fixtures/live-chat'
 
 function entry(over: Partial<Directory[number]> = {}): Directory[number] {
-  return { url: FAKE_CHANNEL.url, nickname: '', message: '', lastSeenAt: 0, ...over }
+  return {
+    url: FAKE_CHANNEL.url,
+    nickname: '',
+    message: '',
+    replyToComment: false,
+    commentMessage: '',
+    lastSeenAt: 0,
+    ...over,
+  }
 }
 
 describe('validateEntryMessage (AC6)', () => {

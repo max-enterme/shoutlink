@@ -18,11 +18,11 @@ feature: comment-link
 
 ## 自動実装できるもの(DOM に依存しない — T1 の前に進めてよい)
 
-- [ ] T2: 設定に `commentReplyEnabled`(**既定 OFF**)と `commentTemplate`(既定 `{name}さん、来てくれてありがとうございます! {url}`)を足す。正規化と既定の回帰 (AC1 / AC5 / AC14 / AC15)  <!-- #26 -->
-- [ ] T3: `DirectoryEntry.replyToComment`(既定 false / 自動登録でも false)、`setReplyToComment`、`normalizeDirectory` の追従 (AC2 / AC14)。あわせて **`DirectoryEntry.commentMessage`(コメント返し用の自由文 / 既定 `''`)と `resolveCommentMessage`** を足す。**003 の `message` とは別フィールド**で、正規化は 003 と同じ規則(欠損・非文字列は `''`、上限超は切り詰め)を再利用する (AC16 / spec.md D4)  <!-- #27 -->
-- [ ] T4: `composer` を `{ name, url }` を受ける形へ広げる。**既存の出力が 1 文字も変わらないことをテストで固定** (AC5 / AC15)。`{msg}` に渡す値は**呼び出し側で選ぶ**(リダイレクト返礼は `resolveMessage` / コメント返しは `resolveCommentMessage`)。**`composer.ts` に自由文の規則を新設しない** — 展開・削り順・切り出しは 003 のものをそのまま使う。**リダイレクト返礼の `{msg}` に `commentMessage` が入らないこと(逆も)を回帰テストで固定** (AC16)  <!-- #28 -->
-- [ ] T5: 抑止の土台 — `post-log` に `kind` を足して鍵・検索・`prune` を種別込みにし(**`'comment'` に完全一致したときだけ `comment`、それ以外は `redirect`**)、`dedupe` の `absorb` から `comment` を除き、`main.ts` が渡す履歴を絞る。`streamId` が空のときは `cooldownSec` から独立した 6 時間の下限を適用する。**`findLastPost`(切り分けログ用)が種別をまたいで拾わないようにする。**件数の食い合いの回帰も置く (AC7 / AC8 / AC14 / plan.md R4)  <!-- #29 -->
-- [ ] T6: `src/post-queue.ts` — 逐次処理 / 最低 5 秒間隔 / 1 配信 20 件の上限 / 無効化時の破棄。`now` を注入して実時間で待たないテストにする (AC11)  <!-- #30 -->
+- [x] T2: 設定に `commentReplyEnabled`(**既定 OFF**)と `commentTemplate`(既定 `{name}さん、来てくれてありがとうございます! {url}`)を足す。正規化と既定の回帰 (AC1 / AC5 / AC14 / AC15)  <!-- #26 -->
+- [x] T3: `DirectoryEntry.replyToComment`(既定 false / 自動登録でも false)、`setReplyToComment`、`normalizeDirectory` の追従 (AC2 / AC14)。あわせて **`DirectoryEntry.commentMessage`(コメント返し用の自由文 / 既定 `''`)と `resolveCommentMessage`** を足す。**003 の `message` とは別フィールド**で、正規化は 003 と同じ規則(欠損・非文字列は `''`、上限超は切り詰め)を再利用する (AC16 / spec.md D4)  <!-- #27 -->
+- [x] T4: `composer` を `{ name, url }` を受ける形へ広げる。**既存の出力が 1 文字も変わらないことをテストで固定** (AC5 / AC15)。`{msg}` に渡す値は**呼び出し側で選ぶ**(リダイレクト返礼は `resolveMessage` / コメント返しは `resolveCommentMessage`)。**`composer.ts` に自由文の規則を新設しない** — 展開・削り順・切り出しは 003 のものをそのまま使う。**リダイレクト返礼の `{msg}` に `commentMessage` が入らないこと(逆も)を回帰テストで固定** (AC16)  <!-- #28 -->
+- [x] T5: 抑止の土台 — `post-log` に `kind` を足して鍵・検索・`prune` を種別込みにし(**`'comment'` に完全一致したときだけ `comment`、それ以外は `redirect`**)、`dedupe` の `absorb` から `comment` を除き、`main.ts` が渡す履歴を絞る。`streamId` が空のときは `cooldownSec` から独立した 6 時間の下限を適用する。**`findLastPost`(切り分けログ用)が種別をまたいで拾わないようにする。**件数の食い合いの回帰も置く (AC7 / AC8 / AC14 / plan.md R4)  <!-- #29 -->
+- [x] T6: `src/post-queue.ts` — 逐次処理 / 最低 5 秒間隔 / 1 配信 20 件の上限 / 無効化時の破棄。`now` を注入して実時間で待たないテストにする (AC11)  <!-- #30 -->
 
 ## T1 の後にしか書けないもの
 
