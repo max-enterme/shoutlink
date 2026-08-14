@@ -1,6 +1,6 @@
 {
   "name": "yt-redirect-pin",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "description": "YouTube ライブリダイレクトを検知して送信元 URL をライブチャットへ投稿・固定する Chrome 拡張 (MV3)",
   "type": "module",

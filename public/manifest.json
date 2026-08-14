@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "リダイレクト返礼ピン (yt-redirect-pin)",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "配信中に受け取ったライブリダイレクトを検知し、送信元チャンネルの URL をライブチャットへ投稿して固定します。",
   "icons": {
     "16": "icons/icon16.png",
