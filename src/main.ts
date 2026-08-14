@@ -49,6 +49,8 @@ async function main(): Promise<void> {
     return
   }
 
+  // `sync` → `local` の 1 度きりの移行は `loadDirectory` の中で走り、**成否はその中で 1 行出る**
+  // (設定画面から先に開かれても同じログが出るように / plan.md R3)。
   let directory: Directory = await guardAsync('呼び名辞書の読み込み', loadDirectory, [])
 
   // **リロードをまたいで再投稿を止めるための土台。**

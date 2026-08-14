@@ -84,6 +84,21 @@ export function getLocalStorageArea(): chrome.storage.StorageArea | null {
   return chrome.storage?.local ?? chrome.storage?.sync ?? null
 }
 
+/**
+ * `getLocalStorageArea()` が**実際に選んだ**エリアの名前。
+ * `chrome.storage.onChanged` の第 2 引数(areaName)で絞り込むために要る。
+ *
+ * **`'local'` 決め打ちにしない。** 上の関数は `local` が無ければ `sync` に落ちるので、
+ * 決め打ちだとそのフォールバック時に変更通知が 1 件も届かなくなる
+ * (設定画面での編集がチャット側に反映されなくなる)。
+ */
+export function getLocalStorageAreaName(): string | null {
+  if (typeof chrome === 'undefined') return null
+  if (chrome.storage?.local) return 'local'
+  if (chrome.storage?.sync) return 'sync'
+  return null
+}
+
 const storage = getStorageArea
 
 export async function loadConfig(): Promise<Config> {
