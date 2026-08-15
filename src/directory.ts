@@ -26,6 +26,22 @@ export type DirectoryEntry = {
    * どちらがどちらか読んで分かる形にしておく。
    */
   message: string
+  /**
+   * **この人のコメントに反応するか** (004 / AC2)。
+   *
+   * **既定は false。**リダイレクト受信による自動登録 (`rememberSource`) でも false のままで、
+   * 人が設定画面で明示的に付けたときだけ true になる。辞書は「リダイレクトを受けた相手」が
+   * 自動で載る名簿でもあるので、載った=反応する にすると**登録した覚えのない相手に反応する。**
+   */
+  replyToComment: boolean
+  /**
+   * **コメント返し用**の自由文 (004 / AC16 / spec.md D4)。**空文字は「未設定」**。
+   *
+   * 上の `message`(リダイレクト返礼用)とは**別のフィールド**。同じ自由文を両方に出すと、
+   * 「リダイレクトを受けたときに宛てて書いた一文」がただのコメントに対して出る。
+   * 差し込み先も別で、こちらは `Config.commentTemplate` の `{msg}` に入る。
+   */
+  commentMessage: string
   /** 最後にリダイレクトを受けた時刻。0 は「まだ受けていない」(手動登録) */
   lastSeenAt: number
 }
@@ -73,8 +89,61 @@ export function resolveMessage(directory: Directory, event: RedirectEvent): stri
 }
 
 /**
+ * **コメント返し**に差し込む自由文を決める (004 / AC16)。
+ *
+ * `resolveMessage` と対になる別関数で、**引数が URL なのは意図的** —
+ * コメント経路には `RedirectEvent` が無い(リダイレクトを受けていないので作れない)。
+ *
+ * ⚠️ **`resolveMessage` にフラグ引数を足して分岐させない。**どちらの自由文を使うかは
+ *    呼び出し側(経路)が知っていることで、辞書側が条件分岐で覚えることではない (plan.md 3.)。
+ */
+export function resolveCommentMessage(directory: Directory, url: string): string {
+  return findEntry(directory, url)?.commentMessage.trim() ?? ''
+}
+
+/**
+ * **コメント返し**に差し込む呼び名を決める (004 / AC5)。
+ *
+ * ⚠️ **`resolveDisplayName` を使い回してはいけない。**あれは呼び名が空のとき
+ *    `event.sourceChannelName` に落ちる。コメント経路でそれに相当するのは
+ *    **コメント側の表示名**(第三者が自由に決める文字列)で、それを配信者名義の投稿に載せると
+ *    AC5 が静かに破れる。ここは**辞書に入っている値だけ**で決める:
+ *    呼び名 → 無ければ**辞書の URL から作ったハンドル**。
+ */
+export function resolveCommentDisplayName(directory: Directory, url: string): string {
+  const entry = findEntry(directory, url)
+  const nickname = entry?.nickname.trim()
+  if (nickname) return nickname
+  return handleFromChannelUrl(entry?.url ?? url)
+}
+
+/**
+ * 新しい行の**既定値**。
+ *
+ * 行を作る場所が 4 つ(自動登録・呼び名・自由文 2 種・フラグ)あるので 1 か所に寄せる。
+ * **フィールドを足したときに一部の経路だけ古い形の行を作る**のを防ぐ
+ * (`normalizeDirectory` が埋めるので実害は出にくいが、既定値が 2 種類あることになる)。
+ */
+function blankEntry(url: string, patch: Partial<DirectoryEntry> = {}): DirectoryEntry {
+  return {
+    url,
+    nickname: '',
+    message: '',
+    // **どちらも「人が明示的に設定したときだけ入る」側**なので、行の生成時は必ず既定 (AC2 / AC16)
+    replyToComment: false,
+    commentMessage: '',
+    lastSeenAt: 0,
+    ...patch,
+  }
+}
+
+/**
  * リダイレクトしてきた相手を辞書に載せる(既にあれば `lastSeenAt` を更新)。
  * **ニックネームは付けない。**後から人が付ける前提。
+ *
+ * ⚠️ **`replyToComment` も付けない (AC2)。**ここは「リダイレクトを受けた相手」が自動で載る経路で、
+ *    載ったことと「コメントに反応してよい」は別。自動で true にすると、**登録した覚えのない相手の
+ *    コメントに反応する。**
  */
 export function rememberSource(directory: Directory, event: RedirectEvent): Directory {
   const key = directoryKey(event.sourceChannelUrl)
@@ -85,10 +154,7 @@ export function rememberSource(directory: Directory, event: RedirectEvent): Dire
     )
   }
   // 自由文も付けない(呼び名と同じく、後から人が書く前提)
-  return [
-    ...directory,
-    { url: event.sourceChannelUrl, nickname: '', message: '', lastSeenAt: event.detectedAt },
-  ]
+  return [...directory, blankEntry(event.sourceChannelUrl, { lastSeenAt: event.detectedAt })]
 }
 
 /** 手動登録・呼び名の変更 */
@@ -98,7 +164,7 @@ export function upsertNickname(directory: Directory, url: string, nickname: stri
   if (existing) {
     return directory.map((entry) => (entry === existing ? { ...entry, nickname } : entry))
   }
-  return [...directory, { url, nickname, message: '', lastSeenAt: 0 }]
+  return [...directory, blankEntry(url, { nickname })]
 }
 
 /**
@@ -113,7 +179,39 @@ export function upsertMessage(directory: Directory, url: string, message: string
   if (existing) {
     return directory.map((entry) => (entry === existing ? { ...entry, message } : entry))
   }
-  return [...directory, { url, nickname: '', message, lastSeenAt: 0 }]
+  return [...directory, blankEntry(url, { message })]
+}
+
+/**
+ * **コメント返し用**の自由文の変更(`upsertMessage` と同じ形 / AC16)。
+ * 003 の `message` には触らない。切り詰めをここでしないのも同じ理由(設定画面が保存前に弾く)。
+ */
+export function upsertCommentMessage(
+  directory: Directory,
+  url: string,
+  commentMessage: string,
+): Directory {
+  const key = directoryKey(url)
+  const existing = directory.find((entry) => directoryKey(entry.url) === key)
+  if (existing) {
+    return directory.map((entry) => (entry === existing ? { ...entry, commentMessage } : entry))
+  }
+  return [...directory, blankEntry(url, { commentMessage })]
+}
+
+/**
+ * 「コメントに反応する」フラグの切り替え (AC2 / AC13)。
+ *
+ * 辞書に無い URL を ON にしたときは行を作る(設定画面から直接登録できる経路)。
+ * **`upsertNickname` と同じ形**にしてあるのは、行編集で即保存する UI が両方を同じに扱うため。
+ */
+export function setReplyToComment(directory: Directory, url: string, value: boolean): Directory {
+  const key = directoryKey(url)
+  const existing = directory.find((entry) => directoryKey(entry.url) === key)
+  if (existing) {
+    return directory.map((entry) => (entry === existing ? { ...entry, replyToComment: value } : entry))
+  }
+  return [...directory, blankEntry(url, { replyToComment: value })]
 }
 
 export function removeEntry(directory: Directory, url: string): Directory {
@@ -150,7 +248,8 @@ export function normalizeDirectory(raw: unknown): Directory {
   const out: Directory = []
   for (const item of raw) {
     if (!item || typeof item !== 'object') continue
-    const { url, nickname, message, lastSeenAt } = item as Partial<DirectoryEntry>
+    const { url, nickname, message, replyToComment, commentMessage, lastSeenAt } =
+      item as Partial<DirectoryEntry>
     if (typeof url !== 'string' || !url.trim()) continue
     const key = directoryKey(url)
     if (seen.has(key)) continue
@@ -160,6 +259,11 @@ export function normalizeDirectory(raw: unknown): Directory {
       nickname: typeof nickname === 'string' ? nickname : '',
       // 003 より前に保存された辞書には message が無い。欠損・非文字列は空文字で埋める
       message: typeof message === 'string' ? clampMessage(message) : '',
+      // **真偽値でないものは false**(AC2 / AC14)。004 より前の辞書にはこのキーが無く、
+      // 「壊れていたら反応しない」側へ倒すのが安全側
+      replyToComment: replyToComment === true,
+      // 自由文の正規化は 003 と同じ規則を再利用する(欠損・非文字列は '' / 上限超は切り詰め / AC16)
+      commentMessage: typeof commentMessage === 'string' ? clampMessage(commentMessage) : '',
       lastSeenAt: Number.isFinite(lastSeenAt) ? Number(lastSeenAt) : 0,
     })
   }

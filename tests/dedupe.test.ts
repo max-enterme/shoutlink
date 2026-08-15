@@ -130,3 +130,54 @@ describe('createDedupe — 保存済みの投稿履歴からの復元', () => {
     expect(dedupe.tryAcquire(ev(FAKE_CHANNEL.url), 2_000)).toBe(true)
   })
 })
+
+// --- 004: コメント返しの記録を取り込まない (AC8) ---------------------------------
+
+describe('createDedupe — 種別つきの履歴 (004 / AC8)', () => {
+  it('**コメント返しの記録は抑止に取り込まない**(コメント返し済みでもリダイレクト返礼はする)', () => {
+    const dedupe = createDedupe(60, {
+      streamId: 'stream-1',
+      history: [
+        { url: FAKE_CHANNEL.url, postedAt: 0, streamId: 'stream-1', kind: 'comment' },
+      ],
+    })
+    expect(dedupe.tryAcquire(ev(FAKE_CHANNEL.url), 1_000)).toBe(true)
+  })
+
+  it('リダイレクト返礼の記録は今までどおり抑止に効く', () => {
+    const dedupe = createDedupe(60, {
+      streamId: 'stream-1',
+      history: [
+        { url: FAKE_CHANNEL.url, postedAt: 0, streamId: 'stream-1', kind: 'redirect' },
+      ],
+    })
+    expect(dedupe.tryAcquire(ev(FAKE_CHANNEL.url), 1_000)).toBe(false)
+  })
+
+  it('**kind の無い記録(004 以前)は redirect として抑止に効く**', () => {
+    const dedupe = createDedupe(60, {
+      streamId: 'stream-1',
+      history: [{ url: FAKE_CHANNEL.url, postedAt: 0, streamId: 'stream-1' }],
+    })
+    expect(dedupe.tryAcquire(ev(FAKE_CHANNEL.url), 1_000)).toBe(false)
+  })
+
+  it('同じ相手にコメント返しとリダイレクト返礼の両方の記録があっても、redirect 側だけを見る', () => {
+    const dedupe = createDedupe(60, {
+      streamId: 'stream-1',
+      history: [
+        { url: FAKE_CHANNEL.url, postedAt: 0, streamId: 'stream-1', kind: 'redirect' },
+        { url: FAKE_OTHER_CHANNEL.url, postedAt: 0, streamId: 'stream-1', kind: 'comment' },
+      ],
+    })
+    expect(dedupe.tryAcquire(ev(FAKE_CHANNEL.url), 1_000)).toBe(false)
+    expect(dedupe.tryAcquire(ev(FAKE_OTHER_CHANNEL.url), 1_000)).toBe(true)
+  })
+
+  it('配信 ID が空でも、コメント返しの記録は取り込まない', () => {
+    const dedupe = createDedupe(60, {
+      history: [{ url: FAKE_CHANNEL.url, postedAt: 0, kind: 'comment' }],
+    })
+    expect(dedupe.tryAcquire(ev(FAKE_CHANNEL.url), 1_000)).toBe(true)
+  })
+})

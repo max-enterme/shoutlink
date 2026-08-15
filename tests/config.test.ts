@@ -45,6 +45,8 @@ describe('normalizeConfig', () => {
         cooldownSec: 30,
         showManualTrigger: true,
         debug: true,
+        commentReplyEnabled: true,
+        commentTemplate: '{name} {url}',
       }),
     ).toEqual({
       enabled: false,
@@ -53,6 +55,8 @@ describe('normalizeConfig', () => {
       cooldownSec: 30,
       showManualTrigger: true,
       debug: true,
+      commentReplyEnabled: true,
+      commentTemplate: '{name} {url}',
     })
   })
 
@@ -81,5 +85,45 @@ describe('normalizeConfig', () => {
     expect(normalizeConfig({ cooldownSec: -1 }).cooldownSec).toBe(DEFAULT_CONFIG.cooldownSec)
     expect(normalizeConfig({ cooldownSec: 'abc' }).cooldownSec).toBe(DEFAULT_CONFIG.cooldownSec)
     expect(normalizeConfig({ cooldownSec: 0 }).cooldownSec).toBe(0)
+  })
+  // --- 004: コメント返し ---------------------------------------------------
+
+  it('commentReplyEnabled は既定 OFF (004 / AC1)', () => {
+    expect(DEFAULT_CONFIG.commentReplyEnabled).toBe(false)
+    expect(normalizeConfig({}).commentReplyEnabled).toBe(false)
+  })
+
+  it('commentReplyEnabled が真偽値でなければ既定 (false) に倒す (AC14)', () => {
+    for (const value of ['true', 1, null, {}, []]) {
+      expect(normalizeConfig({ commentReplyEnabled: value }).commentReplyEnabled).toBe(false)
+    }
+  })
+
+  it('commentReplyEnabled の true はそのまま通す', () => {
+    expect(normalizeConfig({ commentReplyEnabled: true }).commentReplyEnabled).toBe(true)
+  })
+
+  it('commentTemplate の既定は {name} と {url} を持ち、リダイレクト返礼と別物 (AC5)', () => {
+    expect(DEFAULT_CONFIG.commentTemplate).toContain('{name}')
+    expect(DEFAULT_CONFIG.commentTemplate).toContain('{url}')
+    expect(DEFAULT_CONFIG.commentTemplate).not.toBe(DEFAULT_CONFIG.template)
+    // 文面が嘘にならないこと(「リダイレクト」はコメント返しには出てこない)
+    expect(DEFAULT_CONFIG.commentTemplate).not.toContain('リダイレクト')
+  })
+
+  it('空・非文字列の commentTemplate は既定に落とす (AC14)', () => {
+    expect(normalizeConfig({ commentTemplate: '   ' }).commentTemplate).toBe(
+      DEFAULT_CONFIG.commentTemplate,
+    )
+    expect(normalizeConfig({ commentTemplate: 42 }).commentTemplate).toBe(
+      DEFAULT_CONFIG.commentTemplate,
+    )
+  })
+
+  it('004 の設定を足しても 001 の既定は変わらない (AC15)', () => {
+    expect(DEFAULT_CONFIG.enabled).toBe(true)
+    expect(DEFAULT_CONFIG.pinMode).toBe('ifEmpty')
+    expect(DEFAULT_CONFIG.showManualTrigger).toBe(false)
+    expect(DEFAULT_CONFIG.cooldownSec).toBe(6 * 60 * 60)
   })
 })

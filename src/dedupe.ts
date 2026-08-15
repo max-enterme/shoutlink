@@ -32,6 +32,11 @@ export type PriorPost = {
   url: string
   postedAt: number
   streamId?: string
+  /**
+   * 投稿の種別 (004 / AC8)。**欠損は `redirect` 扱い** — 004 以前の記録はリダイレクト返礼しかない。
+   * ここが `'comment'` の記録は**リダイレクト側の抑止に取り込まない**(下の `absorb`)。
+   */
+  kind?: 'redirect' | 'comment'
 }
 
 export type DedupeOptions = {
@@ -75,6 +80,10 @@ export function createDedupe(cooldownSec: number, options: DedupeOptions = {}): 
   const absorb = (history: readonly PriorPost[]): void => {
     for (const post of history) {
       if (!post || typeof post.url !== 'string' || !Number.isFinite(post.postedAt)) continue
+      // **コメント返しの記録は取り込まない** (004 / AC8)。
+      // 抑止は非対称で、「コメント返し済みでもリダイレクト返礼はする」(こちらが本命)。
+      // 取り込むと、コメント返しの記録が起動時からリダイレクト側のクールダウンを埋める。
+      if (post.kind === 'comment') continue
       if (streamId && post.streamId !== streamId) continue
       const key = channelKey(post.url)
       const previous = lastFiredAt.get(key)

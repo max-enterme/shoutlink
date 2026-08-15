@@ -7,10 +7,15 @@ import {
   normalizeDirectory,
   rememberSource,
   removeEntry,
+  resolveCommentDisplayName,
+  resolveCommentMessage,
   resolveDisplayName,
   resolveMessage,
   saveDirectory,
+  setReplyToComment,
   sortForDisplay,
+  upsertCommentMessage,
+  upsertMessage,
   upsertNickname,
 } from '../src/directory'
 import type { Directory, DirectoryEntry } from '../src/directory'
@@ -21,9 +26,16 @@ function ev(url: string, name = 'そのままの表示名', detectedAt = 100): R
   return { sourceChannelName: name, sourceChannelUrl: url, detectedAt }
 }
 
-/** テスト内でだけ使う省略記法。message を書かない既存の観点を短く保つ */
+/** テスト内でだけ使う省略記法。message / 004 のフィールドを書かない既存の観点を短く保つ */
 function entry(patch: Partial<DirectoryEntry> & { url: string }): DirectoryEntry {
-  return { nickname: '', message: '', lastSeenAt: 0, ...patch }
+  return {
+    nickname: '',
+    message: '',
+    replyToComment: false,
+    commentMessage: '',
+    lastSeenAt: 0,
+    ...patch,
+  }
 }
 
 describe('resolveDisplayName', () => {
@@ -93,7 +105,7 @@ describe('rememberSource', () => {
   it('未登録の相手を呼び名・自由文なしで追加する', () => {
     const next = rememberSource([], ev(FAKE_CHANNEL.url, 'x', 42))
     expect(next).toEqual([
-      { url: FAKE_CHANNEL.url, nickname: '', message: '', lastSeenAt: 42 },
+      entry({ url: FAKE_CHANNEL.url, lastSeenAt: 42 }),
     ])
   })
 
@@ -102,7 +114,7 @@ describe('rememberSource', () => {
       entry({ url: FAKE_CHANNEL.url, nickname: 'れい', message: 'いつもありがとう', lastSeenAt: 1 }),
     ]
     expect(rememberSource(directory, ev(FAKE_CHANNEL.url, 'x', 99))).toEqual([
-      { url: FAKE_CHANNEL.url, nickname: 'れい', message: 'いつもありがとう', lastSeenAt: 99 },
+      entry({ url: FAKE_CHANNEL.url, nickname: 'れい', message: 'いつもありがとう', lastSeenAt: 99 }),
     ])
   })
 
@@ -122,7 +134,7 @@ describe('rememberSource', () => {
 describe('upsertNickname / removeEntry', () => {
   it('未登録なら手動登録として追加する (lastSeenAt は 0)', () => {
     expect(upsertNickname([], FAKE_CHANNEL.url, 'れい')).toEqual([
-      { url: FAKE_CHANNEL.url, nickname: 'れい', message: '', lastSeenAt: 0 },
+      entry({ url: FAKE_CHANNEL.url, nickname: 'れい' }),
     ])
   })
 
@@ -131,7 +143,7 @@ describe('upsertNickname / removeEntry', () => {
       entry({ url: FAKE_CHANNEL.url, nickname: 'ふるい', lastSeenAt: 5 }),
     ]
     expect(upsertNickname(directory, FAKE_CHANNEL.url, 'あたらしい')).toEqual([
-      { url: FAKE_CHANNEL.url, nickname: 'あたらしい', message: '', lastSeenAt: 5 },
+      entry({ url: FAKE_CHANNEL.url, nickname: 'あたらしい', lastSeenAt: 5 }),
     ])
   })
 
@@ -140,7 +152,7 @@ describe('upsertNickname / removeEntry', () => {
       entry({ url: FAKE_CHANNEL.url, nickname: 'ふるい', message: 'いつもありがとう', lastSeenAt: 5 }),
     ]
     expect(upsertNickname(directory, FAKE_CHANNEL.url, 'あたらしい')).toEqual([
-      { url: FAKE_CHANNEL.url, nickname: 'あたらしい', message: 'いつもありがとう', lastSeenAt: 5 },
+      entry({ url: FAKE_CHANNEL.url, nickname: 'あたらしい', message: 'いつもありがとう', lastSeenAt: 5 }),
     ])
   })
 
@@ -183,13 +195,13 @@ describe('normalizeDirectory', () => {
         { url: FAKE_CHANNEL.url },
         { url: FAKE_CHANNEL.url.toUpperCase(), nickname: 'あとの方' },
       ]),
-    ).toEqual([{ url: FAKE_CHANNEL.url, nickname: '', message: '', lastSeenAt: 0 }])
+    ).toEqual([entry({ url: FAKE_CHANNEL.url })])
   })
 
   // AC10: 自由文が欠損・文字列でない保存内容でも落ちず、空文字で埋まる
   it('003 より前に保存された(message の無い)辞書を空文字で受ける', () => {
     expect(normalizeDirectory([{ url: FAKE_CHANNEL.url, nickname: 'れい', lastSeenAt: 3 }])).toEqual(
-      [{ url: FAKE_CHANNEL.url, nickname: 'れい', message: '', lastSeenAt: 3 }],
+      [entry({ url: FAKE_CHANNEL.url, nickname: 'れい', lastSeenAt: 3 })],
     )
   })
 
@@ -242,7 +254,7 @@ const MIGRATED_KEY = 'ytRedirectPin.directoryMigratedAt'
 
 /** 003 より前の(message の無い)保存内容 */
 const LEGACY_ENTRY = { url: FAKE_CHANNEL.url, nickname: 'れい', lastSeenAt: 7 }
-const MIGRATED_ENTRY = { url: FAKE_CHANNEL.url, nickname: 'れい', message: '', lastSeenAt: 7 }
+const MIGRATED_ENTRY = entry({ url: FAKE_CHANNEL.url, nickname: 'れい', lastSeenAt: 7 })
 
 type FailOpts = {
   /** すべての `set` を失敗させる */
@@ -390,7 +402,7 @@ describe('辞書の保存先の移行 (AC5)', () => {
     await saveDirectory([entry({ url: FAKE_OTHER_CHANNEL.url, nickname: 'あたらしい' })])
 
     expect(local[DIRECTORY_KEY]).toEqual([
-      { url: FAKE_OTHER_CHANNEL.url, nickname: 'あたらしい', message: '', lastSeenAt: 0 },
+      entry({ url: FAKE_OTHER_CHANNEL.url, nickname: 'あたらしい' }),
     ])
     expect(sync[DIRECTORY_KEY]).toEqual([LEGACY_ENTRY])
   })
@@ -402,7 +414,158 @@ describe('辞書の保存先の移行 (AC5)', () => {
     await saveDirectory([entry({ url: FAKE_CHANNEL.url, message: 'いつもありがとう' })])
 
     expect(local[DIRECTORY_KEY]).toEqual([
-      { url: FAKE_CHANNEL.url, nickname: '', message: 'いつもありがとう', lastSeenAt: 0 },
+      entry({ url: FAKE_CHANNEL.url, message: 'いつもありがとう' }),
     ])
+  })
+})
+
+// --- 004: コメント返し --------------------------------------------------------
+
+describe('replyToComment (AC2)', () => {
+  it('新しい行は既定で false', () => {
+    expect(upsertNickname([], FAKE_CHANNEL.url, 'れい')[0].replyToComment).toBe(false)
+    expect(upsertCommentMessage([], FAKE_CHANNEL.url, 'ようこそ')[0].replyToComment).toBe(false)
+  })
+
+  it('**リダイレクト受信による自動登録でも false のまま**', () => {
+    const next = rememberSource([], ev(FAKE_CHANNEL.url, 'x', 42))
+    expect(next[0].replyToComment).toBe(false)
+  })
+
+  it('自動登録が既存の行のフラグを勝手に落とさない', () => {
+    const directory: Directory = [entry({ url: FAKE_CHANNEL.url, replyToComment: true })]
+    expect(rememberSource(directory, ev(FAKE_CHANNEL.url, 'x', 9))[0].replyToComment).toBe(true)
+  })
+
+  it('setReplyToComment で切り替えられる', () => {
+    const directory: Directory = [entry({ url: FAKE_CHANNEL.url, nickname: 'れい' })]
+    const on = setReplyToComment(directory, FAKE_CHANNEL.url, true)
+    expect(on[0].replyToComment).toBe(true)
+    // 他のフィールドは巻き込まない
+    expect(on[0].nickname).toBe('れい')
+    expect(setReplyToComment(on, FAKE_CHANNEL.url, false)[0].replyToComment).toBe(false)
+  })
+
+  it('setReplyToComment は未登録の URL なら行を作る', () => {
+    const next = setReplyToComment([], FAKE_CHANNEL.url, true)
+    expect(next).toEqual([entry({ url: FAKE_CHANNEL.url, replyToComment: true })])
+  })
+
+  it('URL の大小文字が違っても同じ行として扱う', () => {
+    const directory: Directory = [entry({ url: FAKE_CHANNEL.url })]
+    const next = setReplyToComment(directory, FAKE_CHANNEL.url.toUpperCase(), true)
+    expect(next).toHaveLength(1)
+    expect(next[0].replyToComment).toBe(true)
+  })
+
+  it('元の配列を書き換えない', () => {
+    const directory: Directory = [entry({ url: FAKE_CHANNEL.url })]
+    setReplyToComment(directory, FAKE_CHANNEL.url, true)
+    expect(directory[0].replyToComment).toBe(false)
+  })
+})
+
+describe('commentMessage / resolveCommentMessage (AC16)', () => {
+  it('コメント返し用の自由文を返す', () => {
+    const directory: Directory = [entry({ url: FAKE_CHANNEL.url, commentMessage: 'ようこそ' })]
+    expect(resolveCommentMessage(directory, FAKE_CHANNEL.url)).toBe('ようこそ')
+  })
+
+  it('登録が無い / 空白だけなら空文字', () => {
+    expect(resolveCommentMessage([], FAKE_CHANNEL.url)).toBe('')
+    expect(
+      resolveCommentMessage([entry({ url: FAKE_CHANNEL.url, commentMessage: '   ' })], FAKE_CHANNEL.url),
+    ).toBe('')
+  })
+
+  it('**003 の message とは別のフィールド**(どちらの経路にも他方が漏れない)', () => {
+    const directory: Directory = [
+      entry({ url: FAKE_CHANNEL.url, message: 'リダイレクト用', commentMessage: 'コメント用' }),
+    ]
+    expect(resolveMessage(directory, ev(FAKE_CHANNEL.url))).toBe('リダイレクト用')
+    expect(resolveCommentMessage(directory, FAKE_CHANNEL.url)).toBe('コメント用')
+  })
+
+  it('片方だけ書いても、もう片方は空のまま', () => {
+    const onlyComment: Directory = [entry({ url: FAKE_CHANNEL.url, commentMessage: 'コメント用' })]
+    expect(resolveMessage(onlyComment, ev(FAKE_CHANNEL.url))).toBe('')
+
+    const onlyRedirect: Directory = [entry({ url: FAKE_CHANNEL.url, message: 'リダイレクト用' })]
+    expect(resolveCommentMessage(onlyRedirect, FAKE_CHANNEL.url)).toBe('')
+  })
+
+  it('upsertCommentMessage は message を巻き込まない', () => {
+    const directory: Directory = [entry({ url: FAKE_CHANNEL.url, message: 'リダイレクト用' })]
+    const next = upsertCommentMessage(directory, FAKE_CHANNEL.url, 'コメント用')
+    expect(next[0].message).toBe('リダイレクト用')
+    expect(next[0].commentMessage).toBe('コメント用')
+  })
+
+  it('upsertMessage は commentMessage を巻き込まない', () => {
+    const directory: Directory = [entry({ url: FAKE_CHANNEL.url, commentMessage: 'コメント用' })]
+    const next = upsertMessage(directory, FAKE_CHANNEL.url, 'リダイレクト用')
+    expect(next[0].commentMessage).toBe('コメント用')
+    expect(next[0].message).toBe('リダイレクト用')
+  })
+})
+
+describe('resolveCommentDisplayName (AC5)', () => {
+  it('呼び名があればそれを使う', () => {
+    const directory: Directory = [entry({ url: FAKE_CHANNEL.url, nickname: 'れい' })]
+    expect(resolveCommentDisplayName(directory, FAKE_CHANNEL.url)).toBe('れい')
+  })
+
+  it('**呼び名が無ければ辞書の URL から作ったハンドル**(コメント側の表示名は使わない)', () => {
+    const directory: Directory = [entry({ url: FAKE_CHANNEL.url })]
+    expect(resolveCommentDisplayName(directory, FAKE_CHANNEL.url)).toBe(FAKE_CHANNEL.handle)
+  })
+
+  it('呼び名が空白だけなら未設定として扱う', () => {
+    const directory: Directory = [entry({ url: FAKE_CHANNEL.url, nickname: '   ' })]
+    expect(resolveCommentDisplayName(directory, FAKE_CHANNEL.url)).toBe(FAKE_CHANNEL.handle)
+  })
+
+  it('登録が無ければ渡された URL のハンドルに落ちる', () => {
+    expect(resolveCommentDisplayName([], FAKE_CHANNEL.url)).toBe(FAKE_CHANNEL.handle)
+  })
+})
+
+describe('normalizeDirectory — 004 のフィールド (AC14)', () => {
+  it('004 より前に保存された辞書は replyToComment=false / commentMessage="" で埋まる', () => {
+    const [row] = normalizeDirectory([{ url: FAKE_CHANNEL.url, nickname: 'れい', message: 'あ' }])
+    expect(row.replyToComment).toBe(false)
+    expect(row.commentMessage).toBe('')
+  })
+
+  it('replyToComment は **true 以外すべて false**(壊れた値で勝手に反応しない)', () => {
+    for (const value of ['true', 1, 'yes', {}, [], null]) {
+      expect(normalizeDirectory([{ url: FAKE_CHANNEL.url, replyToComment: value }])[0].replyToComment).toBe(
+        false,
+      )
+    }
+    expect(normalizeDirectory([{ url: FAKE_CHANNEL.url, replyToComment: true }])[0].replyToComment).toBe(
+      true,
+    )
+  })
+
+  it('commentMessage が文字列でなければ空文字にする (003 と同じ規則)', () => {
+    for (const value of [null, 42, { a: 1 }, ['x'], true]) {
+      expect(normalizeDirectory([{ url: FAKE_CHANNEL.url, commentMessage: value }])[0].commentMessage).toBe(
+        '',
+      )
+    }
+  })
+
+  it('MAX_ENTRY_MESSAGE_LENGTH を超える commentMessage は切り詰める (003 と同じ規則)', () => {
+    const long = 'あ'.repeat(MAX_ENTRY_MESSAGE_LENGTH + 50)
+    const [row] = normalizeDirectory([{ url: FAKE_CHANNEL.url, commentMessage: long }])
+    expect(Array.from(row.commentMessage)).toHaveLength(MAX_ENTRY_MESSAGE_LENGTH)
+  })
+
+  it('切り詰めの単位はコードポイント(絵文字を割らない)', () => {
+    const long = '🙂'.repeat(MAX_ENTRY_MESSAGE_LENGTH + 10)
+    const [row] = normalizeDirectory([{ url: FAKE_CHANNEL.url, commentMessage: long }])
+    expect(Array.from(row.commentMessage)).toHaveLength(MAX_ENTRY_MESSAGE_LENGTH)
+    expect(row.commentMessage).not.toContain('�')
   })
 })

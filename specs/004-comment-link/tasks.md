@@ -28,11 +28,11 @@ feature: comment-link
 
 ## 自動実装できるもの(DOM に依存しない — T1 の前に進めてよい)
 
-- [ ] T2: 設定に `commentReplyEnabled`(**既定 OFF**)と `commentTemplate`(既定 `{name}さん、来てくれてありがとうございます! {url}`)を足す。正規化と既定の回帰 (AC1 / AC5 / AC14 / AC15)  <!-- #26 -->
-- [ ] T3: `DirectoryEntry.replyToComment`(既定 false / 自動登録でも false)、`setReplyToComment`、`normalizeDirectory` の追従 (AC2 / AC14)。あわせて **`DirectoryEntry.commentMessage`(コメント返し用の自由文 / 既定 `''`)と `resolveCommentMessage`** を足す。**003 の `message` とは別フィールド**で、正規化は 003 と同じ規則(欠損・非文字列は `''`、上限超は切り詰め)を再利用する (AC16 / spec.md D4)  <!-- #27 -->
-- [ ] T4: `composer` を `{ name, url }` を受ける形へ広げる。**既存の出力が 1 文字も変わらないことをテストで固定** (AC5 / AC15)。`{msg}` に渡す値は**呼び出し側で選ぶ**(リダイレクト返礼は `resolveMessage` / コメント返しは `resolveCommentMessage`)。**`composer.ts` に自由文の規則を新設しない** — 展開・削り順・切り出しは 003 のものをそのまま使う。**リダイレクト返礼の `{msg}` に `commentMessage` が入らないこと(逆も)を回帰テストで固定** (AC16)  <!-- #28 -->
-- [ ] T5: 抑止の土台 — `post-log` に `kind` を足して鍵・検索・`prune` を種別込みにし(**`'comment'` に完全一致したときだけ `comment`、それ以外は `redirect`**)、`dedupe` の `absorb` から `comment` を除き、`main.ts` が渡す履歴を絞る。`streamId` が空のときは `cooldownSec` から独立した 6 時間の下限を適用する。**`findLastPost`(切り分けログ用)が種別をまたいで拾わないようにする。**件数の食い合いの回帰も置く (AC7 / AC8 / AC14 / plan.md R4)  <!-- #29 -->
-- [ ] T6: `src/post-queue.ts` — 逐次処理 / 最低 5 秒間隔 / 1 配信 20 件の上限 / 無効化時の破棄。`now` を注入して実時間で待たないテストにする (AC11)  <!-- #30 -->
+- [x] T2: 設定に `commentReplyEnabled`(**既定 OFF**)と `commentTemplate`(既定 `{name}さん、来てくれてありがとうございます! {url}`)を足す。正規化と既定の回帰 (AC1 / AC5 / AC14 / AC15)  <!-- #26 -->
+- [x] T3: `DirectoryEntry.replyToComment`(既定 false / 自動登録でも false)、`setReplyToComment`、`normalizeDirectory` の追従 (AC2 / AC14)。あわせて **`DirectoryEntry.commentMessage`(コメント返し用の自由文 / 既定 `''`)と `resolveCommentMessage`** を足す。**003 の `message` とは別フィールド**で、正規化は 003 と同じ規則(欠損・非文字列は `''`、上限超は切り詰め)を再利用する (AC16 / spec.md D4)  <!-- #27 -->
+- [x] T4: `composer` を `{ name, url }` を受ける形へ広げる。**既存の出力が 1 文字も変わらないことをテストで固定** (AC5 / AC15)。`{msg}` に渡す値は**呼び出し側で選ぶ**(リダイレクト返礼は `resolveMessage` / コメント返しは `resolveCommentMessage`)。**`composer.ts` に自由文の規則を新設しない** — 展開・削り順・切り出しは 003 のものをそのまま使う。**リダイレクト返礼の `{msg}` に `commentMessage` が入らないこと(逆も)を回帰テストで固定** (AC16)  <!-- #28 -->
+- [x] T5: 抑止の土台 — `post-log` に `kind` を足して鍵・検索・`prune` を種別込みにし(**`'comment'` に完全一致したときだけ `comment`、それ以外は `redirect`**)、`dedupe` の `absorb` から `comment` を除き、`main.ts` が渡す履歴を絞る。`streamId` が空のときは `cooldownSec` から独立した 6 時間の下限を適用する。**`findLastPost`(切り分けログ用)が種別をまたいで拾わないようにする。**件数の食い合いの回帰も置く (AC7 / AC8 / AC14 / plan.md R4)  <!-- #29 -->
+- [x] T6: `src/post-queue.ts` — 逐次処理 / 最低 5 秒間隔 / 1 配信 20 件の上限 / 無効化時の破棄。`now` を注入して実時間で待たないテストにする (AC11)  <!-- #30 -->
 
 ## T1 の後にしか書けないもの(**T1 は完了。着手可**)
 
@@ -40,6 +40,10 @@ feature: comment-link
 - [ ] T16: **`host_permissions` に `https://www.youtube.com/*` を足す**(fetch 用 / AC17)。**`content_scripts` は増やさない**(注入範囲は `studio.youtube.com/live_chat*` のまま)。`docs/security-review.md` に項を足し、**事故 1(`www` で content script が動いた)との違い**——注入ではなく設定画面からの 1 回の取得で、**ライブチャットの画面では通信しない**——を明記する (plan.md R11)。**あわせて `content_scripts.matches` が増えていないことを `test` で固定する** — 事故 1 の再発防止は現状 `docs/security-review.md` の記述と `tests/scope.test.ts` だけで、**manifest の中身そのものを固定する回帰テストが無い。**権限を足すこの PR でこそ置く価値がある。**権限を広げる唯一のタスクなので、レビュー後に人が確認してからマージする**(T8 と同じ扱い / plan.md R11 は「降りる箇所」に置いてある)  <!-- #52 -->
 - [ ] T7: `src/comment-detector.ts` と `selectors.ts` のコメント用定数・アクセサ。**通常のテキストメッセージだけを対象にする**(`SELECTORS.chatTextMessage` を流用しない)。**追加ノードだけを見る**(`scanExisting` を作らない)。**投稿者は `whole-message-clickable` の `params` を base64 で 2 回解いて取る** — **動画 ID と隣り合う ID(配信の持ち主)を除いた残りが 1 つに絞れたときだけ採り、絞れなければ捨てる**(位置頼みで推測しない)。**取れなかったことは診断ログに出す**(無言で捨てない / plan.md R10)。**`#timestamp`(`5:17 PM` 形式・分単位)と監視開始から 10 秒の猶予**で、監視開始より前のコメントを切る (AC3 / AC4 / AC9 / plan.md R3・R10)  <!-- #31 -->
 - [ ] T8: `main.ts` への配線 — 照合 → キュー → 投稿(**固定はしない**)、自己ループ遮断 3 枚、有効化スイッチの切り替え追従、起動ログへの追加 (AC6 / AC10 / AC12)。**plan.md R2(降りる箇所)に触れるため、レビュー後に人が確認してからマージする**  <!-- #32 -->
+  - **コメント返しでは `selfEcho.remember` を呼ばない**(T2–T6 のレビューで判明 / plan.md 6.)。
+    `self-echo` の鍵は種別を持たないため、呼ぶと 30 秒間その相手のリダイレクト受信が捨てられ **AC8 が破れる**
+  - 起動ログに `commentReplyEnabled` と**辞書で ON の件数**を載せる(T2–T6 では入れていない。
+    配線前に出すと「ON にしたのに動かない」の誤読になるため)
 
 ## 仕上げ
 
