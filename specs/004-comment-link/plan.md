@@ -34,8 +34,11 @@ test: npm run typecheck && npx vitest run
   `yt-live-chat-paid-message-renderer`(スパチャ)と `yt-live-chat-membership-item-renderer`
   (メンバー加入)を含み、**除外用に使われている**定数でもある。
   コメント経路には**通常のテキストメッセージだけ**の定数を別に持つ (AC3)
-- **タイムスタンプで新旧を切る** (AC9)。要素からタイムスタンプが取れるかは T1 の採取項目。
-  取れない場合は「監視開始から 10 秒は投稿しない」猶予に落とす
+- **タイムスタンプと猶予を併用して新旧を切る** (AC9)。`#timestamp` のテキストは
+  **`5:17 PM` 形式(分単位・日付なし)**で取れる(T1 で確認)。**時計表記としてパースできたときだけ**
+  時刻として使い、**監視開始の分より前なら投稿しない。**
+  **`#timestamp` 要素そのものが無いときは投稿しない**(構造が変わった = 何を見ているか分からない)。
+  **要素はあるがテキストを読めなかったときだけ**「監視開始から 10 秒は投稿しない」猶予に落とす
 
 ```ts
 export type CommentAuthor = {
@@ -45,7 +48,11 @@ export type CommentAuthor = {
    * (T1 で確定 / 動画 ID と隣り合う ID = 配信の持ち主を除いた残り)。
    */
   channelId: string | null
-  /** 表示名。**投稿文にも照合にも使わない**(ログと、設定画面の目印のため / AC5) */
+  /**
+   * 表示名。**投稿文にも照合にも使わない** (AC5)。**用途は診断ログだけ。**
+   * (D1 の「表示名は人が紐付けを確認するときの目印」は**設定画面側**の話で、
+   *  そちらは辞書のフィールドを見る。この値を設定画面へ渡す経路は作らない)
+   */
   displayName: string
   /** `author-type` 属性。`'owner'` なら配信者自身の投稿 (AC10) */
   authorType: string
@@ -56,10 +63,15 @@ export type CommentAuthor = {
 ```
 
 > **`params` の中身は公開された仕様ではない。**フィールド番号・順序が変われば壊れる。
-> したがって:
-> - **位置頼みにしない** — 「2 つ目を採る」ではなく、**動画 ID(`currentStreamId()` と同じ値)と
->   隣り合う ID を配信の持ち主として除外**し、残りが 1 つに絞れたときだけ採る
-> - **絞れなければ `channelId = null`**(= 何もしない)。**推測で埋めない**
+> したがって (AC4):
+> - **位置頼みにしない** — 「2 つ目を採る」ではなく、**その ID の直後に動画 ID が続いているか**
+>   という構造で「配信の持ち主」を特定して除外する
+> - **`currentStreamId()` は補強にだけ使う。**空でないときは動画 ID がその値と一致することも
+>   確かめるが、**空でも判定は成立させる**(`currentStreamId()` は空を返しうる。
+>   一致を必須にすると、管制室の埋め込みチャットで**機能が無言で 1 度も動かない**)
+> - **持ち主を特定できなかったら `channelId = null`。**除外が成立しないまま「残り」を採ると
+>   **持ち主(= 配信者自身)の ID を投稿者として採りうる**(その行が ON だと視聴者の全コメントに反応する)
+> - **残りが 1 つに絞れなければ `channelId = null`**(= 何もしない)。**推測で埋めない**
 > - 抽出は純関数として切り出し、**T1 で採った実物の形を fixture にして**テストする
 
 ### 2. 照合 — 辞書のフラグ
@@ -89,7 +101,13 @@ export type DirectoryEntry = {
   **`author.channelId` が null / `entry.channelId` が空なら即座に捨てる** (AC4 / AC17)
 - **鍵(`url`)は `@handle` のまま。**辞書の同一性・表示・003 の自由文はすべて現状どおりで、
   **保存先の移行もしない**(003 が入れた `local` 移行の直後にもう一度移行しない)
-- `findEntryByChannelId(directory, channelId)` を `findEntry` と同じ形の純関数として足す
+- `findEntryByChannelId(directory, channelId)` を `findEntry` と同じ形の純関数として足す。
+  **`channelId` は鍵ではないので一意ではない** — 同一人物が `@handle` 形と `/channel/UC…` 形で
+  2 行に載りうる(`normalizeChannelUrl` が別の鍵にする)。**2 件以上ヒットしたら
+  `undefined` を返す**(どの行の呼び名・自由文・フラグを採るか決められないため / AC17)
+- **書き込む口も足す。** `replyToComment` に `setReplyToComment` が要るのと同じ理由で、
+  解決結果を保存する **`upsertChannelId(directory, url, channelId)`**(既存の `upsertMessage` /
+  `upsertNickname` と同じ形)が要る。**これが無いと解決しても保存できない**
 - 辞書にフラグを書き換える口が無い(`upsertNickname` だけ)ので、
   `setReplyToComment(directory, url, value)` を同じ形の純関数として足す
 
@@ -181,9 +199,10 @@ export type PostRecord = {
 1. `postMessage` が返した**自分のメッセージ要素**を記録し、その要素は検知の対象外にする
    — ただし [poster.ts](../../src/poster.ts) は要素の特定に失敗しうるので**単独では信用しない**
 2. **投稿本文と一致するコメントには反応しない**(1 が外れたときの受け皿)
-3. **配信者自身のチャンネル URL を対象外にする** — 辞書には自分が載りうる
-   (`rememberSource` は投稿の可否に関わらず載せる)。**判別手段は T1 の採取項目**で、
-   採れなかった場合は spec.md **D2** の判断へ返す
+3. **配信者自身のコメントを対象外にする** — 辞書には自分が載りうる
+   (`rememberSource` は投稿の可否に関わらず載せる)。**手段は 2 つとも DOM から取れる**
+   (T1 で確定 / AC10): **`author-type="owner"`** と、**同じ `params` から得た「配信の持ち主」の ID
+   との一致**。後者は AC4 のデコード結果をそのまま使うので追加の取得が要らない
 
 > **既存の `self-echo.ts` はここに数えない。**あれが覚えるのは*投稿した相手*の URL で、
 > コメント経路で照合するのは*コメントの投稿者*。**自分の投稿を弾く役には立たない**
@@ -200,7 +219,7 @@ export type PostRecord = {
 | `public/manifest.json` | `host_permissions` に `https://www.youtube.com/*`(fetch 用)。**`content_scripts` は増やさない** |
 | `src/types.ts` | `Config` に `commentReplyEnabled` / `commentTemplate`。`CommentAuthor` |
 | `src/config.ts` | 既定値(**`commentReplyEnabled: false`**)と正規化 (AC1 / AC14) |
-| `src/directory.ts` | `DirectoryEntry.replyToComment`(既定 false)、**`DirectoryEntry.commentMessage`(既定 `''` / AC16)**、`setReplyToComment`、**`resolveCommentMessage`**(003 の `resolveMessage` と対になる別関数。**引数は URL を受ける** — コメント経路に `RedirectEvent` が無いため / 上記「3. 文面」)、**辞書側の値だけで名前を決める関数**(`resolveDisplayName` とは別 / AC5)、`normalizeDirectory` / `rememberSource` / `upsertNickname` の追従 |
+| `src/directory.ts` | `DirectoryEntry.replyToComment`(既定 false)、**`DirectoryEntry.commentMessage`(既定 `''` / AC16)**、`setReplyToComment`、**`resolveCommentMessage`**(003 の `resolveMessage` と対になる別関数。**引数は URL を受ける** — コメント経路に `RedirectEvent` が無いため / 上記「3. 文面」)、**辞書側の値だけで名前を決める関数**(`resolveDisplayName` とは別 / AC5)、`normalizeDirectory` / `rememberSource` / `upsertNickname` の追従。**あわせて `DirectoryEntry.channelId`(既定 `''` / AC17)、`findEntryByChannelId`(2 件以上ヒットしたら `undefined`)、`upsertChannelId`** |
 | `src/composer.ts` | `{ name, url }` を受ける形へ広げる(既存の出力は不変 / AC15)。**自由文まわりは 003 の規則をそのまま使い、新設しない**(渡す値だけ呼び出し側で選ぶ / AC16) |
 | `src/post-log.ts` | `PostRecord.kind`。鍵・検索・`prune` を種別込みに。**欠損・壊れた値ともに `redirect`**(`'comment'` に完全一致したときだけ `comment` / AC14) |
 | `src/dedupe.ts` | `PriorPost.kind`。**`absorb` で `comment` を取り込まない** (AC8) |
@@ -255,7 +274,9 @@ export type PostRecord = {
   - **コメント返しの記録が `dedupe` に取り込まれない**(リダイレクト返礼が抑止されない / AC8)
   - **コメント記録が `POST_LOG_MAX_ENTRIES` を押し上げても、今の配信の `redirect` 記録が残る**
   - `streamId` が空でもコメント返しが 2 度出ない (AC7)
-  - 表示名だけが一致して URL が取れない / 正規形が違うコメントで**投稿しない** (AC4)
+  - **`channelId` が取れない / 配信の持ち主を特定できない / 辞書側が未解決 / 一致しない /
+    同じ `channelId` の行が 2 件以上ある**、のいずれでも**投稿しない** (AC4 / AC17)
+  - **表示名だけが一致するコメントで投稿しない**(照合に表示名を使っていないことの固定)
   - スパチャ・メンバー加入・削除済みプレースホルダで**投稿しない** (AC3)
   - 自分が投稿したメッセージを引き金に再投稿しない (AC10)
 - **合成 DOM を「仕様」にしない。**コメント要素の fixture は T1 で採った構造に合わせて作る。
@@ -283,16 +304,27 @@ export type PostRecord = {
     privacy-policy.md を必ず追従させる**(T10)。security-review.md にも項を足す(T16)
   - 取得は**失敗しても壊れない**設計にする(`channelId` が空のままになるだけ / AC17)
 
-- **R2(高): 自己ループの距離が近い。** spec.md D2。
-  歯止め 3 枚(上記 6)のうち**1 枚でも欠けた状態で実配信に出さない。**
-  特に 3 枚目(自分のチャンネルの除外)は T1 の採取に依存しており、
-  **採れなかった場合に「本文一致 1 枚で出す」かどうかは人間が決める。**
+- **R2(高): 自己ループの距離が近い。** 歯止め 3 枚(上記 6)のうち
+  **1 枚でも欠けた状態で実配信に出さない。**
+  → **2026-08-15 に spec.md D2 は解消**(T1 で 3 枚目の手段が採れた)。
+  3 枚目は `author-type="owner"` と「配信の持ち主の ID との一致」の**2 通り**で持つ。
+  **枚数が揃ったこと自体は実配信での確認(T12)を省く理由にならない。**
 
 - **R3(中): 起動時・再構築時の一斉投稿。**
   コメントはチャットに残り続ける。`scanExisting` を作らなくても、**項目リストが再構築される経路**
   (ポップアウトの開き直し・フィルタ切替・仮想スクロール)では既存コメントが追加ノードとして流れ、
   **その配信で初回の該当者が複数いれば一斉に出る。**
   AC9 のタイムスタンプ / 猶予を 1 枚目の歯止めにする。投稿履歴 (AC7) は 2 枚目であって 1 枚目にしない。
+  **残る穴は「監視開始と同じ分のコメント」** — タイムスタンプが「監視開始の分より前」にならないので、
+  猶予明けに再挿入されると素通りする。**その範囲では AC7(1 人 1 回)と AC11(20 件)だけが効く。**
+
+- **R12(中): タイムスタンプ側だけが fail-open になりやすい。**
+  `channelId` 側は「壊れたら何もしない」で統一してある (R10) が、AC9 の
+  「読めなかったら猶予で判定する」は**投稿する側**に倒れている。`#timestamp` の構造が変わって
+  **全件読めなくなると、猶予明けの再挿入で古いコメントに一斉投稿する**(AC11 の 20 件まで)。
+  → **`#timestamp` 要素そのものが無い場合は fail-closed**(投稿しない)、
+  **要素はあるがテキストを読めない場合だけ猶予**、と分ける (AC9)。
+  **どちらも診断ログに出す** — 無言で止まると「動かない」の切り分けに実機の往復を使う。
 
 - **R4(中): 抑止の鍵を変えることが 001 の回帰になる。**
   `post-log` の鍵に種別を混ぜる変更は、**既存の保存内容の読み方を変える。**
