@@ -15,6 +15,9 @@ feature: comment-link
       見分ける手掛かり**(バッジ・`author-type` 等)と、**メッセージのタイムスタンプ**が取れるか。
       結果を `docs/` に残し、`selectors.ts` に入れる形を確定する。
       **取れなかった場合は spec.md D1 / D2 を人間が決める**(エージェントは降りない / plan.md R1・R2)
+  - **採取手順は用意済み** — [docs/004-t1-collect.md](../../docs/004-t1-collect.md)(実行場所・準備・読み方)と
+    [scripts/t1-comment-probe.js](../../scripts/t1-comment-probe.js)(DevTools のコンソールに貼るスニペット。
+    読み取りのみ / 出力は匿名化)。**実施と結果の記録は人手**(SPEC-OPS §08)
 
 ## 自動実装できるもの(DOM に依存しない — T1 の前に進めてよい)
 
