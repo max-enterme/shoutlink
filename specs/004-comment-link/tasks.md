@@ -9,12 +9,20 @@ feature: comment-link
 
 ## 先に片付けるもの(人手・SPEC-OPS §08)
 
-- [ ] T1: **チャットのコメント要素から次の 3 点を実 DOM で採取する。**  <!-- #25 -->
+- [x] T1: **チャットのコメント要素から次の 3 点を実 DOM で採取する。**  <!-- #25 -->
       ① 投稿者のチャンネルが取れるか(属性・リンク) ② 取れる形式が `@handle` / `UC…` のどちらで、
       **辞書の鍵(`normalizeChannelUrl` の出力)と同じ正規形になるか** ③ **配信者自身の投稿を
       見分ける手掛かり**(バッジ・`author-type` 等)と、**メッセージのタイムスタンプ**が取れるか。
       結果を `docs/` に残し、`selectors.ts` に入れる形を確定する。
       **取れなかった場合は spec.md D1 / D2 を人間が決める**(エージェントは降りない / plan.md R1・R2)
+  - **2026-08-15 完了。**採取結果は [docs/004-t1-collect.md](../../docs/004-t1-collect.md)。
+    手順とプローブは [scripts/t1-comment-probe.js](../../scripts/t1-comment-probe.js)
+  - **① 投稿者は DOM 属性から取れる** — `whole-message-clickable` の `params` を base64 で 2 回。
+    実配信で全メッセージ分を正解と突き合わせ、通常のテキストメッセージは**全件一致**。
+    **メインワールドへの注入は不要**(2026-08-14 の「注入を許す」は前提が消えた)
+  - **② 形は `UC…`** で辞書の鍵(`@handle`)と一致しない → **`channelId` を足して解決する**(AC17)
+  - **③ `author-type="owner"` と `#timestamp`(`5:17 PM` 形式)が DOM で取れる** → **D2 は解消**
+  - **ハンドルはどこにも無い。**表示名(`@…` の形)はあるが**ハンドルの保証がない**ので使わない
 
 ## 自動実装できるもの(DOM に依存しない — T1 の前に進めてよい)
 
@@ -24,15 +32,17 @@ feature: comment-link
 - [ ] T5: 抑止の土台 — `post-log` に `kind` を足して鍵・検索・`prune` を種別込みにし(**`'comment'` に完全一致したときだけ `comment`、それ以外は `redirect`**)、`dedupe` の `absorb` から `comment` を除き、`main.ts` が渡す履歴を絞る。`streamId` が空のときは `cooldownSec` から独立した 6 時間の下限を適用する。**`findLastPost`(切り分けログ用)が種別をまたいで拾わないようにする。**件数の食い合いの回帰も置く (AC7 / AC8 / AC14 / plan.md R4)  <!-- #29 -->
 - [ ] T6: `src/post-queue.ts` — 逐次処理 / 最低 5 秒間隔 / 1 配信 20 件の上限 / 無効化時の破棄。`now` を注入して実時間で待たないテストにする (AC11)  <!-- #30 -->
 
-## T1 の後にしか書けないもの
+## T1 の後にしか書けないもの(**T1 は完了。着手可**)
 
-- [ ] T7: `src/comment-detector.ts` と `selectors.ts` のコメント用定数・アクセサ。**通常のテキストメッセージだけを対象にする**(`SELECTORS.chatTextMessage` を流用しない)。**追加ノードだけを見る**(`scanExisting` を作らない)。**タイムスタンプ(または 10 秒の猶予)で監視開始時刻より前のコメントを切る**。**URL が取れない / 正規形が違うコメントは捨てる** (AC3 / AC4 / AC9 / plan.md R3)  <!-- #31 -->
+- [ ] T15: **`@handle` → `UC…` の解決** (AC17) — `src/channel-id.ts`(新規)。`https://www.youtube.com/@handle` を取得して `UC…` を取り出す。**取得と抽出を分け、抽出は純関数**にして単体テストする。`DirectoryEntry.channelId`(既定 `''`)と `findEntryByChannelId` を足し、`normalizeDirectory` は **`UC` で始まる妥当な形だけを受ける**(それ以外は空文字 / AC14)。**登録が `/channel/UC…` 形なら取得せずその場で決まる**。**失敗しても壊れない**(空のままにして理由を返す)。**チャット側からは呼ばない**  <!-- #51 -->
+- [ ] T16: **`host_permissions` に `https://www.youtube.com/*` を足す**(fetch 用 / AC17)。**`content_scripts` は増やさない**(注入範囲は `studio.youtube.com/live_chat*` のまま)。`docs/security-review.md` に項を足し、**事故 1(`www` で content script が動いた)との違い**——注入ではなく設定画面からの 1 回の取得で、**ライブチャットの画面では通信しない**——を明記する (plan.md R11)  <!-- #52 -->
+- [ ] T7: `src/comment-detector.ts` と `selectors.ts` のコメント用定数・アクセサ。**通常のテキストメッセージだけを対象にする**(`SELECTORS.chatTextMessage` を流用しない)。**追加ノードだけを見る**(`scanExisting` を作らない)。**投稿者は `whole-message-clickable` の `params` を base64 で 2 回解いて取る** — **動画 ID と隣り合う ID(配信の持ち主)を除いた残りが 1 つに絞れたときだけ採り、絞れなければ捨てる**(位置頼みで推測しない)。**取れなかったことは診断ログに出す**(無言で捨てない / plan.md R10)。**`#timestamp`(`5:17 PM` 形式・分単位)と監視開始から 10 秒の猶予**で、監視開始より前のコメントを切る (AC3 / AC4 / AC9 / plan.md R3・R10)  <!-- #31 -->
 - [ ] T8: `main.ts` への配線 — 照合 → キュー → 投稿(**固定はしない**)、自己ループ遮断 3 枚、有効化スイッチの切り替え追従、起動ログへの追加 (AC6 / AC10 / AC12)。**plan.md R2(降りる箇所)に触れるため、レビュー後に人が確認してからマージする**  <!-- #32 -->
 
 ## 仕上げ
 
-- [ ] T9: 設定画面 — 有効化スイッチ / コメント用テンプレート + プレビュー / 辞書テーブルの**フラグ列とコメント返し用の自由文列**(**どちらも行編集で即保存**)/ **行を畳む表示**(既定は現状の 3 列 = ハンドル・呼び名・削除ボタンだけ。**削除は畳んだ状態でも押せる**。**畳んだ状態でも「設定したのに効かない」行が分かる** — 自由文があるのにフラグが false / テンプレートに `{msg}` が無い。**フラグ ON で自由文が空は正常なので撃たない**)/ スイッチとフラグ件数の不整合の常時表示 / **投稿履歴の表に種別列**。自由文の 200 字検証・残り文字数・`{msg}` 不在の警告は **`commentTemplate` × `commentMessage` の組**で判定する(組を跨がない) (AC13 / AC16)。**文言はベタ書きの日本語**(003 spec.md D2 の決定により 002 は後に載るため、`_locales/` 化はしない)。**T14 のモックが確定してから着手する**(SPEC-OPS §10 / plan.md R9)  <!-- #33 -->
-- [ ] T10: ドキュメント — README / `docs/install.md` / `docs/index.html` / `docs/for-testers.md` / `docs/privacy-policy.md` / `docs/setup-and-verify.md` に、**引き金が増えたこと・既定 OFF・保存項目の追加**(`replyToComment` と `commentMessage`)を反映する。`scripts/make-site-assets.mjs` の見本データに**フラグと自由文**を足す。**T11 は決着済み(2026-08-13)** — 書くのは「**引き金が増えても 001 D3 の結論は変わらない**」という判断と、**D5 の決定に基づく未検証の明記**(README / `docs/install.md` / **`docs/index.html`(公開ページ)/ `docs/for-testers.md`(ZIP に START-HERE として同梱される唯一の説明)** に「実配信での通し確認は未実施」。T12 が済んだら外す)  <!-- #34 -->
+- [ ] T9: 設定画面 — 有効化スイッチ / コメント用テンプレート + プレビュー / 辞書テーブルの**フラグ列とコメント返し用の自由文列**(**どちらも行編集で即保存**)/ **行を畳む表示**(既定は現状の 3 列 = ハンドル・呼び名・削除ボタンだけ。**削除は畳んだ状態でも押せる**。**畳んだ状態でも「設定したのに効かない」行が分かる** — 自由文があるのにフラグが false / テンプレートに `{msg}` が無い。**フラグ ON で自由文が空は正常なので撃たない**)/ スイッチとフラグ件数の不整合の常時表示 / **投稿履歴の表に種別列**。自由文の 200 字検証・残り文字数・`{msg}` 不在の警告は **`commentTemplate` × `commentMessage` の組**で判定する(組を跨がない) (AC13 / AC16)。**文言はベタ書きの日本語**(003 spec.md D2 の決定により 002 は後に載るため、`_locales/` 化はしない)。**T14 のモックが確定してから着手する**(SPEC-OPS §10 / plan.md R9)。<br>**あわせて `channelId` の解決まわり**(AC17)— 「コメントに反応する」を ON にしたときに解決を走らせる / **未解決の行が畳んだ状態でも分かる**(ON なのに `channelId` が空 = コメントに反応しない)/ **失敗の理由を出す**/ **未解決の行を再試行できる**  <!-- #33 -->
+- [ ] T10: ドキュメント — README / `docs/install.md` / `docs/index.html` / `docs/for-testers.md` / `docs/privacy-policy.md` / `docs/setup-and-verify.md` に、**引き金が増えたこと・既定 OFF・保存項目の追加**(`replyToComment` / `commentMessage` / `channelId`)を反映する。**あわせて `host_permissions` が増えたことを説明する**(AC17 / plan.md R11)— **インストール時の許可表示が変わる**こと、**注入ではなく設定画面からの 1 回の取得**であること、**ライブチャットの画面では通信しない**こと、**事故 1(`www` で content script が動いた)とは別物**であること。`docs/privacy-policy.md` には**どこへ何のために通信するか**を書く。`scripts/make-site-assets.mjs` の見本データに**フラグと自由文**を足す。**T11 は決着済み(2026-08-13)** — 書くのは「**引き金が増えても 001 D3 の結論は変わらない**」という判断と、**D5 の決定に基づく未検証の明記**(README / `docs/install.md` / **`docs/index.html`(公開ページ)/ `docs/for-testers.md`(ZIP に START-HERE として同梱される唯一の説明)** に「実配信での通し確認は未実施」。T12 が済んだら外す)  <!-- #34 -->
 
 ## 人手・実機が要るもの(SPEC-OPS §08 — `/spec-implement` に投げても止まる)
 
@@ -69,6 +79,8 @@ feature: comment-link
 ## 実装フロー(SPEC-OPS §11)
 
 - 集約ブランチ **`004-comment-link`**(main から切る)。タスクの PR は**これを base**にする
+- **T15 → T16 → T7 → T8** の順(T7 の照合先が `channelId` なので T15 が先。T16 は T15 の取得が
+  実際に通るために要る)。**T15 / T16 は 1 PR に束ねてよい**
 - **003 が main へ載ったあとに切る**(spec.md D4 / plan.md 依存節)。004 がコンフリクトを引き取る側
 - **T2–T6 は 1 PR に束ねてよい**(DOM に依存せず、降りる箇所に触れない範囲)。
   ただし **T3 の `commentMessage` と T4 の `{msg}` の値の選択は 003 の実装に乗る**ので、

@@ -39,15 +39,28 @@ test: npm run typecheck && npx vitest run
 
 ```ts
 export type CommentAuthor = {
-  /** 正規化済みチャンネル URL。取れなければ null → 何もしない (AC4) */
-  channelUrl: string | null
-  /** 表示名。**投稿文には使わない**(照合の説明とログのため / AC5) */
+  /**
+   * 投稿者のチャンネル ID (`UC…`)。取れなければ null → 何もしない (AC4)。
+   * **`whole-message-clickable` 属性の `params` を base64 で 2 回解いて取る**
+   * (T1 で確定 / 動画 ID と隣り合う ID = 配信の持ち主を除いた残り)。
+   */
+  channelId: string | null
+  /** 表示名。**投稿文にも照合にも使わない**(ログと、設定画面の目印のため / AC5) */
   displayName: string
-  /** メッセージのタイムスタンプ。取れなければ null (AC9) */
-  postedAt: number | null
+  /** `author-type` 属性。`'owner'` なら配信者自身の投稿 (AC10) */
+  authorType: string
+  /** `#timestamp` のテキスト(`5:17 PM` 形式)。**分単位**で日付が無い (AC9) */
+  timestampText: string
   detectedAt: number
 }
 ```
+
+> **`params` の中身は公開された仕様ではない。**フィールド番号・順序が変われば壊れる。
+> したがって:
+> - **位置頼みにしない** — 「2 つ目を採る」ではなく、**動画 ID(`currentStreamId()` と同じ値)と
+>   隣り合う ID を配信の持ち主として除外**し、残りが 1 つに絞れたときだけ採る
+> - **絞れなければ `channelId = null`**(= 何もしない)。**推測で埋めない**
+> - 抽出は純関数として切り出し、**T1 で採った実物の形を fixture にして**テストする
 
 ### 2. 照合 — 辞書のフラグ
 
@@ -62,13 +75,21 @@ export type DirectoryEntry = {
   replyToComment: boolean
   /** コメント返し用の自由文(spec.md D4 の決定)。既定 `''`。**003 の `message` とは別物** */
   commentMessage: string
+  /**
+   * 照合用のチャンネル ID (`UC…` / AC17)。**既定は空文字 = 未解決。**
+   * 鍵は `url`(`@handle`)のままで、これは**照合専用の追加フィールド。**
+   * `@handle` から解決して保存する(解決するのは設定画面。チャット画面では通信しない)。
+   */
+  channelId: string
 }
 ```
 
-- 照合は `findEntry(directory, author.channelUrl)` の結果が
-  `replyToComment === true` のときだけ通す。**`channelUrl` が null なら即座に捨てる** (AC4)
-- `findEntry` は**正規化済み URL の文字列比較**なので、`@handle` と `/channel/UC…` は一致しない。
-  **T1 でコメント側の形を確認し、辞書と揃わないなら spec.md D1 (c) の判断へ返す**
+- 照合は **`author.channelId` と `entry.channelId` の一致**で行い、その行の
+  `replyToComment === true` のときだけ通す。
+  **`author.channelId` が null / `entry.channelId` が空なら即座に捨てる** (AC4 / AC17)
+- **鍵(`url`)は `@handle` のまま。**辞書の同一性・表示・003 の自由文はすべて現状どおりで、
+  **保存先の移行もしない**(003 が入れた `local` 移行の直後にもう一度移行しない)
+- `findEntryByChannelId(directory, channelId)` を `findEntry` と同じ形の純関数として足す
 - 辞書にフラグを書き換える口が無い(`upsertNickname` だけ)ので、
   `setReplyToComment(directory, url, value)` を同じ形の純関数として足す
 
@@ -174,7 +195,9 @@ export type PostRecord = {
 |---|---|
 | `src/comment-detector.ts` | **新規。**コメント要素 → `CommentAuthor` の抽出(純関数)と observer |
 | `src/post-queue.ts` | **新規。**逐次処理 + 最低間隔 + 上限 + 破棄 (AC11) |
-| `src/selectors.ts` | コメント専用の要素定数と、投稿者 / タイムスタンプ / 自分の判別のアクセサ。**T1 の採取結果だけを入れる**(推測は入れない) |
+| `src/selectors.ts` | コメント専用の要素定数と、投稿者 / タイムスタンプ / 自分の判別のアクセサ。**T1 の採取結果だけを入れる**(推測は入れない)。投稿者は `whole-message-clickable` のデコードで取る |
+| `src/channel-id.ts` | **新規。**`@handle` → `UC…` の解決 (AC17)。取得と抽出を分け、**抽出は純関数**にして単体テストする。チャット側からは呼ばない |
+| `public/manifest.json` | `host_permissions` に `https://www.youtube.com/*`(fetch 用)。**`content_scripts` は増やさない** |
 | `src/types.ts` | `Config` に `commentReplyEnabled` / `commentTemplate`。`CommentAuthor` |
 | `src/config.ts` | 既定値(**`commentReplyEnabled: false`**)と正規化 (AC1 / AC14) |
 | `src/directory.ts` | `DirectoryEntry.replyToComment`(既定 false)、**`DirectoryEntry.commentMessage`(既定 `''` / AC16)**、`setReplyToComment`、**`resolveCommentMessage`**(003 の `resolveMessage` と対になる別関数。**引数は URL を受ける** — コメント経路に `RedirectEvent` が無いため / 上記「3. 文面」)、**辞書側の値だけで名前を決める関数**(`resolveDisplayName` とは別 / AC5)、`normalizeDirectory` / `rememberSource` / `upsertNickname` の追従 |
@@ -241,9 +264,24 @@ export type PostRecord = {
 
 ## リスク / 降りる箇所
 
-- **R1(高): 投稿者の特定手段と鍵の形が未確認。** spec.md D1。
-  T1 の結果で照合方式が変わり、取れなければ feature ごと畳む選択肢もある。
-  **エージェントは表示名照合へ勝手に降りない。**
+- ~~**R1(高): 投稿者の特定手段と鍵の形が未確認。**~~
+  → **2026-08-15 に T1 で解消**([docs/004-t1-collect.md](../../docs/004-t1-collect.md) / spec.md D1)。
+  投稿者は **DOM 属性から取れる**(実配信で全件、正解と一致)。鍵の形は `UC…` なので
+  **`channelId` を辞書に足して解決する**(AC17)。**表示名照合には降りていない。**
+
+- **R10(中): `whole-message-clickable` の中身は公開された仕様ではない。**
+  YouTube 側の変更で**いつでも壊れうる。**壊れ方は「投稿者が取れなくなる」= **何もしなくなる**側
+  (`channelId = null` で捨てる)なので、**誤爆にはならない**。ただし黙って止まるので、
+  **取れなかったことを診断ログに出す**(この repo は「無言で捨てる分岐が実機の往復を消費する」を
+  繰り返し踏んでいる)。**位置頼みの抽出をしない**ことが誤爆を防ぐ側の条件(上記 1.)。
+
+- **R11(中): `host_permissions` が増える。**
+  `https://www.youtube.com/*` を fetch のために足す (AC17)。**content script は増やさない。**
+  - **事故 1(`www` で content script が動いた)と混同されない書き方**が要る。
+    注入ではなく**設定画面から 1 回取得するだけ**で、**ライブチャットの画面では通信しない**
+  - インストール時の許可表示が変わるので、**README / install.md / index.html / for-testers.md /
+    privacy-policy.md を必ず追従させる**(T10)。security-review.md にも項を足す(T16)
+  - 取得は**失敗しても壊れない**設計にする(`channelId` が空のままになるだけ / AC17)
 
 - **R2(高): 自己ループの距離が近い。** spec.md D2。
   歯止め 3 枚(上記 6)のうち**1 枚でも欠けた状態で実配信に出さない。**
