@@ -199,14 +199,18 @@
     }
     walk(el)
 
-    // ② 自分(配信者)の判別に使えそうな手掛かり
-    const badges = Array.from(el.querySelectorAll('yt-live-chat-author-badge-renderer, [id*="badge" i]')).map(
-      (b) => ({
+    // ② 自分(配信者)の判別に使えそうな手掛かり。
+    // **`type` も `aria-label` も無いものは数えない** — `[id*="badge"]` だけだと
+    // 中身の `span` を 3 つ拾って「バッジ 3 個」に見え、判別の手掛かりが有るように誤読させる
+    const badges = Array.from(
+      el.querySelectorAll('yt-live-chat-author-badge-renderer, [id*="badge" i]'),
+    )
+      .map((b) => ({
         tag: b.tagName.toLowerCase(),
         type: b.getAttribute('type'),
         ariaLabel: b.getAttribute('aria-label') ? mask(b.getAttribute('aria-label')) : null,
-      }),
-    )
+      }))
+      .filter((b) => b.type || b.ariaLabel || b.tag === 'yt-live-chat-author-badge-renderer')
 
     // ③ タイムスタンプ
     const timestampEl = el.querySelector('#timestamp, [id*="timestamp" i]')
@@ -288,10 +292,15 @@
     console.log('[YTRP] 項目リストに出ている要素の内訳(AC3 の対象を決めるのに使う):')
     console.table(tally)
 
+    const rows = state.last.map(summarize)
     console.log('[YTRP] 直近のメッセージ:')
-    console.table(state.last.map(summarize))
+    console.table(rows)
     console.log('[YTRP] 詳しく見るには YTRP.detail(i) / 生の値は YTRP.raw(i)(出力を貼らないこと)')
-    return state.last
+
+    // ⚠️ **`state.last` を返さない。**中には正規化後の URL(= 実際のチャンネル ID)が入っており、
+    //    コンソールが戻り値を展開表示すると**匿名化を素通りして生の値が画面に出る。**
+    //    2026-08-14 の採取で実際にそうなった(貼り付け先が公開の場だと事故になる)。
+    return rows
   }
 
   /**
@@ -409,12 +418,25 @@
     return out.join('\n')
   }
 
-  window.YTRP = { probe, detail, raw, watch, md, normalizeChannelUrl, state }
+  /**
+   * 貼り戻し用の Markdown を**そのまま読める形で**出す。
+   *
+   * DevTools の `copy()`(コマンドラインAPI)は環境によって使えないことがある
+   * (studio.youtube.com では `copy is not a function` になった / 2026-08-14)。
+   * こちらは素の `console.log` なので必ず出る。出たテキストを選択してコピーする。
+   */
+  const show = () => {
+    console.log(md())
+    return '(上のテキストをコピーする)'
+  }
+
+  window.YTRP = { probe, detail, raw, watch, md, show, normalizeChannelUrl, state }
   console.log(
     '[YTRP] 用意できた。順に実行する:\n' +
       '  1) YTRP.probe()      … いま出ているコメントを調べる\n' +
       '  2) YTRP.watch(60)    … 60 秒ぶん新しいコメントを拾う(途中で自分でも 1 回コメントする)\n' +
-      '  3) copy(YTRP.md())   … 貼り戻し用の Markdown をクリップボードへ\n' +
+      '  3) YTRP.show()       … 貼り戻し用の Markdown を出す(選択してコピー)\n' +
+      '                        ※ copy(YTRP.md()) は環境によって使えない\n' +
       '  詳細: YTRP.detail(i) / 生の値: YTRP.raw(i)(**出力を貼らない**)',
   )
 })()
