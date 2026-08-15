@@ -15,14 +15,16 @@ feature: comment-link
       見分ける手掛かり**(バッジ・`author-type` 等)と、**メッセージのタイムスタンプ**が取れるか。
       結果を `docs/` に残し、`selectors.ts` に入れる形を確定する。
       **取れなかった場合は spec.md D1 / D2 を人間が決める**(エージェントは降りない / plan.md R1・R2)
-  - **2026-08-15 完了。**採取結果は [docs/004-t1-collect.md](../../docs/004-t1-collect.md)。
-    手順とプローブは [scripts/t1-comment-probe.js](../../scripts/t1-comment-probe.js)
+  - **2026-08-15 完了。**採取結果は [docs/004-t1-collect.md](../../docs/004-t1-collect.md)
+    (手順と結果を兼ねる)。プローブは [scripts/t1-comment-probe.js](../../scripts/t1-comment-probe.js)
+    (DevTools のコンソールに貼るスニペット。**読み取りのみ / 出力は匿名化**)
   - **① 投稿者は DOM 属性から取れる** — `whole-message-clickable` の `params` を base64 で 2 回。
     実配信で全メッセージ分を正解と突き合わせ、通常のテキストメッセージは**全件一致**。
     **メインワールドへの注入は不要**(2026-08-14 の「注入を許す」は前提が消えた)
   - **② 形は `UC…`** で辞書の鍵(`@handle`)と一致しない → **`channelId` を足して解決する**(AC17)
   - **③ `author-type="owner"` と `#timestamp`(`5:17 PM` 形式)が DOM で取れる** → **D2 は解消**
-  - **ハンドルはどこにも無い。**表示名(`@…` の形)はあるが**ハンドルの保証がない**ので使わない
+  - **探した範囲ではハンドルが見つからない**(DOM の属性・リンク / 復号後の `params` / ページ内部のデータ)。
+    表示名は `@…` の形をしているが**ハンドルの保証がない**ので使わない
 
 ## 自動実装できるもの(DOM に依存しない — T1 の前に進めてよい)
 
