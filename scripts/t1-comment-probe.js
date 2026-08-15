@@ -283,6 +283,19 @@
     }
   }
 
+  /**
+   * その値が**表示名**の場所か。
+   *
+   * ⚠️ 2026-08-15 の採取: `authorName.simpleText` が `@…` の形をしていたため、
+   *    「ハンドルが取れた」と読めてしまった。**チャンネル名は誰でも自由に決められる**ので、
+   *    形が `@…` でも「その人のハンドル」である保証はない。**鍵にしてはいけない。**
+   */
+  const isDisplayNamePath = (h) => /(^|\.)author(Name|Text)/i.test(h.path)
+
+  /** 鍵に使える見込みのある出所(表示名を除いた、URL 系のキー)だけのパス一覧 */
+  const urlHandlePaths = (info) =>
+    info.handleValues.filter((h) => !isDisplayNamePath(h)).map((h) => h.path)
+
   /** 1 件の調査結果を「表の 1 行」に畳む */
   const summarize = (info, index) => {
     const domSource =
@@ -294,8 +307,13 @@
       'DOMで取れる': domSource ? keyShape(domSource.normalized) : '—',
       'DOMの出所': domSource ? domSource.where || domSource.path : '—',
       'Polymerで取れる': mainSource ? keyShape(mainSource.normalized) : '—',
-      // **ここが本題**: ハンドルが内部データにあるなら対応付けが要らない
-      'Polymerのハンドル': info.handleValues.length ? info.handleValues[0].path : '—',
+      // **ここが本題**: URL 系のキーにハンドルがあるなら、辞書の鍵とそのまま一致する。
+      // **1 件目だけ出さない** — `authorName` が先に当たると本命が隠れる(2026-08-15 に一度そうなった)
+      'Polymerのハンドル(URL系)': urlHandlePaths(info).join(',') || '—',
+      // ⚠️ **表示名は鍵にしてはいけない。**チャンネル名は誰でも自由に決められるので、
+      //    `@…` の形でも「その人のハンドル」である保証がない(spec.md D1 (a) の誤爆そのもの)。
+      //    参考として「形が @ かどうか」だけ出す
+      '表示名が@形式': info.handleValues.some(isDisplayNamePath) ? 'はい' : 'いいえ',
       'author-type': info.attrs['author-type'] || '—',
       バッジ: info.badges.length ? info.badges.map((b) => b.type || b.tag).join(',') : '—',
       'timestamp(DOM)': info.timestampText || '—',
@@ -361,7 +379,10 @@
     console.log('  timestamp(DOM のテキスト):', info.timestampText)
     console.log(`  Polymer データの場所: ${info.polymerPath || '(見つからない)'}`)
     console.log('  Polymer のチャンネル系キー ※隔離ワールドからは見えない:', maskSources(info.channelKeys))
-    console.log('  Polymer の中の @ハンドルらしい値 ※同上:', info.handleValues)
+    console.log(
+      '  Polymer の中の @ハンドルらしい値 ※同上(author* は表示名なので鍵にしない):',
+      info.handleValues.map((h) => ({ ...h, 表示名の場所: isDisplayNamePath(h) ? 'はい' : 'いいえ' })),
+    )
     console.log('  Polymer の時刻系キー ※同上:', info.timeKeys)
     return info
   }
