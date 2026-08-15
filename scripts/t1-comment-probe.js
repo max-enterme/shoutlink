@@ -165,6 +165,36 @@
     return out
   }
 
+  /**
+   * **キー名ではなく「値の形」で探す。**
+   *
+   * ⚠️ 2026-08-14 の初回採取での取りこぼし: キー名を `channel|author.*id|externalId` で
+   *    探していたため、**ハンドルが入りうるキー(`canonicalBaseUrl` 等)を最初から見ていなかった。**
+   *    「UC しか無い」と結論しかけたが、それは**探していないだけ**だった可能性がある。
+   *    ここは `@ハンドル` らしい**値**を、キー名に関係なく拾う。
+   */
+  const findHandleValues = (obj, depth = 0, seen = new Set(), prefix = '') => {
+    const out = []
+    if (!obj || typeof obj !== 'object' || depth > 5 || seen.has(obj)) return out
+    seen.add(obj)
+    for (const key of Object.keys(obj)) {
+      let value
+      try {
+        value = obj[key]
+      } catch {
+        continue
+      }
+      const path = prefix ? `${prefix}.${key}` : key
+      if (typeof value === 'string' && /(^|\/)@[^\s/?#]{1,40}$/u.test(value.trim())) {
+        out.push({ path, value: mask(value), 正規形: keyShape(normalizeChannelUrl(value.trim())) })
+      }
+      if (value && typeof value === 'object') {
+        out.push(...findHandleValues(value, depth + 1, seen, path))
+      }
+    }
+    return out
+  }
+
   // --- 1 件のメッセージを調べる ---------------------------------------------
   const inspect = (el) => {
     const tag = el.tagName.toLowerCase()
@@ -235,6 +265,10 @@
         }))
       : []
 
+    // **ハンドルが内部データのどこかに入っていないか**(キー名に頼らず値の形で探す)。
+    // ここに `@handle` があれば、辞書の鍵とそのまま一致するので対応付けが要らなくなる
+    const handleValues = polymer.value ? findHandleValues(polymer.value) : []
+
     return {
       tag,
       attrs,
@@ -244,6 +278,7 @@
       timestampText,
       polymerPath: polymer.path,
       channelKeys,
+      handleValues,
       timeKeys,
     }
   }
@@ -259,6 +294,8 @@
       'DOMで取れる': domSource ? keyShape(domSource.normalized) : '—',
       'DOMの出所': domSource ? domSource.where || domSource.path : '—',
       'Polymerで取れる': mainSource ? keyShape(mainSource.normalized) : '—',
+      // **ここが本題**: ハンドルが内部データにあるなら対応付けが要らない
+      'Polymerのハンドル': info.handleValues.length ? info.handleValues[0].path : '—',
       'author-type': info.attrs['author-type'] || '—',
       バッジ: info.badges.length ? info.badges.map((b) => b.type || b.tag).join(',') : '—',
       'timestamp(DOM)': info.timestampText || '—',
@@ -324,6 +361,7 @@
     console.log('  timestamp(DOM のテキスト):', info.timestampText)
     console.log(`  Polymer データの場所: ${info.polymerPath || '(見つからない)'}`)
     console.log('  Polymer のチャンネル系キー ※隔離ワールドからは見えない:', maskSources(info.channelKeys))
+    console.log('  Polymer の中の @ハンドルらしい値 ※同上:', info.handleValues)
     console.log('  Polymer の時刻系キー ※同上:', info.timeKeys)
     return info
   }
