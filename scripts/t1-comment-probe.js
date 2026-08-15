@@ -195,6 +195,75 @@
     return out
   }
 
+  // --- `whole-message-clickable`(DOM 属性)から投稿者を取り出す ------------
+  //
+  // 2026-08-15 に Elements で発見: メッセージ要素の **DOM 属性** `whole-message-clickable` に
+  // `liveChatItemContextMenuEndpoint.params` が入っており、**base64 を 2 回**解くと
+  // protobuf が出てくる。中には **UC が 2 つ**ある:
+  //   - {チャンネルID, 動画ID} … 動画とセットなので**配信の持ち主**
+  //   - {チャンネルID}         … **投稿者**
+  // **DOM 属性なので content script(隔離ワールド)から読める。**
+  //
+  // ⚠️ **これは公開された仕様ではない。**フィールド番号や順序が変わればいつでも壊れる。
+  //    そのため「2 つ目を採る」のような位置頼みにせず、**動画 ID と隣り合っているほうを
+  //    配信者として除外する**(`v=` と突き合わせられるので、位置が変わっても効く)。
+
+  /** 現在の配信の動画 ID(ポップアウトの `v=`)。切り分けの基準に使う */
+  const currentVideoId = () => {
+    try {
+      return new URL(location.href).searchParams.get('v') || ''
+    } catch {
+      return ''
+    }
+  }
+
+  const decodeBase64 = (value) => {
+    try {
+      const s = decodeURIComponent(String(value)).replace(/-/g, '+').replace(/_/g, '/')
+      return atob(s + '='.repeat((4 - (s.length % 4)) % 4))
+    } catch {
+      return ''
+    }
+  }
+
+  /**
+   * DOM 属性から投稿者のチャンネル ID を取り出す。
+   * **切り分けられなければ null を返す**(推測しない)。
+   */
+  const authorIdFromDom = (el) => {
+    const raw = el.getAttribute('whole-message-clickable')
+    if (!raw) return { status: '属性なし', id: null, count: 0 }
+    let json
+    try {
+      json = JSON.parse(raw)
+    } catch {
+      return { status: 'JSONでない', id: null, count: 0 }
+    }
+    const params = json?.liveChatItemContextMenuEndpoint?.params
+    if (!params) return { status: 'paramsなし', id: null, count: 0 }
+
+    const blob = decodeBase64(decodeBase64(params))
+    if (!blob) return { status: 'デコード失敗', id: null, count: 0 }
+
+    const found = []
+    const re = /UC[A-Za-z0-9_-]{22}/g
+    let m
+    while ((m = re.exec(blob)) != null) found.push({ id: m[0], at: m.index })
+    if (found.length === 0) return { status: 'UCなし', id: null, count: 0 }
+
+    // **動画 ID と隣り合っている ID は配信の持ち主**なので投稿者ではない
+    const videoId = currentVideoId()
+    const isOwner = (hit) =>
+      !!videoId && blob.slice(hit.at + 24, hit.at + 24 + 20).includes(videoId)
+
+    const others = found.filter((hit) => !isOwner(hit))
+    // 配信者自身の投稿では全部が「持ち主」になる。その場合の投稿者は持ち主自身
+    const picked = others.length > 0 ? others[others.length - 1] : found[found.length - 1]
+    const distinct = new Set(others.map((h) => h.id))
+    if (distinct.size > 1) return { status: '候補が複数', id: null, count: found.length }
+    return { status: '取れた', id: picked.id, count: found.length }
+  }
+
   // --- 1 件のメッセージを調べる ---------------------------------------------
   const inspect = (el) => {
     const tag = el.tagName.toLowerCase()
@@ -269,6 +338,20 @@
     // ここに `@handle` があれば、辞書の鍵とそのまま一致するので対応付けが要らなくなる
     const handleValues = polymer.value ? findHandleValues(polymer.value) : []
 
+    // **DOM 属性から投稿者を取り出せるか**(= メインワールド注入が要らなくなるか)。
+    // 正解(Polymer の `authorExternalChannelId`)と突き合わせて検証する
+    const fromDom = authorIdFromDom(el)
+    const truth = polymer.value
+      ? findKeys(polymer.value, /^authorExternalChannelId$/).map((k) => String(k.value))[0] || null
+      : null
+    const domVerdict = !truth
+      ? '正解が無い'
+      : fromDom.id == null
+        ? `取れない(${fromDom.status})`
+        : fromDom.id === truth
+          ? '一致'
+          : '**不一致**'
+
     return {
       tag,
       attrs,
@@ -280,6 +363,7 @@
       channelKeys,
       handleValues,
       timeKeys,
+      domAuthor: { status: fromDom.status, ucCount: fromDom.count, verdict: domVerdict },
     }
   }
 
@@ -304,6 +388,9 @@
     return {
       '#': index,
       要素: info.tag.replace(/^yt-live-chat-/, ''),
+      // **ここが本命**: DOM 属性だけで投稿者を特定できるか(= メインワールド注入が要らないか)
+      'DOM属性から投稿者': info.domAuthor.verdict,
+      'UC の個数': info.domAuthor.ucCount || '—',
       'DOMで取れる': domSource ? keyShape(domSource.normalized) : '—',
       'DOMの出所': domSource ? domSource.where || domSource.path : '—',
       'Polymerで取れる': mainSource ? keyShape(mainSource.normalized) : '—',
