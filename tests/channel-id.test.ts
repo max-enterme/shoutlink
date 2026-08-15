@@ -59,6 +59,17 @@ describe('extractChannelId (AC17)', () => {
     expect(result.ok === false && result.reason).toContain('候補が複数')
   })
 
+  it('**同じ出所が 2 回出て値が違えば失敗**(最初の 1 件だけ見ない)', () => {
+    const html = `<html>${canonical(ID)}...${canonical(OTHER)}</html>`
+    const result = extractChannelId(html)
+    expect(result.ok).toBe(false)
+  })
+
+  it('同じ出所が 2 回出ても値が同じなら通す', () => {
+    const html = `<html>${canonical(ID)}...${canonical(ID)}</html>`
+    expect(extractChannelId(html).ok).toBe(true)
+  })
+
   it('1 つも無ければ失敗', () => {
     expect(extractChannelId('<html><body>なにもない</body></html>').ok).toBe(false)
   })
@@ -91,6 +102,16 @@ describe('channelIdFromUrl (AC17)', () => {
   it('legacy 形も決まらない', () => {
     expect(channelIdFromUrl('https://www.youtube.com/c/example')).toBeNull()
     expect(channelIdFromUrl('https://www.youtube.com/user/example')).toBeNull()
+  })
+
+  it('**YouTube 以外のホストは決まらない**(辞書の行が任意の ID に結びつくのを防ぐ)', () => {
+    expect(channelIdFromUrl(`https://evil.example/channel/${ID}`)).toBeNull()
+    expect(channelIdFromUrl(`https://youtube.com.evil.example/channel/${ID}`)).toBeNull()
+  })
+
+  it('**パスの先頭でなければ決まらない**(クエリに紛れ込んだものを拾わない)', () => {
+    expect(channelIdFromUrl(`https://www.youtube.com/@x?r=/channel/${ID}`)).toBeNull()
+    expect(channelIdFromUrl(`https://www.youtube.com/watch/channel/${ID}`)).toBeNull()
   })
 })
 
@@ -161,12 +182,47 @@ describe('resolveChannelId (AC17)', () => {
     expect(result.status).toBe('failed')
   })
 
-  it('読む量を上限で切っても、先頭にある metadata なら拾える', async () => {
-    const { impl } = fakeFetch(`<html><head>${canonical(ID)}</head><body>${'x'.repeat(5000)}</body>`)
-    const result = await resolveChannelId('https://www.youtube.com/@example', {
-      fetchImpl: impl,
-      maxBytes: 200,
-    })
+  it('**ページの後ろのほうにある metadata も拾う**(途中で切らない)', async () => {
+    // 実測(2026-08-15): チャンネルページは 1.3〜1.9 MB で、metadata は先頭ではなく
+    // 約 733 KB 地点、`externalId` は 1.89 MB 地点に出た。上限で切ると出所が黙って減る
+    const { impl } = fakeFetch(`<html><body>${'x'.repeat(50_000)}${canonical(ID)}</body></html>`)
+    const result = await resolveChannelId('https://www.youtube.com/@example', { fetchImpl: impl })
     expect(result).toEqual({ status: 'resolved', channelId: ID })
+  })
+
+  // --- URL の検証(誤爆経路を塞ぐ) -------------------------------------------
+
+  it('**YouTube 以外のホストは取りに行かない**', async () => {
+    const { impl, calls } = fakeFetch(`<html><head>${canonical(ID)}</head></html>`)
+    const result = await resolveChannelId('https://evil.example/@example', { fetchImpl: impl })
+    expect(result).toEqual({ status: 'failed', reason: 'YouTube のチャンネル URL ではない' })
+    expect(calls).toEqual([])
+  })
+
+  it('**YouTube 以外のホストの `/channel/UC…` を「解決済み」にしない**', async () => {
+    const { impl } = fakeFetch('')
+    const result = await resolveChannelId(`https://evil.example/channel/${ID}`, { fetchImpl: impl })
+    expect(result.status).toBe('failed')
+  })
+
+  it('**クエリに紛れ込んだ `/channel/UC…` を拾わない**', async () => {
+    const { impl } = fakeFetch(`<html><head>${canonical(OTHER)}</head></html>`)
+    const result = await resolveChannelId(`https://www.youtube.com/@x?r=/channel/${ID}`, {
+      fetchImpl: impl,
+    })
+    // クエリ側の ID ではなく、取得したページの ID になる
+    expect(result).toEqual({ status: 'resolved', channelId: OTHER })
+  })
+
+  it('http:// は受けない', async () => {
+    const { impl } = fakeFetch('')
+    expect((await resolveChannelId(`http://www.youtube.com/channel/${ID}`, { fetchImpl: impl })).status).toBe(
+      'failed',
+    )
+  })
+
+  it('URL として壊れていても落ちない', async () => {
+    const { impl } = fakeFetch('')
+    expect((await resolveChannelId('not a url', { fetchImpl: impl })).status).toBe('failed')
   })
 })

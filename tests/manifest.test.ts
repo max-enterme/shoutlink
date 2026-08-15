@@ -15,7 +15,10 @@ import manifestJson from '../public/manifest.json'
 const manifest = manifestJson as {
   permissions: string[]
   host_permissions: string[]
-  content_scripts: { matches: string[]; all_frames?: boolean }[]
+  content_scripts: { matches: string[]; js?: string[]; world?: string; all_frames?: boolean }[]
+  optional_permissions?: string[]
+  optional_host_permissions?: string[]
+  web_accessible_resources?: unknown[]
 }
 
 describe('manifest.json — 注入範囲 (事故 1 の再発防止)', () => {
@@ -36,6 +39,23 @@ describe('manifest.json — 注入範囲 (事故 1 の再発防止)', () => {
   it('content script の対象が 1 つも増えていない(数で固定する)', () => {
     expect(manifest.content_scripts.flatMap((cs) => cs.matches)).toHaveLength(1)
   })
+
+  it('**メインワールドへ注入しない**(spec.md D1 の決定)', () => {
+    // `world: "MAIN"` にすると、ページと同じ文脈でスクリプトが動く。
+    // T1 の結果、投稿者は DOM 属性から取れるので注入する理由が無い
+    for (const cs of manifest.content_scripts) {
+      expect(cs.world).toBeUndefined()
+    }
+  })
+
+  it('注入するファイルは content.js だけ', () => {
+    expect(manifest.content_scripts[0].js).toEqual(['content.js'])
+  })
+
+  it('**ページ側から拡張のリソースを読めるようにしない**', () => {
+    // `web_accessible_resources` はページ文脈へ露出する経路になる
+    expect(manifest.web_accessible_resources).toBeUndefined()
+  })
 })
 
 describe('manifest.json — 権限 (AC17)', () => {
@@ -52,5 +72,11 @@ describe('manifest.json — 権限 (AC17)', () => {
 
   it('API 権限は storage だけ(増やさない)', () => {
     expect(manifest.permissions).toEqual(['storage'])
+  })
+
+  it('**あとから広げられる権限も宣言しない**', () => {
+    // `optional_*` があると「host 権限は YouTube の 2 つだけ」が実質破れる
+    expect(manifest.optional_permissions).toBeUndefined()
+    expect(manifest.optional_host_permissions).toBeUndefined()
   })
 })

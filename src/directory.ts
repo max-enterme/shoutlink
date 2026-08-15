@@ -243,6 +243,9 @@ export function upsertCommentMessage(
  * **これが無いと解決しても保存できない**(`replyToComment` に `setReplyToComment` が要るのと同じ)。
  * **妥当な形でない値は空文字にして受ける** — 呼び出し側が壊れた値を持ち込んでも
  * 「未解決」に倒れるだけにする(誤爆させない / AC14)。
+ *
+ * ⚠️ **呼ぶのは解決に成功したときだけ。**失敗の理由をそのまま渡すと、
+ *    妥当でない値として**解決済みの ID が空に戻る**(T17 の実装時に注意)。
  */
 export function upsertChannelId(directory: Directory, url: string, channelId: string): Directory {
   const value = CHANNEL_ID_PATTERN.test(channelId) ? channelId : ''
