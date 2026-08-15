@@ -99,7 +99,9 @@
   }
 
   /** 値をそのまま出してよい属性(列挙値・真偽値だけ。識別子を含みうるものは伏せる) */
-  const SAFE_ATTR = /^(author-type|is-[a-z-]+|has-[a-z-]+|hidden|disable-upgrade|role|aria-label|type|show-[a-z-]+|whitespace)$/
+  // ⚠️ **`aria-label` は入れない。**自由文なので識別子を含みうる(バッジ側は `mask()` している)。
+  //    ここに入れてよいのは列挙値・真偽値だけ
+  const SAFE_ATTR = /^(author-type|is-[a-z-]+|has-[a-z-]+|hidden|disable-upgrade|role|type|show-[a-z-]+|whitespace)$/
 
   // --- チャット項目の取得 ---------------------------------------------------
   const ITEM_LIST_SELECTORS = [
@@ -232,24 +234,34 @@
    */
   const authorIdFromDom = (el) => {
     const raw = el.getAttribute('whole-message-clickable')
-    if (!raw) return { status: '属性なし', id: null, count: 0 }
+    if (!raw) return { status: '属性なし', id: null, count: 0, handles: [] }
     let json
     try {
       json = JSON.parse(raw)
     } catch {
-      return { status: 'JSONでない', id: null, count: 0 }
+      return { status: 'JSONでない', id: null, count: 0, handles: [] }
     }
     const params = json?.liveChatItemContextMenuEndpoint?.params
-    if (!params) return { status: 'paramsなし', id: null, count: 0 }
+    if (!params) return { status: 'paramsなし', id: null, count: 0, handles: [] }
 
     const blob = decodeBase64(decodeBase64(params))
-    if (!blob) return { status: 'デコード失敗', id: null, count: 0 }
+    if (!blob) return { status: 'デコード失敗', id: null, count: 0, handles: [] }
 
     const found = []
     const re = /UC[A-Za-z0-9_-]{22}/g
     let m
     while ((m = re.exec(blob)) != null) found.push({ id: m[0], at: m.index })
-    if (found.length === 0) return { status: 'UCなし', id: null, count: 0 }
+
+    // ⚠️ **ここも `@ハンドル` を探す。**
+    //    2026-08-15 のレビュー指摘: 「ハンドルはどこにも無い」と結論しかけたが、
+    //    **識別子が実際に入っていた唯一の場所(この復号後の blob)を探していなかった。**
+    //    ここにハンドルがあれば辞書の鍵とそのまま一致するので、対応付け(D1 c)が要らなくなる。
+    //    値は出さず「何件あったか / 何文字か」だけを出す。
+    const handles = []
+    const hre = /@[^\x00-\x20\/?#@]{1,40}/g
+    while ((m = hre.exec(blob)) != null) handles.push(mask(m[0]))
+
+    if (found.length === 0) return { status: 'UCなし', id: null, count: 0, handles }
 
     // **動画 ID と隣り合っている ID は配信の持ち主**なので投稿者ではない
     const videoId = currentVideoId()
@@ -260,8 +272,8 @@
     // 配信者自身の投稿では全部が「持ち主」になる。その場合の投稿者は持ち主自身
     const picked = others.length > 0 ? others[others.length - 1] : found[found.length - 1]
     const distinct = new Set(others.map((h) => h.id))
-    if (distinct.size > 1) return { status: '候補が複数', id: null, count: found.length }
-    return { status: '取れた', id: picked.id, count: found.length }
+    if (distinct.size > 1) return { status: '候補が複数', id: null, count: found.length, handles }
+    return { status: '取れた', id: picked.id, count: found.length, handles }
   }
 
   // --- 1 件のメッセージを調べる ---------------------------------------------
@@ -363,7 +375,12 @@
       channelKeys,
       handleValues,
       timeKeys,
-      domAuthor: { status: fromDom.status, ucCount: fromDom.count, verdict: domVerdict },
+      domAuthor: {
+        status: fromDom.status,
+        ucCount: fromDom.count,
+        verdict: domVerdict,
+        handles: fromDom.handles || [],
+      },
     }
   }
 
@@ -391,6 +408,8 @@
       // **ここが本命**: DOM 属性だけで投稿者を特定できるか(= メインワールド注入が要らないか)
       'DOM属性から投稿者': info.domAuthor.verdict,
       'UC の個数': info.domAuthor.ucCount || '—',
+      // **属性の中(復号後)にハンドルがあるか。**あれば対応付け(D1 c)が要らなくなる
+      '属性内のハンドル': info.domAuthor.handles.length ? info.domAuthor.handles.join(',') : '—',
       'DOMで取れる': domSource ? keyShape(domSource.normalized) : '—',
       'DOMの出所': domSource ? domSource.where || domSource.path : '—',
       'Polymerで取れる': mainSource ? keyShape(mainSource.normalized) : '—',
@@ -471,7 +490,11 @@
       info.handleValues.map((h) => ({ ...h, 表示名の場所: isDisplayNamePath(h) ? 'はい' : 'いいえ' })),
     )
     console.log('  Polymer の時刻系キー ※同上:', info.timeKeys)
-    return info
+    console.log('  属性の中(復号後)のハンドルらしい値:', info.domAuthor.handles)
+    // ⚠️ **`info` を返さない。**中の `normalized` は生の URL(= 実際のハンドル / チャンネル ID)で、
+    //    コンソールが戻り値を展開表示すると匿名化を素通りする(`probe()` と同じ穴)。
+    //    生値が要るときは `raw(i)`
+    return undefined
   }
 
   /** **生の値。出力を docs へ貼らない。**自分の目で形を確かめるためだけに使う */
@@ -583,6 +606,7 @@
       '  2) YTRP.watch(60)    … 60 秒ぶん新しいコメントを拾う(途中で自分でも 1 回コメントする)\n' +
       '  3) YTRP.show()       … 貼り戻し用の Markdown を出す(選択してコピー)\n' +
       '                        ※ copy(YTRP.md()) は環境によって使えない\n' +
-      '  詳細: YTRP.detail(i) / 生の値: YTRP.raw(i)(**出力を貼らない**)',
+      '  詳細: YTRP.detail(i) / 生の値: YTRP.raw(i)(**出力を貼らない**)\n' +
+      '  ※ YTRP.state を展開すると生の値が見えます。**その出力も貼らないこと**',
   )
 })()
