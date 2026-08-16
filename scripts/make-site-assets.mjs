@@ -76,21 +76,67 @@ const MOCK = `
           pinMode: 'ifEmpty',
           cooldownSec: 600,
           debug: false,
+          // **コメント返しは ON にする** (004 / T13)。OFF のままだと、辞書側でフラグを付けた
+          // 見本と食い違って設定画面が AC13 の不整合表示を常時出し、版下が「警告の出ている画面」になる。
+          // **既定は OFF** (config.ts) で、ここで ON にしているのは撮影用の見本であることに注意
+          commentReplyEnabled: true,
+          // コメント返し用のテンプレートにも {msg} を入れる (理由は上と同じ / AC16)
+          commentTemplate: '{name}さん {msg} 来てくれてありがとうございます! {url}',
         },
-        // 自由文 (message) は空の行も混ぜる。「未設定でも成立する」ことが絵で分かるように
+        // 自由文 (message / commentMessage) は空の行も混ぜる。「未設定でも成立する」ことが絵で分かるように。
+        // **フラグ (replyToComment) と channelId は 3 通りを混ぜる** (004 / AC13 / AC17):
+        //   ① ON + 解決済み … 正常に効いている行
+        //   ② どれも未設定    … リダイレクトを受けて自動で載っただけの行 (印は出ない)
+        //   ③ ON + 未解決    … **「設定したのに効かない行」**。⚠ と背景色、辞書の上に再試行の行が出る
+        // ③ を入れているのは、**畳んだ状態でも効かない行が分かる**ことが絵で伝わるようにするため。
+        // channelId は実在しない値にする (UC[\w-]{20,} に合う形であればよい / CHANNEL_ID_PATTERN)
         'ytRedirectPin.directory': [
           {
             url: 'https://www.youtube.com/@example-live',
             nickname: 'れい',
             message: 'いつも遊びに来てくれてありがとう!',
+            replyToComment: true,
+            commentMessage: 'コメントありがとう!',
+            channelId: 'UCexample0000000000000a',
             lastSeenAt: 1,
           },
-          { url: 'https://www.youtube.com/@sample-channel', nickname: '', message: '', lastSeenAt: 2 },
+          {
+            url: 'https://www.youtube.com/@sample-channel',
+            nickname: '',
+            message: '',
+            replyToComment: false,
+            commentMessage: '',
+            channelId: '',
+            lastSeenAt: 2,
+          },
           {
             url: 'https://www.youtube.com/@demo-streamer',
             nickname: 'でも先輩',
             message: '今日もお疲れさまです',
+            replyToComment: true,
+            commentMessage: '',
+            channelId: '',
             lastSeenAt: 0,
+          },
+        ],
+        // 投稿履歴にも見本を入れる。**種別の列 (004 / AC13) が空の絵にならないように**、
+        // リダイレクト返礼とコメント返しを 1 件ずつ置く
+        'ytRedirectPin.postLog': [
+          {
+            url: 'https://www.youtube.com/@example-live',
+            handle: '@example-live',
+            text: 'れいさん いつも遊びに来てくれてありがとう! リダイレクトありがとうございます! https://www.youtube.com/@example-live',
+            postedAt: Date.now() - 26 * 60 * 1000,
+            streamId: 'sample-stream',
+            kind: 'redirect',
+          },
+          {
+            url: 'https://www.youtube.com/@example-live',
+            handle: '@example-live',
+            text: 'れいさん コメントありがとう! 来てくれてありがとうございます! https://www.youtube.com/@example-live',
+            postedAt: Date.now() - 12 * 60 * 1000,
+            streamId: 'sample-stream',
+            kind: 'comment',
           },
         ],
       }
