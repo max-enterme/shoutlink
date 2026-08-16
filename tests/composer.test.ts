@@ -306,6 +306,7 @@ describe('{msg} に渡す値の選択 (004 / AC16)', () => {
       message: 'リダイレクトの自由文',
       replyToComment: true,
       commentMessage: 'コメントの自由文',
+      channelId: '',
       lastSeenAt: 0,
     },
   ]

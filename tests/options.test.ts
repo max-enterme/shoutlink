@@ -36,6 +36,7 @@ function entry(over: Partial<Directory[number]> = {}): Directory[number] {
     message: '',
     replyToComment: false,
     commentMessage: '',
+    channelId: '',
     lastSeenAt: 0,
     ...over,
   }

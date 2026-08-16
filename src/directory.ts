@@ -42,9 +42,27 @@ export type DirectoryEntry = {
    * 差し込み先も別で、こちらは `Config.commentTemplate` の `{msg}` に入る。
    */
   commentMessage: string
+  /**
+   * **照合用**のチャンネル ID (`UC…` / 004 / AC17)。**空文字は「未解決」。**
+   *
+   * コメントから取れる投稿者の ID は `UC…` 形だが、**鍵 (`url`) は `@handle` 形**で
+   * 文字列比較が一致しない。そのため**照合専用のフィールドとして持つ**。
+   *
+   * **鍵ではない。**辞書の同一性・表示・自由文はすべて `url` のままで、保存先の移行もしない。
+   * 埋めるのは設定画面([channel-id.ts](./channel-id.ts))で、**チャット画面では触らない。**
+   */
+  channelId: string
   /** 最後にリダイレクトを受けた時刻。0 は「まだ受けていない」(手動登録) */
   lastSeenAt: number
 }
+
+/**
+ * チャンネル ID として受け付ける形 (AC14)。
+ *
+ * **[detector.ts](./detector.ts) の `normalizeChannelUrl` が `/channel/UC…` を受けるときと
+ * 同じ形にそろえてある。**揃えないと、片方が通して片方が弾く行ができる。
+ */
+export const CHANNEL_ID_PATTERN = /^UC[\w-]{20,}$/
 
 export type Directory = DirectoryEntry[]
 
@@ -69,6 +87,25 @@ export function displayHandle(entry: DirectoryEntry): string {
 export function findEntry(directory: Directory, url: string): DirectoryEntry | undefined {
   const key = directoryKey(url)
   return directory.find((entry) => directoryKey(entry.url) === key)
+}
+
+/**
+ * **チャンネル ID で行を引く** (004 / AC4 / AC17)。コメント経路の照合はこちらを使う。
+ *
+ * ⚠️ **`channelId` は鍵ではないので一意ではない。** 同一人物が `@handle` 形と
+ *    `/channel/UC…` 形で 2 行に載りうる(`normalizeChannelUrl` が別の鍵にするため)。
+ *    呼び名・自由文・フラグは行ごとに違うので、**どの行を採るかを決められない。**
+ *    → **2 件以上ヒットしたら `undefined`**(= 何もしない)。設定画面はこの状態を警告として出す。
+ *
+ * **未解決(空文字)の行は絶対に引っかけない。**空同士が一致して全員に反応する事故を防ぐ。
+ */
+export function findEntryByChannelId(
+  directory: Directory,
+  channelId: string,
+): DirectoryEntry | undefined {
+  if (!CHANNEL_ID_PATTERN.test(channelId)) return undefined
+  const hits = directory.filter((entry) => entry.channelId === channelId)
+  return hits.length === 1 ? hits[0] : undefined
 }
 
 /**
@@ -132,6 +169,7 @@ function blankEntry(url: string, patch: Partial<DirectoryEntry> = {}): Directory
     // **どちらも「人が明示的に設定したときだけ入る」側**なので、行の生成時は必ず既定 (AC2 / AC16)
     replyToComment: false,
     commentMessage: '',
+    channelId: '',
     lastSeenAt: 0,
     ...patch,
   }
@@ -200,6 +238,26 @@ export function upsertCommentMessage(
 }
 
 /**
+ * 解決した `channelId` を保存する (AC17)。`upsertNickname` / `upsertMessage` と同じ形。
+ *
+ * **これが無いと解決しても保存できない**(`replyToComment` に `setReplyToComment` が要るのと同じ)。
+ * **妥当な形でない値は空文字にして受ける** — 呼び出し側が壊れた値を持ち込んでも
+ * 「未解決」に倒れるだけにする(誤爆させない / AC14)。
+ *
+ * ⚠️ **呼ぶのは解決に成功したときだけ。**失敗の理由をそのまま渡すと、
+ *    妥当でない値として**解決済みの ID が空に戻る**(T17 の実装時に注意)。
+ */
+export function upsertChannelId(directory: Directory, url: string, channelId: string): Directory {
+  const value = CHANNEL_ID_PATTERN.test(channelId) ? channelId : ''
+  const key = directoryKey(url)
+  const existing = directory.find((entry) => directoryKey(entry.url) === key)
+  if (existing) {
+    return directory.map((entry) => (entry === existing ? { ...entry, channelId: value } : entry))
+  }
+  return [...directory, blankEntry(url, { channelId: value })]
+}
+
+/**
  * 「コメントに反応する」フラグの切り替え (AC2 / AC13)。
  *
  * 辞書に無い URL を ON にしたときは行を作る(設定画面から直接登録できる経路)。
@@ -248,7 +306,7 @@ export function normalizeDirectory(raw: unknown): Directory {
   const out: Directory = []
   for (const item of raw) {
     if (!item || typeof item !== 'object') continue
-    const { url, nickname, message, replyToComment, commentMessage, lastSeenAt } =
+    const { url, nickname, message, replyToComment, commentMessage, channelId, lastSeenAt } =
       item as Partial<DirectoryEntry>
     if (typeof url !== 'string' || !url.trim()) continue
     const key = directoryKey(url)
@@ -264,6 +322,9 @@ export function normalizeDirectory(raw: unknown): Directory {
       replyToComment: replyToComment === true,
       // 自由文の正規化は 003 と同じ規則を再利用する(欠損・非文字列は '' / 上限超は切り詰め / AC16)
       commentMessage: typeof commentMessage === 'string' ? clampMessage(commentMessage) : '',
+      // **形が違うものは空文字 = 未解決**(AC14)。壊れた値で誰かに誤爆させない
+      channelId:
+        typeof channelId === 'string' && CHANNEL_ID_PATTERN.test(channelId) ? channelId : '',
       lastSeenAt: Number.isFinite(lastSeenAt) ? Number(lastSeenAt) : 0,
     })
   }

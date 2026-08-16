@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { MAX_ENTRY_MESSAGE_LENGTH } from '../src/composer'
 import {
+  findEntryByChannelId,
   displayHandle,
   loadDirectory,
   migrateDirectoryToLocal,
@@ -14,6 +15,7 @@ import {
   saveDirectory,
   setReplyToComment,
   sortForDisplay,
+  upsertChannelId,
   upsertCommentMessage,
   upsertMessage,
   upsertNickname,
@@ -33,6 +35,7 @@ function entry(patch: Partial<DirectoryEntry> & { url: string }): DirectoryEntry
     message: '',
     replyToComment: false,
     commentMessage: '',
+    channelId: '',
     lastSeenAt: 0,
     ...patch,
   }
@@ -567,5 +570,93 @@ describe('normalizeDirectory — 004 のフィールド (AC14)', () => {
     const [row] = normalizeDirectory([{ url: FAKE_CHANNEL.url, commentMessage: long }])
     expect(Array.from(row.commentMessage)).toHaveLength(MAX_ENTRY_MESSAGE_LENGTH)
     expect(row.commentMessage).not.toContain('�')
+  })
+})
+
+// --- 004: channelId(照合用のチャンネル ID / AC17) -----------------------------
+
+const CHANNEL_ID = 'UCaaaaaaaaaaaaaaaaaaaaaa'
+const OTHER_ID = 'UCbbbbbbbbbbbbbbbbbbbbbb'
+
+describe('channelId の既定と正規化 (AC14 / AC17)', () => {
+  it('新しい行は既定で未解決(空文字)', () => {
+    expect(upsertNickname([], FAKE_CHANNEL.url, 'れい')[0].channelId).toBe('')
+    expect(rememberSource([], ev(FAKE_CHANNEL.url))[0].channelId).toBe('')
+  })
+
+  it('004 より前に保存された辞書は空文字で埋まる', () => {
+    const [row] = normalizeDirectory([{ url: FAKE_CHANNEL.url, nickname: 'れい' }])
+    expect(row.channelId).toBe('')
+  })
+
+  it('**形が違う値はすべて空文字**(壊れた値で誰かに誤爆させない)', () => {
+    for (const value of ['UCshort', 'xUCaaaaaaaaaaaaaaaaaaaaaa', '@handle', 42, null, {}, true]) {
+      expect(normalizeDirectory([{ url: FAKE_CHANNEL.url, channelId: value }])[0].channelId).toBe('')
+    }
+  })
+
+  it('妥当な形はそのまま通す', () => {
+    expect(
+      normalizeDirectory([{ url: FAKE_CHANNEL.url, channelId: CHANNEL_ID }])[0].channelId,
+    ).toBe(CHANNEL_ID)
+  })
+})
+
+describe('upsertChannelId (AC17)', () => {
+  it('解決結果を保存する', () => {
+    const directory: Directory = [entry({ url: FAKE_CHANNEL.url, nickname: 'れい' })]
+    const next = upsertChannelId(directory, FAKE_CHANNEL.url, CHANNEL_ID)
+    expect(next[0].channelId).toBe(CHANNEL_ID)
+    // 他のフィールドは巻き込まない
+    expect(next[0].nickname).toBe('れい')
+  })
+
+  it('**妥当でない値は空文字にして受ける**(未解決に倒す)', () => {
+    const directory: Directory = [entry({ url: FAKE_CHANNEL.url, channelId: CHANNEL_ID })]
+    expect(upsertChannelId(directory, FAKE_CHANNEL.url, 'こわれた')[0].channelId).toBe('')
+  })
+
+  it('未登録の URL なら行を作る', () => {
+    expect(upsertChannelId([], FAKE_CHANNEL.url, CHANNEL_ID)).toEqual([
+      entry({ url: FAKE_CHANNEL.url, channelId: CHANNEL_ID }),
+    ])
+  })
+
+  it('元の配列を書き換えない', () => {
+    const directory: Directory = [entry({ url: FAKE_CHANNEL.url })]
+    upsertChannelId(directory, FAKE_CHANNEL.url, CHANNEL_ID)
+    expect(directory[0].channelId).toBe('')
+  })
+})
+
+describe('findEntryByChannelId (AC4 / AC17)', () => {
+  it('ID が一致する行を返す', () => {
+    const directory: Directory = [
+      entry({ url: FAKE_CHANNEL.url, channelId: CHANNEL_ID, nickname: 'れい' }),
+      entry({ url: FAKE_OTHER_CHANNEL.url, channelId: OTHER_ID }),
+    ]
+    expect(findEntryByChannelId(directory, CHANNEL_ID)?.nickname).toBe('れい')
+  })
+
+  it('**未解決(空文字)の行は絶対に引っかけない**', () => {
+    const directory: Directory = [entry({ url: FAKE_CHANNEL.url, channelId: '' })]
+    expect(findEntryByChannelId(directory, '')).toBeUndefined()
+  })
+
+  it('**同じ ID の行が 2 件以上あれば undefined**(どれを採るか決められない)', () => {
+    const directory: Directory = [
+      entry({ url: FAKE_CHANNEL.url, channelId: CHANNEL_ID, nickname: 'ハンドル形' }),
+      entry({ url: `https://www.youtube.com/channel/${CHANNEL_ID}`, channelId: CHANNEL_ID }),
+    ]
+    expect(findEntryByChannelId(directory, CHANNEL_ID)).toBeUndefined()
+  })
+
+  it('形が違う ID で引いても何も返さない', () => {
+    const directory: Directory = [entry({ url: FAKE_CHANNEL.url, channelId: CHANNEL_ID })]
+    expect(findEntryByChannelId(directory, 'こわれた')).toBeUndefined()
+  })
+
+  it('該当が無ければ undefined', () => {
+    expect(findEntryByChannelId([], CHANNEL_ID)).toBeUndefined()
   })
 })
