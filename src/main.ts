@@ -3,6 +3,9 @@
  * 全体を try/catch で包み、どこで失敗しても配信に影響させない (AC6)。
  */
 import { compose } from './composer'
+import { startCommentDetector } from './comment-detector'
+import { decideCommentReply } from './comment-reply'
+import type { CommentAuthor, CommentDetectorHandle } from './comment-detector'
 import { REDIRECT_TEXT_PATTERNS, getChatMessages, getMessageText } from './selectors'
 import { DEFAULT_CONFIG, isActionAllowed, loadConfig, onConfigChanged } from './config'
 import { createDedupe } from './dedupe'
@@ -24,15 +27,18 @@ import type { ManualTriggerHandle } from './manual-trigger'
 import { pin } from './pinner'
 import { postMessage } from './poster'
 import {
+  countCommentPostsInStream,
   currentStreamId,
   findLastPost,
   findPostInStream,
   loadPostLog,
   makePostRecord,
+  makePostRecordFor,
   redirectHistory,
   rememberPost,
   savePostLog,
 } from './post-log'
+import { createPostQueue } from './post-queue'
 import type { PostLog } from './post-log'
 import { createSelfEchoGuard } from './self-echo'
 import type { Config, RedirectEvent } from './types'
@@ -67,6 +73,29 @@ async function main(): Promise<void> {
   // 設定と独立した自己ループの歯止め (security-review.md S1)
   const selfEcho = createSelfEchoGuard()
 
+  /**
+   * **自分が投稿した要素と本文** (AC10 の 1・2 枚目)。
+   *
+   * コメント返しの投稿は**それ自体がチャットコメント**で、検知対象と同じ種類のノードになる。
+   * 1 枚目(要素)は [poster.ts](./poster.ts) が要素の特定に失敗しうるので**単独では信用しない**。
+   * 2 枚目(本文一致)がその受け皿。
+   */
+  const ownMessageElements = new WeakSet<Element>()
+  const ownMessageTexts = new Set<string>()
+  /** 覚えておく本文の件数。1 配信 20 件(AC11)+ リダイレクト返礼ぶんで足りる */
+  const OWN_TEXT_MEMORY = 50
+
+  const rememberOwnPost = (text: string, element: Element | null): void => {
+    if (element) ownMessageElements.add(element)
+    ownMessageTexts.add(text)
+    // 無限に増やさない。古いものから捨てる(Set は挿入順)
+    while (ownMessageTexts.size > OWN_TEXT_MEMORY) {
+      const oldest = ownMessageTexts.values().next().value
+      if (oldest === undefined) break
+      ownMessageTexts.delete(oldest)
+    }
+  }
+
   onDirectoryChanged((next) => {
     directory = next
   })
@@ -76,6 +105,8 @@ async function main(): Promise<void> {
     dedupe.setCooldownSec(next.cooldownSec)
     // 手動トリガーの表示切り替えに、ページの再読み込みを要らなくする
     guard('手動トリガーの切り替え', () => syncManualTrigger(next.showManualTrigger), undefined)
+    // コメント返しの ON / OFF も再読み込みなしで効かせる (AC1 / AC11)
+    guard('コメント検知の切り替え', () => syncCommentDetector(next.commentReplyEnabled), undefined)
     log.info('設定を更新した', next)
   })
 
@@ -137,6 +168,9 @@ async function main(): Promise<void> {
       return
     }
 
+    // 自分の投稿として覚える (AC10)。**コメント経路が自分の返礼に反応しないため**にも要る
+    rememberOwnPost(text, posted.element)
+
     // **投稿できたときだけ**履歴に残す。次回の起動はここから抑止を組み立てる。
     // 失敗した回まで残すと、投稿できていないのに抑止だけ効いてしまう。
     postLog = rememberPost(postLog, makePostRecord(event, text, { streamId, postedAt: Date.now() }))
@@ -154,6 +188,126 @@ async function main(): Promise<void> {
 
   const detector = startRedirectDetector({ onEvent: safeHandle, debug: () => config.debug })
   detector.scanExisting()
+
+  // --- コメント返し (004) ---------------------------------------------------
+  //
+  // **リダイレクト返礼とは別のパイプライン**にする。規則が違うため (plan.md のアプローチ表):
+  // 起動時の既存ノードを拾わない (AC9) / 固定しない (AC6) / 文面もテンプレートも別 (AC5) /
+  // 抑止が非対称 (AC8)。
+
+  /**
+   * コメント返しを 1 件投稿する。**投稿できたら true**(キューの間隔の起点になる)。
+   *
+   * ⚠️ **固定しない (AC6)。**`pinMode` の値に関わらず固定操作を行わない。
+   *    固定枠は 1 件しかなく、コメントのたびに上書きするとリダイレクト返礼の固定が流れる。
+   */
+  /** 判断は純関数に寄せてある([comment-reply.ts](./comment-reply.ts))。ここは実行だけ */
+  const decide = (author: CommentAuthor, messageText: string) =>
+    decideCommentReply({
+      author,
+      messageText,
+      directory,
+      postLog,
+      commentTemplate: config.commentTemplate,
+      streamId,
+      now: Date.now(),
+      ownTexts: ownMessageTexts,
+    })
+
+  const postCommentReply = async (author: CommentAuthor, messageText: string): Promise<boolean> => {
+    // **キューに積んだ後に状況が変わりうる**(他の返礼が入る・設定が変わる)ので、
+    // 投稿の直前にもう一度判断する
+    const decision = decide(author, messageText)
+    if (decision.action !== 'post') {
+      log.info(`コメント返しを見送った (${decision.reason})`)
+      return false
+    }
+    const { entry, text } = decision
+    log.info('コメント返しを投稿する:', text)
+
+    const posted = await postMessage(text)
+    if (posted.status !== 'posted') {
+      log.warn('コメント返しの投稿に失敗した:', posted.reason)
+      return false
+    }
+
+    // ⚠️ **`selfEcho.remember` は呼ばない**(plan.md 6.)。
+    //    `self-echo` の鍵は投稿相手の URL だけで**種別を持たない**ので、ここで覚えると
+    //    30 秒の間その相手からの**リダイレクト受信が捨てられ、AC8 の後半が破れる。**
+    //    そもそも `self-echo` が想定しているのは固定バナー経路で、コメント返しは固定しない (AC6)。
+    rememberOwnPost(text, posted.element)
+
+    postLog = rememberPost(
+      postLog,
+      makePostRecordFor(entry.url, text, { streamId, postedAt: Date.now(), kind: 'comment' }),
+    )
+    void guardAsync('投稿履歴の保存', () => savePostLog(postLog), undefined)
+    return true
+  }
+
+  /**
+   * 連投の抑制 (AC11)。**上限の分母は投稿履歴から数える** — メモリのカウンタにすると
+   * チャットを開き直すたびに枠がリセットされ、上限が事実上効かない。
+   */
+  type QueuedComment = { author: CommentAuthor; messageText: string }
+  const commentQueue = createPostQueue<QueuedComment>({
+    countPosted: () => countCommentPostsInStream(postLog, streamId, Date.now()),
+    post: (item) => postCommentReply(item.author, item.messageText),
+    onSkip: (item, reason, error) => {
+      if (reason === 'failed') log.error('コメント返しで例外:', error)
+      else log.info(`コメント返しを見送った (${reason})`, item.author.channelId)
+    },
+  })
+
+  /**
+   * 検知したコメントを投稿の待ち行列へ積むまで。
+   *
+   * **自己ループの遮断 3 枚 (AC10) はここで効かせる。**
+   * 1 枚目(投稿した要素)は検知側の `ignoreElement` で、抽出の前に弾いている。
+   */
+  const handleComment = (author: CommentAuthor, el: Element): void => {
+    const messageText = getMessageText(el)
+    const decision = decide(author, messageText)
+    if (decision.action !== 'post') {
+      // **無言で捨てない。**ただし「辞書に無い」は普通のコメントすべてが当たるので診断ログ側
+      if (decision.reason === '辞書に該当が無い') {
+        if (config.debug) log.info('[debug] 辞書に該当が無いコメント')
+      } else {
+        log.info(`コメント返しをしない (${decision.reason})`)
+      }
+      return
+    }
+
+    log.info('コメント返しの対象を検知した:', decision.entry.url)
+    commentQueue.enqueue({ author, messageText })
+  }
+
+  /**
+   * 検知の開始・停止 (AC1 / AC11)。
+   *
+   * **OFF の間は検知そのものを走らせない。**「見てから捨てる」にすると、捨て漏れが投稿に化ける。
+   * **OFF になった時点で未処理のキューは捨てる** (AC11)。
+   */
+  let commentDetector: CommentDetectorHandle | null = null
+  const syncCommentDetector = (enabled: boolean): void => {
+    if (enabled === (commentDetector != null)) return
+    if (enabled) {
+      commentDetector = startCommentDetector({
+        streamId,
+        debug: () => config.debug,
+        ignoreElement: (el) => ownMessageElements.has(el),
+        onComment: (author, el) =>
+          guard('コメント返しのパイプライン', () => handleComment(author, el), undefined),
+      })
+      log.info('コメント返しの検知を開始した')
+    } else {
+      commentDetector?.stop()
+      commentDetector = null
+      commentQueue.clear()
+      log.info('コメント返しの検知を止めた(未処理のキューは捨てた)')
+    }
+  }
+  syncCommentDetector(config.commentReplyEnabled)
 
   /**
    * 切り分け用: 投稿せずに固定だけを試す。
@@ -208,6 +362,11 @@ async function main(): Promise<void> {
     streamId: streamId || '(不明)',
     postLog: postLog.length,
     showManualTrigger: config.showManualTrigger,
+    // 「ON にしたのに動かない」の切り分け用。**辞書側のフラグが 0 件なら何も起きない** (AC13)
+    commentReplyEnabled: config.commentReplyEnabled,
+    replyToComment: directory.filter((entry) => entry.replyToComment).length,
+    // フラグが ON でも `channelId` が空だと照合できない (AC17)
+    commentReady: directory.filter((entry) => entry.replyToComment && entry.channelId).length,
     patterns: REDIRECT_TEXT_PATTERNS.length,
     url: location.href,
   })

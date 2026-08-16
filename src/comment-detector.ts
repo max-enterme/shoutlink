@@ -342,8 +342,16 @@ export type CommentDetectorOptions = {
   /**
    * **AC9 を通ったコメントだけが渡る** — 監視開始より前のもの・猶予の中のもの・
    * タイムスタンプの要素が無いものは、ここへ来る前に捨てられる。
+   *
+   * **要素も渡す。**自己ループの遮断 (AC10) は「自分が投稿した要素か」「本文が一致するか」を
+   * 見るので、呼び出し側に要素が要る。**検知側は投稿のことを知らないままでいる。**
    */
-  onComment: (author: CommentAuthor) => void
+  onComment: (author: CommentAuthor, el: Element) => void
+  /**
+   * **この要素は見ない** (AC10 の 1 枚目)。自分が投稿した要素を呼び出し側が覚えておき、
+   * ここで弾く。**抽出の前に呼ぶ**ので、自分の投稿で診断ログが埋まることもない。
+   */
+  ignoreElement?: (el: Element) => boolean
   streamId?: string
   now?: () => number
   /** 抽出できなかった理由を出すか(設定の診断ログ) */
@@ -375,6 +383,8 @@ export function startCommentDetector(options: CommentDetectorOptions): CommentDe
     if (node.nodeType !== 1 /* ELEMENT_NODE */) return
     const el = node as Element
     if (!isCommentTextMessage(el)) return
+    // AC10 の 1 枚目: 自分が投稿した要素は見ない
+    if (options.ignoreElement?.(el)) return
     // 同じ要素が付け替えられても 2 度出さない(ノード単位の抑止。dedupe とは別)
     if (seen.has(el)) return
     seen.add(el)
@@ -398,7 +408,7 @@ export function startCommentDetector(options: CommentDetectorOptions): CommentDe
       log.info('[debug] タイムスタンプを読めなかった。猶予だけで判定した')
     }
 
-    options.onComment(result.author)
+    options.onComment(result.author, el)
   }
 
   const observer = new MutationObserver((records) => {
