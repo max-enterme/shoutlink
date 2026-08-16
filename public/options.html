@@ -38,8 +38,6 @@
       table.directory td:last-child, table.directory th:last-child { width: 2.5em; padding-right: 0; }
       table.directory .handle { word-break: break-all; }
       table.directory .unseen { color: #888; }
-      /* 自由文は一番長い入力なので、呼び名より広く取る */
-      table.directory .msg { width: 40%; }
       table.directory .remaining { display: block; color: #666; font-size: 11px; margin-top: 2px; }
       /* 負(超過)は色でも分かるようにする。投稿時に削られるが保存は妨げない (AC8) */
       table.directory .remaining.over { color: #b3261e; }
@@ -49,6 +47,29 @@
       table.postlog td:last-child, table.postlog th:last-child { width: auto; white-space: nowrap; color: #666; }
       table.postlog .text { word-break: break-all; }
       .empty { color: #888; }
+
+      /* --- 004: 行を畳む表示 (T14 で確定) --- */
+      /* 展開の操作子は**左端の ▸**。行全体クリックにも「編集」ボタンにもしない */
+      table.directory td.caret, table.directory th.caret { width: 1.6em; padding-right: 0; }
+      table.directory button.caret {
+        border: none; background: none; padding: 0 2px; color: #666; cursor: pointer; line-height: 1;
+      }
+      /* 「効かない行」の印は**アイコン + 行の背景色**の両方 (T14 で確定) */
+      /* 展開している行では**詳細行にも**付ける(上段だけ色が変わると半端になる) */
+      table.directory tr.ineffective > td { background: #fff6f6; }
+      table.directory tr.ineffective > td.detail { background: #fff2f2; }
+      table.directory .mark { color: #b3261e; cursor: help; margin-left: 4px; }
+      /* 詳細セルは `colspan` なので `td:last-child` の幅指定が当たる。ここで戻す */
+      table.directory td.detail { background: #fafafa; border-left: 3px solid #ddd; padding: 8px 10px; width: auto; }
+      table.directory .detail-field { display: block; color: #666; font-size: 12px; margin-top: 8px; }
+      table.directory .detail .row { margin-bottom: 4px; }
+      /* --- 004 AC17: チャンネル ID の解決 --- */
+      /* 展開したときの 1 行(状態 + 再試行)。理由は**行ごと**に出す */
+      table.directory .channel-id { margin: 6px 0 0; color: #666; font-size: 12px; }
+      table.directory .channel-id.failed { color: #b3261e; }
+      table.directory .channel-id button { margin-left: 6px; }
+      /* 走っている間の表示。畳んだ行でも分かるようにハンドルの横に出す */
+      table.directory .resolving { color: #666; font-size: 11px; margin-left: 4px; }
     </style>
   </head>
   <body>
@@ -63,7 +84,7 @@
     </p>
 
     <fieldset>
-      <legend>動作</legend>
+      <legend>リダイレクト返礼</legend>
       <div class="row">
         <input id="enabled" type="checkbox" />
         <label for="enabled" style="margin: 0">リダイレクトを自動検知して投稿する</label>
@@ -73,6 +94,46 @@
         <strong>外しても、チャット右下の「↩ 返礼」からは実行できます。</strong>
         自動投稿は使わず、自分で押したときだけ投稿したい場合はこの状態で使ってください。
       </p>
+
+      <label for="template" style="margin-top: 12px">
+        文面 — `{name}` に表示名、`{url}` にチャンネル URL、`{msg}` に<strong>送信元ごとの自由文</strong>
+      </label>
+      <textarea id="template"></textarea>
+      <p class="warn" id="templateWarning" hidden></p>
+      <p class="hint">
+        `{msg}` は「呼び名の辞書」で相手ごとに登録します。<strong>未登録の相手では `{msg}` ごと消え、
+        前後の空白は 1 つに畳まれます。</strong>全体が 200 字を超えると、自由文 → 表示名 → 末尾 の順に削られます。
+      </p>
+      <p class="hint">プレビュー:</p>
+      <p class="preview" id="preview"></p>
+    </fieldset>
+
+    <fieldset>
+      <legend>コメント返し</legend>
+      <div class="row">
+        <input id="commentReplyEnabled" type="checkbox" />
+        <label for="commentReplyEnabled" style="margin: 0">コメントに反応して投稿する</label>
+      </div>
+      <p class="hint">
+        辞書で<strong>「コメントに反応する」を付けた人</strong>がチャットにコメントしたときに投稿します。
+        <strong>既定は OFF。</strong>同じ配信で同じ人には 1 回だけ、最低 5 秒の間隔、
+        1 配信あたり 20 件までです。<br />
+        <strong>固定はしません</strong>(固定枠は 1 件しかなく、リダイレクト返礼の固定が流れるため)。
+      </p>
+      <!-- AC13: 一時表示ではなく**常時**出す -->
+      <p class="warn" id="commentMismatch" hidden></p>
+
+      <label for="commentTemplate" style="margin-top: 12px">
+        文面 — `{msg}` に入るのは<strong>コメント返し用の自由文</strong>(リダイレクト返礼とは別のもの)
+      </label>
+      <textarea id="commentTemplate"></textarea>
+      <p class="warn" id="commentTemplateWarning" hidden></p>
+      <p class="hint">
+        `{name}` は<strong>辞書の呼び名</strong>(空ならハンドル)、`{url}` は<strong>辞書に登録されている URL</strong>。
+        <strong>コメント側の表示名は使いません</strong>(他人が自由に決められる文字列なので)。
+      </p>
+      <p class="hint">プレビュー:</p>
+      <p class="preview" id="commentPreview"></p>
     </fieldset>
 
     <fieldset>
@@ -89,21 +150,6 @@
       </p>
     </fieldset>
 
-
-    <fieldset>
-      <legend>投稿文テンプレート</legend>
-      <label for="template">
-        `{name}` に表示名、`{url}` にチャンネル URL、`{msg}` に<strong>送信元ごとの自由文</strong>が入る
-      </label>
-      <textarea id="template"></textarea>
-      <p class="warn" id="templateWarning" hidden></p>
-      <p class="hint">
-        `{msg}` は「呼び名の辞書」で相手ごとに登録します。<strong>未登録の相手では `{msg}` ごと消え、
-        前後の空白は 1 つに畳まれます。</strong>全体が 200 字を超えると、自由文 → 表示名 → 末尾 の順に削られます。
-      </p>
-      <p class="hint">プレビュー:</p>
-      <p class="preview" id="preview"></p>
-    </fieldset>
 
     <fieldset>
       <legend>固定モード</legend>
@@ -142,7 +188,7 @@
       </p>
       <table class="directory postlog">
         <thead>
-          <tr><th>ハンドル</th><th>投稿した文面</th><th>投稿時刻</th></tr>
+          <tr><th>ハンドル</th><th>種別</th><th>投稿した文面</th><th>投稿時刻</th></tr>
         </thead>
         <tbody id="postLogRows"></tbody>
       </table>
@@ -168,20 +214,35 @@
         呼び名の取り違えなら「誰かの名前」が出るだけですが、自由文は宛先を間違えると内容そのものが
         事故になります。<strong>取り違えて別の人に読まれても困らない内容だけを書いてください。</strong>
       </p>
+      <!-- AC17: 同じチャンネル ID の行が 2 件以上 = どちらを使うか決められないので何もしない。**常時表示** -->
+      <p class="warn" id="channelIdDuplicate" hidden></p>
+      <!-- AC17 / T14 の決定 3: 再試行は「展開したときの個別」と「ここのまとめて」の 2 つ -->
+      <p class="hint" id="channelIdRetryRow" hidden>
+        <button id="retryChannelIds" type="button"></button>
+        「コメントに反応する」が ON なのに<strong>チャンネル ID を取得できていない行</strong>です。
+        取得できるまで、その人のコメントには反応しません。
+      </p>
       <table class="directory">
         <thead>
-          <tr><th>ハンドル</th><th>呼び名</th><th>自由文 (`{msg}`)</th><th></th></tr>
+          <tr><th class="caret"></th><th>ハンドル</th><th>呼び名</th><th></th></tr>
         </thead>
         <tbody id="directoryRows"></tbody>
         <tfoot>
           <tr>
+            <td class="caret"></td>
             <td><input id="newHandle" type="text" placeholder="@example-channel または URL" /></td>
             <td><input id="newNickname" type="text" placeholder="呼び名" /></td>
-            <td class="msg"><input id="newMessage" type="text" placeholder="自由文 (任意)" /></td>
             <td><button id="addEntry" type="button" title="登録する">＋</button></td>
           </tr>
         </tfoot>
       </table>
+      <p class="hint">
+        <strong>▸ を押すと、自由文 2 本と「コメントに反応する」が開きます。</strong>
+        畳んだ状態でも、<strong>設定したのに効かない行には ⚠ が出ます</strong>(理由はアイコンにカーソルを合わせると出ます)。<br />
+        「コメントに反応する」を ON にすると、<strong>その人のチャンネルページを 1 回だけ見に行って照合用の ID を控えます</strong>
+        (ライブチャットの画面では通信しません)。失敗しても他の機能は動きますが、<strong>その人のコメントには反応しません</strong>
+        — 理由は行を開くと出ます。
+      </p>
       <p class="hint" id="directoryStatus"></p>
     </fieldset>
 

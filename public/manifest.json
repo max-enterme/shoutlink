@@ -10,7 +10,7 @@
     "128": "icons/icon128.png"
   },
   "permissions": ["storage"],
-  "host_permissions": ["https://studio.youtube.com/*"],
+  "host_permissions": ["https://studio.youtube.com/*", "https://www.youtube.com/*"],
   "content_scripts": [
     {
       "matches": ["https://studio.youtube.com/live_chat*"],

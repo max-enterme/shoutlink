@@ -11,6 +11,8 @@
     "noFallthroughCasesInSwitch": true,
     "verbatimModuleSyntax": true,
     "isolatedModules": true,
+    // tests/manifest.test.ts が public/manifest.json を直接読むため(依存を増やさない)
+    "resolveJsonModule": true,
     "skipLibCheck": true,
     "noEmit": true
   },

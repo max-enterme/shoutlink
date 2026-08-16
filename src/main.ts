@@ -3,6 +3,9 @@
  * 全体を try/catch で包み、どこで失敗しても配信に影響させない (AC6)。
  */
 import { compose } from './composer'
+import { startCommentDetector } from './comment-detector'
+import { createCommentRunner } from './comment-runner'
+import type { CommentDetectorHandle } from './comment-detector'
 import { REDIRECT_TEXT_PATTERNS, getChatMessages, getMessageText } from './selectors'
 import { DEFAULT_CONFIG, isActionAllowed, loadConfig, onConfigChanged } from './config'
 import { createDedupe } from './dedupe'
@@ -29,6 +32,7 @@ import {
   findPostInStream,
   loadPostLog,
   makePostRecord,
+  redirectHistory,
   rememberPost,
   savePostLog,
 } from './post-log'
@@ -59,9 +63,42 @@ async function main(): Promise<void> {
   // 抑止の記録をメモリだけに持っていると、そのたびに白紙に戻って再投稿していた (2026-08-06)。
   const streamId = guard('配信 ID の取得', () => currentStreamId(), '')
   let postLog: PostLog = await guardAsync('投稿履歴の読み込み', loadPostLog, [])
-  const dedupe = createDedupe(config.cooldownSec, { streamId, history: postLog })
+  // **リダイレクト側の抑止にはリダイレクト返礼の記録だけを渡す** (004 / AC8)。
+  // コメント返しの記録まで渡すと、それが起動時からクールダウンを埋め、
+  // 「コメント返し済みでもリダイレクト返礼はする」が壊れる(`absorb` 側でも弾いている)
+  const dedupe = createDedupe(config.cooldownSec, { streamId, history: redirectHistory(postLog) })
   // 設定と独立した自己ループの歯止め (security-review.md S1)
   const selfEcho = createSelfEchoGuard()
+
+  /**
+   * コメント返しの実行と、自己ループの記憶 (AC10 / AC11)。
+   * **配線の中身は [comment-runner.ts](./comment-runner.ts)** — `main.ts` に置くと
+   * `chrome` と実 DOM 無しではテストできず、**R2 の歯止めが配線されているかを誰も確かめられない。**
+   */
+  const commentRunner = createCommentRunner({
+    isEnabled: () => config.commentReplyEnabled,
+    getDirectory: () => directory,
+    getPostLog: () => postLog,
+    setPostLog: (next) => {
+      postLog = next
+      void guardAsync('投稿履歴の保存', () => savePostLog(postLog), undefined)
+    },
+    getCommentTemplate: () => config.commentTemplate,
+    streamId,
+    // **固定はしない (AC6)。**投稿だけを渡す
+    post: async (text) => {
+      const posted = await postMessage(text)
+      if (posted.status !== 'posted') {
+        log.warn('コメント返しの投稿に失敗した:', posted.reason)
+        return { posted: false, element: null }
+      }
+      return { posted: true, element: posted.element }
+    },
+    onLog: (message, detail) => {
+      if (detail === undefined) log.info(message)
+      else log.info(message, detail)
+    },
+  })
 
   onDirectoryChanged((next) => {
     directory = next
@@ -72,6 +109,8 @@ async function main(): Promise<void> {
     dedupe.setCooldownSec(next.cooldownSec)
     // 手動トリガーの表示切り替えに、ページの再読み込みを要らなくする
     guard('手動トリガーの切り替え', () => syncManualTrigger(next.showManualTrigger), undefined)
+    // コメント返しの ON / OFF も再読み込みなしで効かせる (AC1 / AC11)
+    guard('コメント検知の切り替え', () => syncCommentDetector(next.commentReplyEnabled), undefined)
     log.info('設定を更新した', next)
   })
 
@@ -103,9 +142,11 @@ async function main(): Promise<void> {
     // AC4: 同じ配信の中での、同一送信元・クールダウン内の多重発火を抑止
     if (!dedupe.tryAcquire(event)) {
       // なぜ止めたかを保存済みの履歴から説明する(「投稿されない」の切り分け用)
+      // **種別を指定する** (004)。指定しないとコメント返しの記録を
+      // 「前回のリダイレクト返礼」として出し、切り分けの窓が嘘をつく
       const prior =
-        findPostInStream(postLog, streamId, event.sourceChannelUrl) ??
-        findLastPost(postLog, event.sourceChannelUrl)
+        findPostInStream(postLog, streamId, event.sourceChannelUrl, 'redirect') ??
+        findLastPost(postLog, event.sourceChannelUrl, 'redirect')
       log.info(
         'クールダウン中のためスキップ',
         event.sourceChannelUrl,
@@ -123,13 +164,20 @@ async function main(): Promise<void> {
     const text = compose(config.template, named, { message: resolveMessage(directory, event) })
     log.info(`投稿する (${event.origin ?? 'auto'}):`, text)
 
-    // 投稿する**前に**覚える。投稿・固定の途中で observer が発火しても取りこぼさないため
+    // 投稿する**前に**覚える。投稿・固定の途中で observer が発火しても取りこぼさないため。
+    // **コメント経路の自己ループ遮断 (AC10) も同じ理由で投稿前に本文を覚える** —
+    // MutationObserver は自分の投稿を**マイクロタスク**で配送するのに対し、
+    // `postMessage` の要素確認はポーリング(マクロタスク)なので、後だと間に合わない
     selfEcho.remember(event.sourceChannelUrl)
+    commentRunner.rememberOwnPost(text, null)
     const posted = await postMessage(text)
     if (posted.status !== 'posted') {
       log.warn('投稿に失敗した:', posted.reason)
       return
     }
+
+    // 要素は投稿できて初めて分かる (AC10 の 1 枚目)
+    commentRunner.rememberOwnPost(text, posted.element)
 
     // **投稿できたときだけ**履歴に残す。次回の起動はここから抑止を組み立てる。
     // 失敗した回まで残すと、投稿できていないのに抑止だけ効いてしまう。
@@ -148,6 +196,45 @@ async function main(): Promise<void> {
 
   const detector = startRedirectDetector({ onEvent: safeHandle, debug: () => config.debug })
   detector.scanExisting()
+
+  // --- コメント返し (004) ---------------------------------------------------
+  //
+  // **リダイレクト返礼とは別のパイプライン**にする。規則が違うため (plan.md のアプローチ表):
+  // 起動時の既存ノードを拾わない (AC9) / 固定しない (AC6) / 文面もテンプレートも別 (AC5) /
+  // 抑止が非対称 (AC8)。
+
+  /**
+   * 検知の開始・停止 (AC1 / AC11)。
+   *
+   * **OFF の間は検知そのものを走らせない。**「見てから捨てる」にすると、捨て漏れが投稿に化ける。
+   * **OFF になった時点で未処理のキューは捨てる** (AC11)。
+   * 走っている 1 件は `decideCommentReply` が投稿の直前に `enabled` を見て止める。
+   */
+  let commentDetector: CommentDetectorHandle | null = null
+  const syncCommentDetector = (enabled: boolean): void => {
+    if (enabled === (commentDetector != null)) return
+    if (enabled) {
+      commentDetector = startCommentDetector({
+        streamId,
+        debug: () => config.debug,
+        // AC10 の 1 枚目: 自分が投稿した要素は抽出の前に弾く
+        ignoreElement: (el) => commentRunner.isOwnElement(el),
+        onComment: (author, el) =>
+          guard(
+            'コメント返しのパイプライン',
+            () => commentRunner.handle(author, getMessageText(el)),
+            undefined,
+          ),
+      })
+      log.info('コメント返しの検知を開始した')
+    } else {
+      commentDetector?.stop()
+      commentDetector = null
+      commentRunner.clear()
+      log.info('コメント返しの検知を止めた(未処理のキューは捨てた)')
+    }
+  }
+  syncCommentDetector(config.commentReplyEnabled)
 
   /**
    * 切り分け用: 投稿せずに固定だけを試す。
@@ -202,6 +289,11 @@ async function main(): Promise<void> {
     streamId: streamId || '(不明)',
     postLog: postLog.length,
     showManualTrigger: config.showManualTrigger,
+    // 「ON にしたのに動かない」の切り分け用。**辞書側のフラグが 0 件なら何も起きない** (AC13)
+    commentReplyEnabled: config.commentReplyEnabled,
+    replyToComment: directory.filter((entry) => entry.replyToComment).length,
+    // フラグが ON でも `channelId` が空だと照合できない (AC17)
+    commentReady: directory.filter((entry) => entry.replyToComment && entry.channelId).length,
     patterns: REDIRECT_TEXT_PATTERNS.length,
     url: location.href,
   })

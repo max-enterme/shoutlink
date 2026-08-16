@@ -31,7 +31,7 @@
 
 | 観点 | 結果 |
 |---|---|
-| 外部通信 | **無し。**`fetch` / `XMLHttpRequest` / `WebSocket` / `sendBeacon` / 動的 `import()` の使用箇所ゼロ。for-testers.md の「外部のサーバーとは通信しません」は正確 |
+| 外部通信 | **点検時は無し。**`fetch` / `XMLHttpRequest` / `WebSocket` / `sendBeacon` / 動的 `import()` の使用箇所ゼロ。<br>⚠️ **2026-08-15 に変わった (004 / S10)** — [channel-id.ts](../src/channel-id.ts) が **`fetch` を 1 か所使う**(設定画面から、辞書に登録されたチャンネルのページを取得 / `credentials: 'omit'`)。**開発者のサーバは無いまま**だが、「通信を一切行わない」ではなくなったので、**for-testers.md / privacy-policy.md の文言を T10 で書き換えた** |
 | リモートコード実行 | `eval` / `new Function` / 文字列 `setTimeout` 無し。MV3 なので既定 CSP のまま |
 | DOM インジェクション | `src/` の `innerHTML` は `manual-trigger.ts:119` の 1 箇所のみで**静的文字列**。動的な値は全て `textContent` / `dataset` 経由。options ページも `createElement` + `textContent` |
 | 権限 | `permissions: ["storage"]` のみ。`web_accessible_resources` 無し・background 無し |
@@ -236,7 +236,15 @@ normalizeChannelUrl('/@%3Cscript%3E')
 - `docs/for-testers.md` §1「何をする拡張か(権限の説明)」→
   「`youtube.com/live_chat` と `studio.youtube.com/live_chat`」と書いてあった。
   この文書は**外部のテスターに「この拡張は何をするか」を説明する唯一の資料**で、
-  ZIP の `START-HERE.md` として同梱される。
+  ~~ZIP の `START-HERE.md` として同梱される。~~
+
+  > **訂正 (2026-08-16 / 004 T10): `docs/for-testers.md` は ZIP に同梱されていない。**
+  > [scripts/package.mjs](../scripts/package.mjs) が ZIP に入れるのは **`dist/` の中身と
+  > `INSTALL.txt` だけ**で、`START-HERE.md` は存在しない(for-testers.md は別途手渡す /
+  > [setup-and-verify.md](setup-and-verify.md) §8)。
+  > **したがって「ZIP を展開した人がまず読む文書」は `INSTALL.txt`** であり、
+  > 配布物と食い違ってはいけないのはそちら。S5 と同型の食い違いは 004 の
+  > `host_permissions` 追加でも起こりうるため、**T10 で `INSTALL.txt` にも許可の説明を入れた。**
 - `docs/setup-and-verify.md` §4「動く場所」→ 同上。
   さらに冒頭の警告が「T1 未実施 / セレクタはすべて推測」のままで、現状と合っていなかった。
 
@@ -248,6 +256,11 @@ normalizeChannelUrl('/@%3Cscript%3E')
 background も `fetch` も無く、content script の注入は `content_scripts.matches` が決めるので、
 この宣言は実質不要(少なくとも `https://studio.youtube.com/live_chat*` で足りる)。
 拡張の権限表示は「入れてもらう」ときの信頼に直結するので、絞っておくほうがよい。
+
+> **⚠️ 前提が変わった (2026-08-15 / [004](../specs/004-comment-link/spec.md) AC17)。**
+> 「`fetch` も無いので実質不要」という理由は、**`fetch` を使うようになったことで成り立たなくなった。**
+> 004 は `host_permissions` に **`https://www.youtube.com/*` を足す**(下の S10)。
+> **`studio.youtube.com` 側を `live_chat*` へ絞る話は S6 のまま残る**(こちらは今も未対応)。
 
 ### S7 (低) 呼び名辞書が上限なく増え、`chrome.storage.sync` の上限で保存が黙って失敗する
 
@@ -303,6 +316,45 @@ for-testers.md §7 には④の採取について注意書きがあるので、�
 
 ---
 
+### S10 (中・情報) `host_permissions` に `www.youtube.com` を足した (2026-08-15 / 004)
+
+**何のためか**: コメントから取れる投稿者の ID は `UC…` 形だが、辞書の鍵は `@handle` 形で
+文字列比較が一致しない。**照合用に `DirectoryEntry.channelId` を埋める**ため、
+登録されているチャンネルのページを**1 回だけ取得**して `UC…` を取り出す
+([channel-id.ts](../src/channel-id.ts) / 004 AC17)。
+
+**⚠️ 事故 1(`www.youtube.com` で content script が動いた)とは別物。**
+混同されやすいので、違いを明示する。
+
+| | 事故 1(2026-08-06) | 今回 (S10) |
+|---|---|---|
+| 何が起きるか | **他人の配信のチャットを開いているだけで拡張が動いた** | 設定画面が**チャンネルページを 1 回取得する** |
+| 仕組み | `content_scripts.matches` に `www` が入っていた(**注入**) | `host_permissions`(**fetch の許可**) |
+| いつ動くか | そのページを開いている間ずっと | **人が「コメントに反応する」を ON にしたとき / 再試行を押したとき**だけ |
+| 配信中は | 動く(投稿しうる) | **ライブチャットの画面では通信しない** |
+| 対象 | 開いた任意のライブチャット | **自分が辞書に登録したチャンネルのページ**だけ |
+
+**注入範囲は 1 つも増えていない。** `content_scripts.matches` は
+`https://studio.youtube.com/live_chat*` のまま。
+**この点は文書だけでなく [tests/manifest.test.ts](../tests/manifest.test.ts) で機械的に固定した** —
+事故 1 の再発防止はこれまで `tests/scope.test.ts`(実行時の判定)と本書の記述だけで、
+**manifest の中身そのものを押さえるテストが無かった。**
+
+**残る面**:
+- 取得先は利用者が辞書に登録した URL。**登録されていない URL は取りに行かない**
+- 取得は `credentials: 'omit'`(ログイン状態を送らない)
+- 失敗しても壊れない。`channelId` が空のままになり、**その行はコメント照合の対象外になるだけ**
+  (リダイレクト返礼は今までどおり動く / AC17)
+- **抽出を間違えると別人に反応する。**チャンネルページには他人の `UC…` が大量に載っているため、
+  「最初に見つかった `UC…`」は採らない。**ページ自身を表す metadata(canonical / og:url /
+  itemprop / externalId)だけを見て、出所が食い違ったら失敗にする**([channel-id.ts](../src/channel-id.ts))
+- **利用者から見た許可表示は変わる。**インストール時に `www.youtube.com` が出るので、
+  README / install.md / index.html / for-testers.md / privacy-policy.md と
+  **配布 ZIP の `INSTALL.txt`**(`scripts/package.mjs`)に説明を入れる(004 T10)
+  → **反映済み (2026-08-16 / T10)。**この表の「事故 1 との違い」を各文書の言葉で書き分けた。
+  **privacy-policy.md には「どこへ・いつ・何のために・何を送るか」を書いた** —
+  同ポリシーは「ネットワーク通信を一切行いません」と書いていたので、**そのままだと嘘になる**
+
 ## 回帰テストの穴
 
 点検時の 102 tests は 2026-08-06 の 3 件をすべて押さえていたが、上の指摘には何も無かった。
@@ -333,5 +385,6 @@ S1 / S2 の対応にあわせて追加し、**118 tests** になった。
 | S5 | ドキュメントの `www.youtube.com` 記述の食い違い | **✅ 対応済み** |
 | S3 / S4 | 表示名と `safeDecode` 後の URL の検査 | ➖ **中 → 低に格下げ。**実在する経路とは示せていない。T1 で通知 DOM を採るときに一緒に見る |
 | S7 | 辞書を `chrome.storage.local` へ退避(`sync` からは 1 度だけ引き継ぐ) | **✅ 対応済み** (2026-08-14 / 003) |
-| S6 | `host_permissions` を `live_chat*` へ絞る | ❌ 未対応 |
+| S6 | `host_permissions` を `live_chat*` へ絞る | ❌ 未対応(**004 で前提が変わった** → S10) |
+| S10 | `host_permissions` に `www.youtube.com` を追加(fetch 用)。**注入範囲は不変で、テストで固定** | ➖ **情報**(2026-08-15 / 004) |
 | ①の前提 | 他人の videoId で Studio の live_chat が開けるか(人手・実機) | ❌ 未検証 |

@@ -114,17 +114,39 @@ export type ComposeOptions = {
 }
 
 /**
+ * 差し込む相手。**「誰に・どの URL で」だけを持つ** (004 / plan.md 3.)。
+ *
+ * `RedirectEvent` を受けない形にしてあるのは、コメント経路には `RedirectEvent` が無いため
+ * (リダイレクトを受けていないので作れない)。**引き金の種類を composer に持ち込まない。**
+ */
+export type ComposeTarget = {
+  /** `{name}` に入る値。**呼び出し側が辞書から解決して渡す** */
+  name: string
+  /** `{url}` に入る値。**辞書に登録されている URL**(コメントから取った URL ではない / 004 AC5) */
+  url: string
+}
+
+/**
  * テンプレートに `{name}` `{url}` `{msg}` を差し込む。
  *
  * - 差し込みは 1 パスで行う。値の中に `{url}` のような文字列が含まれても再展開しない (AC9)。
  * - 未知のプレースホルダ(`{foo}`)はそのまま残す。
  * - 上限を超える場合、**自由文 → 表示名 → 末尾**の順に削る (AC3)。
  *   自由文か表示名を削って収まるなら URL は壊れない。末尾切りは両方削っても収まらないときだけ。
+ *
+ * ⚠️ **リダイレクト返礼とコメント返しで規則を分けない。**004 が足したのは
+ *    「`RedirectEvent` ではなく `{ name, url }` を受ける」ことと、`{msg}` に渡す値を
+ *    **呼び出し側が選ぶ**ことだけで、削り順も切り出し単位も 003 のものをそのまま使う
+ *    (spec.md D4 / 004 AC16)。
  */
-export function compose(template: string, event: RedirectEvent, opts: ComposeOptions = {}): string {
+export function composeText(
+  template: string,
+  target: ComposeTarget,
+  opts: ComposeOptions = {},
+): string {
   const maxLength = opts.maxLength ?? MAX_MESSAGE_LENGTH
-  const url = sanitize(event.sourceChannelUrl)
-  const name = sanitize(event.sourceChannelName)
+  const url = sanitize(target.url)
+  const name = sanitize(target.name)
   const message = sanitize(opts.message ?? '')
 
   const full = render(template, { name, url, message })
@@ -162,6 +184,20 @@ export function compose(template: string, event: RedirectEvent, opts: ComposeOpt
 
   // --- 3. 末尾を切る(最終手段。**ここでは URL が壊れうる** — 現状どおり) ---
   return current.slice(0, maxLength)
+}
+
+/**
+ * リダイレクト返礼の文面 (001 / 003)。**`composeText` の薄いラッパ。**
+ *
+ * 004 で本体を `{ name, url }` 化したときに、既存の呼び出し側を書き換えずに済ませるためのもの。
+ * **ここに規則を足さない** — 足すなら `composeText` 側で、両方の経路に効く形にする。
+ */
+export function compose(template: string, event: RedirectEvent, opts: ComposeOptions = {}): string {
+  return composeText(
+    template,
+    { name: event.sourceChannelName, url: event.sourceChannelUrl },
+    opts,
+  )
 }
 
 /**
