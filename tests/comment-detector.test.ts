@@ -29,7 +29,7 @@ const VIDEO = 'fakeVideo01'
  * **合成 DOM を仕様にしない**ため、ここは観測した並びから外さない
  * (`docs/004-t1-collect.md`)。
  */
-function buildParams(
+function buildBinary(
   options: {
     owner?: string
     author?: string
@@ -73,8 +73,29 @@ function buildParams(
 
   push(0x38, 0x02, 0x48, 0x00, 0x50, 0x01)
 
-  const binary = String.fromCharCode(...bytes)
-  return btoa(btoa(binary))
+  return String.fromCharCode(...bytes)
+}
+
+/** 既定の中身の生バイト列。包み方だけを変えたいテストが使う */
+function rawBinary(): string {
+  return buildBinary()
+}
+
+function buildParams(options: Parameters<typeof buildBinary>[0] = {}): string {
+  return encodeRealParams(buildBinary(options))
+}
+
+/**
+ * **実配信 (2026-08-16) で観測した形**に合わせて包む。
+ *
+ * ⚠️ **`btoa(btoa(…))` に戻さない。**実物は**内側の base64 のパディング `=` が
+ *    `%3D` にパーセントエンコードされている**。素の二重 base64 で固めていたせいで、
+ *    **483 テストが緑のまま実機では 1 件もデコードできない**状態が続いた
+ *    (`構造: <151字:Ch4K…>%3D` を実配信のコンソールで採取)。
+ *    ここが実物とずれると、また同じ見落とし方をする。
+ */
+function encodeRealParams(binary: string): string {
+  return btoa(encodeURIComponent(btoa(binary)))
 }
 
 function clickableAttr(params: string): string {
@@ -203,6 +224,61 @@ describe('extractCommentAuthor (AC3 / AC4)', () => {
     const el = makeMessage({ rawAttr: clickableAttr('!!!これは base64 ではない!!!') })
     const result = extractCommentAuthor(el)
     expect(result.ok).toBe(false)
+  })
+
+  // 2026-08-16 の実機で全メッセージが「デコードできない」で落ちていた形。
+  // **`%3D` は実配信のコンソールで採取した実物**(`構造: <151字:Ch4K…>%3D`)。
+  // 素の二重 base64 で固めていたため、テストは緑のまま 1 件も動いていなかった。
+  it('内側の base64 のパディングが %3D のままでも投稿者を取れる (2026-08-16 実機)', () => {
+    const inner = btoa(rawBinary())
+    // 実物と同じく `=` だけがパーセントエンコードされて残っている状態を作る
+    expect(inner.endsWith('=')).toBe(true)
+    const params = btoa(inner.replace(/=/g, '%3D'))
+    const result = extractCommentAuthor(makeMessage({ rawAttr: clickableAttr(params) }))
+    expect(result).toMatchObject({ ok: true, author: { channelId: AUTHOR } })
+  })
+
+  // 逆側も固定する。**`%3D` へ寄せ直したことで素の形を落とさない**
+  // (どちらの形で来ても取れる = 段ごとにパーセントデコードを通している証拠)
+  it('パーセントエンコードが無い素の二重 base64 でも投稿者を取れる', () => {
+    const params = btoa(btoa(rawBinary()))
+    const result = extractCommentAuthor(makeMessage({ rawAttr: clickableAttr(params) }))
+    expect(result).toMatchObject({ ok: true, author: { channelId: AUTHOR } })
+  })
+
+  // ⚠️ **この 2 本が無いと、URL-safe 置換とパディング補完を丸ごと消しても全テストが通る。**
+  //    `btoa` は `-` `_` を出さず必ずパディングを付けるので、**合成 fixture はこの分岐に
+  //    一度も触らない。**「実機で効いている変換にテストが届いていない」形は、
+  //    2026-08-16 の `%3D` 見落としとまったく同じなので、ここで塞ぐ。
+  it('URL-safe base64(`-` / `_`)でも投稿者を取れる', () => {
+    const urlSafe = (s: string): string => s.replace(/\+/g, '-').replace(/\//g, '_')
+    // ⚠️ **既定の中身をそのまま base64 にすると `+` も `/` も出ない**ので、
+    //    置換を 1 文字も通らないテストになる(最初に書いたときそうなっていた)。
+    //    62 / 63 の 6 ビット組を必ず作る末尾バイトを足して、**確実に踏ませる**。
+    //    `UC…` にも動画 ID にもならないので、判定の結果は変わらない
+    const withSymbols = rawBinary() + String.fromCharCode(0xfb, 0xff, 0xbf, 0xfe)
+    const inner = btoa(withSymbols)
+    expect(inner).toMatch(/[+/]/)
+    // **確かめるのは内側**(実物の `UC…` が入っているのはこちら)。
+    // 外側は中身しだいで `+` `/` を含まないことがあるので、含むことを条件にしない
+    const innerSafe = urlSafe(inner)
+    expect(innerSafe).toMatch(/[-_]/)
+    const params = urlSafe(btoa(innerSafe))
+    const result = extractCommentAuthor(makeMessage({ rawAttr: clickableAttr(params) }))
+    expect(result).toMatchObject({ ok: true, author: { channelId: AUTHOR } })
+  })
+
+  // ⚠️ **これは挙動を固定するだけで、実装の `'='.repeat(…)` の行は固定できない。**
+  //    `atob` は長さ % 4 が 2 / 3 ならパディング無しでも通る(% 4 が 1 の入力は
+  //    パディングを足しても通らない)ので、あの行を消してもこのテストは緑のまま。
+  //    **「テストがあるから守られている」と読まないこと。**あの行は防御であって分岐ではない
+  it('パディングの `=` が落ちていても投稿者を取れる', () => {
+    const strip = (s: string): string => s.replace(/=+$/, '')
+    const inner = strip(btoa(rawBinary()))
+    const params = strip(btoa(inner))
+    expect(inner.endsWith('=')).toBe(false)
+    const result = extractCommentAuthor(makeMessage({ rawAttr: clickableAttr(params) }))
+    expect(result).toMatchObject({ ok: true, author: { channelId: AUTHOR } })
   })
 
   it('チャンネル ID を含まない params は捨てる', () => {

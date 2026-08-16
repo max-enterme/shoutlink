@@ -200,7 +200,7 @@
   // --- `whole-message-clickable`(DOM 属性)から投稿者を取り出す ------------
   //
   // 2026-08-15 に Elements で発見: メッセージ要素の **DOM 属性** `whole-message-clickable` に
-  // `liveChatItemContextMenuEndpoint.params` が入っており、**base64 を 2 回**解くと
+  // `liveChatItemContextMenuEndpoint.params` が入っており、**各段ともパーセントデコード + base64)を 2 段**解くと
   // protobuf が出てくる。中には **UC が 2 つ**ある:
   //   - {チャンネルID, 動画ID} … 動画とセットなので**配信の持ち主**
   //   - {チャンネルID}         … **投稿者**

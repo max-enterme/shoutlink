@@ -44,7 +44,7 @@ test: npm run typecheck && npx vitest run
 export type CommentAuthor = {
   /**
    * 投稿者のチャンネル ID (`UC…`)。取れなければ null → 何もしない (AC4)。
-   * **`whole-message-clickable` 属性の `params` を base64 で 2 回解いて取る**
+   * **`whole-message-clickable` 属性の `params` を 2 段(各段ともパーセントデコード + base64)解いて取る**
    * (T1 で確定 / 動画 ID と隣り合う ID = 配信の持ち主を除いた残り)。
    */
   channelId: string | null
