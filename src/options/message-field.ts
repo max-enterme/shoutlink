@@ -55,8 +55,18 @@ export function hasMsgPlaceholder(template: string): boolean {
 }
 
 /** 自由文が入っている(空白だけではない)登録の件数 */
-export function countEntriesWithMessage(directory: Directory): number {
-  return directory.filter((entry) => entry.message.trim()).length
+/**
+ * どちらの自由文か (004 / AC16)。
+ * **判定は `template` × `message` と `commentTemplate` × `commentMessage` の組で行い、
+ * 組を跨がない** — 片方のテンプレートに `{msg}` があることで、もう片方の警告が消えてはいけない。
+ */
+export type MessageField = 'message' | 'commentMessage'
+
+export function countEntriesWithMessage(
+  directory: Directory,
+  field: MessageField = 'message',
+): number {
+  return directory.filter((entry) => entry[field].trim()).length
 }
 
 /**
@@ -65,11 +75,16 @@ export function countEntriesWithMessage(directory: Directory): number {
  * 既定テンプレートに `{msg}` を入れても `normalizeConfig` が保存済みテンプレートを尊重するため
  * 既存利用者には届かない。**代わりにこの警告で気づかせる**(spec.md「既定テンプレートは変えない」)。
  */
-export function msgPlaceholderWarning(template: string, directory: Directory): string | null {
+export function msgPlaceholderWarning(
+  template: string,
+  directory: Directory,
+  field: MessageField = 'message',
+): string | null {
   if (hasMsgPlaceholder(template)) return null
-  const count = countEntriesWithMessage(directory)
+  const count = countEntriesWithMessage(directory, field)
   if (count === 0) return null
-  return `自由文を ${count} 件登録していますが、テンプレートに {msg} がありません。このままでは自由文は投稿に出ません。`
+  const what = field === 'commentMessage' ? 'コメント返し用の自由文' : '自由文'
+  return `${what}を ${count} 件登録していますが、テンプレートに {msg} がありません。このままでは${what}は投稿に出ません。`
 }
 
 // --- AC8: 展開後の投稿文に対する残り文字数 ---------------------------------
@@ -197,13 +212,68 @@ export function rowDraftValues(saved: SavedRowValues, draft: RowDraft | undefine
   return { nickname: saved.nickname, message: saved.message, invalid: false, reason: null }
 }
 
+// --- 「効かない行」の印と、スイッチの食い違い (AC13) -------------------------
+//
+// **DOM に触らない純関数にしてある。** ここは AC13 が「間違えるな」と名指しした判定で、
+// `options.ts` の描画関数の中に置くとテストが書けない。実際、2026-08-16 のレビューで出た
+// 2 件のバグ(下書きのゴースト復活 / 辞書が空のときに常時表示が止まる)は、
+// どちらもこの形にしていれば単体テストで落ちていた。
+
+export type IneffectiveContext = {
+  template: string
+  commentTemplate: string
+}
+
 /**
- * ＋ の欄からの登録で、**自由文を書き込むか**。
+ * 畳んだ状態でも分かるべき**「設定したのに効かない」理由** (AC13 / AC17)。
  *
- * 既存のハンドルを ＋ の欄から再登録したとき、**空の自由文欄で保存済みの自由文を消さない。**
- * 呼び名は 003 より前からの上書き挙動をそのまま維持する(ここでは判断しない)。
+ * 出すのは 4 つ:
+ * 1. コメント返し用の自由文があるのに「コメントに反応する」が OFF(書いた一文が一生使われない)
+ * 2. 自由文があるのに、**対応する**テンプレートに `{msg}` が無い(2 組ぶん / 組を跨がない)
+ * 3. 「コメントに反応する」が ON なのに**チャンネル ID が未解決**(照合できないので反応しない)
+ *
+ * ⚠️ **「フラグ ON で自由文が空」は出さない。**AC16 の既定であり、フラグを付けた直後の
+ *    全行がこれに当たる。撃つと辞書全体が印で埋まり、上の理由も AC13 の常時表示も読み飛ばされる。
  */
-export function shouldUpsertMessage(existing: SavedRowValues | undefined, input: string): boolean {
-  if (!existing) return true
-  return input.trim() !== ''
+export function ineffectiveReasons(
+  entry: Pick<DirectoryEntry, 'replyToComment' | 'channelId'>,
+  message: string,
+  commentMessage: string,
+  context: IneffectiveContext,
+): string[] {
+  const reasons: string[] = []
+  if (commentMessage.trim() && !entry.replyToComment) {
+    reasons.push(
+      'コメント返し用の自由文がありますが、「コメントに反応する」が OFF です。この一文は使われません。',
+    )
+  }
+  if (message.trim() && !hasMsgPlaceholder(context.template)) {
+    reasons.push('自由文がありますが、リダイレクト返礼の文面に {msg} がありません。')
+  }
+  if (commentMessage.trim() && !hasMsgPlaceholder(context.commentTemplate)) {
+    reasons.push('コメント返し用の自由文がありますが、コメント返しの文面に {msg} がありません。')
+  }
+  if (entry.replyToComment && !entry.channelId) {
+    reasons.push('チャンネル ID が未解決のため、コメントには反応しません。')
+  }
+  return reasons
+}
+
+/**
+ * スイッチと辞書のフラグの食い違い (AC13)。**一時表示ではなく常時出す**ためのもの。
+ * 食い違っていなければ `null`。
+ */
+export function commentMismatchMessage(enabled: boolean, flaggedCount: number): string | null {
+  if (enabled && flaggedCount === 0) {
+    return '辞書で「コメントに反応する」を付けた人が 0 件です。このままでは何も起きません。'
+  }
+  if (!enabled && flaggedCount > 0) {
+    return `辞書で ${flaggedCount} 人に「コメントに反応する」が付いていますが、このスイッチが OFF なので動きません。`
+  }
+  return null
+}
+
+/** 辞書のうち「コメントに反応する」が ON の件数 */
+export function countReplyToComment(directory: Directory): number {
+  return directory.filter((entry) => entry.replyToComment).length
 }
