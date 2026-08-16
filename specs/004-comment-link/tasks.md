@@ -18,7 +18,7 @@ feature: comment-link
   - **2026-08-15 完了。**採取結果は [docs/004-t1-collect.md](../../docs/004-t1-collect.md)
     (手順と結果を兼ねる)。プローブは [scripts/t1-comment-probe.js](../../scripts/t1-comment-probe.js)
     (DevTools のコンソールに貼るスニペット。**読み取りのみ / 出力は匿名化**)
-  - **① 投稿者は DOM 属性から取れる** — `whole-message-clickable` の `params` を base64 で 2 回。
+  - **① 投稿者は DOM 属性から取れる** — `whole-message-clickable` の `params` を 2 段(各段ともパーセントデコード + base64)。
     実配信で全メッセージ分を正解と突き合わせ、通常のテキストメッセージは**全件一致**。
     **メインワールドへの注入は不要**(2026-08-14 の「注入を許す」は前提が消えた)
   - **② 形は `UC…`** で辞書の鍵(`@handle`)と一致しない → **`channelId` を足して解決する**(AC17)
@@ -38,7 +38,7 @@ feature: comment-link
 
 - [x] T15: **`@handle` → `UC…` の解決** (AC17) — `src/channel-id.ts`(新規)。`https://www.youtube.com/@handle` を取得して `UC…` を取り出す。**取得と抽出を分け、抽出は純関数**にして単体テストする。`DirectoryEntry.channelId`(既定 `''`)と `findEntryByChannelId` を足し、`normalizeDirectory` は **`UC` で始まる妥当な形だけを受ける**(それ以外は空文字 / AC14)。**登録が `/channel/UC…` 形なら取得せずその場で決まる**。**失敗しても壊れない**(空のままにして理由を返す)。**チャット側からは呼ばない**  <!-- #51 -->
 - [x] T16: **`host_permissions` に `https://www.youtube.com/*` を足す**(fetch 用 / AC17)。**`content_scripts` は増やさない**(注入範囲は `studio.youtube.com/live_chat*` のまま)。`docs/security-review.md` に項を足し、**事故 1(`www` で content script が動いた)との違い**——注入ではなく設定画面からの 1 回の取得で、**ライブチャットの画面では通信しない**——を明記する (plan.md R11)。**あわせて `content_scripts.matches` が増えていないことを `test` で固定する** — 事故 1 の再発防止は現状 `docs/security-review.md` の記述と `tests/scope.test.ts` だけで、**manifest の中身そのものを固定する回帰テストが無い。**権限を足すこの PR でこそ置く価値がある。**権限を広げる唯一のタスクなので、レビュー後に人が確認してからマージする**(T8 と同じ扱い / plan.md R11 は「降りる箇所」に置いてある)  <!-- #52 -->
-- [x] T7: `src/comment-detector.ts` と `selectors.ts` のコメント用定数・アクセサ。**通常のテキストメッセージだけを対象にする**(`SELECTORS.chatTextMessage` を流用しない)。**追加ノードだけを見る**(`scanExisting` を作らない)。**投稿者は `whole-message-clickable` の `params` を base64 で 2 回解いて取る** — **動画 ID と隣り合う ID(配信の持ち主)を除いた残りが 1 つに絞れたときだけ採り、絞れなければ捨てる**(位置頼みで推測しない)。**取れなかったことは診断ログに出す**(無言で捨てない / plan.md R10)。**`#timestamp`(`5:17 PM` 形式・分単位)と監視開始から 10 秒の猶予**で、監視開始より前のコメントを切る (AC3 / AC4 / AC9 / plan.md R3・R10)  <!-- #31 -->
+- [x] T7: `src/comment-detector.ts` と `selectors.ts` のコメント用定数・アクセサ。**通常のテキストメッセージだけを対象にする**(`SELECTORS.chatTextMessage` を流用しない)。**追加ノードだけを見る**(`scanExisting` を作らない)。**投稿者は `whole-message-clickable` の `params` を 2 段(各段ともパーセントデコード + base64)解いて取る** — **動画 ID と隣り合う ID(配信の持ち主)を除いた残りが 1 つに絞れたときだけ採り、絞れなければ捨てる**(位置頼みで推測しない)。**取れなかったことは診断ログに出す**(無言で捨てない / plan.md R10)。**`#timestamp`(`5:17 PM` 形式・分単位)と監視開始から 10 秒の猶予**で、監視開始より前のコメントを切る (AC3 / AC4 / AC9 / plan.md R3・R10)  <!-- #31 -->
 - [x] T8: `main.ts` への配線 — 照合 → キュー → 投稿(**固定はしない**)、自己ループ遮断 3 枚、有効化スイッチの切り替え追従、起動ログへの追加 (AC6 / AC10 / AC12)。**plan.md R2(降りる箇所)に触れるため、レビュー後に人が確認してからマージする**  <!-- #32 -->
   - **コメント返しでは `selfEcho.remember` を呼ばない**(T2–T6 のレビューで判明 / plan.md 6.)。
     `self-echo` の鍵は種別を持たないため、呼ぶと 30 秒間その相手のリダイレクト受信が捨てられ **AC8 が破れる**

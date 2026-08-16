@@ -64,15 +64,38 @@ const CHANNEL_ID_IN_BLOB = /UC[A-Za-z0-9_-]{22}/g
 const VIDEO_ID_SHAPE = /^[\w-]{8,20}$/
 
 /**
- * base64 を解く。**失敗したら空文字**(例外を投げない)。
+ * パーセントエンコードを解く。**壊れた `%` があっても元の文字列を返す。**
  *
- * `percentDecode` は属性から取り出した 1 回目だけ。2 回目の入力は 1 回目の出力
- * (= 内側の base64 文字列)で `%` は現れず、当たれば `URIError` で**全件破棄**になるだけ。
+ * ⚠️ **これは保険であって、挙動の分かれ目ではない。** 投げさせても `decodeBase64` の
+ *    `catch` が拾い、戻り値は同じ `''` になる(`%` は `atob` が必ず拒否するため)。
+ *    2026-08-06 の事故 3(`decodeURIComponent` の `URIError` でパイプラインごと落とした)と
+ *    同じ形を、握る側で閉じておくためだけに置いている。
  */
-function decodeBase64(value: string, percentDecode: boolean): string {
+function percentDecode(value: string): string {
   try {
-    const source = percentDecode ? decodeURIComponent(value) : value
-    const normalized = source.replace(/-/g, '+').replace(/_/g, '/')
+    return decodeURIComponent(value)
+  } catch {
+    return value
+  }
+}
+
+/**
+ * `params` の 1 段を解く。
+ *
+ * ⚠️ **段ごとにパーセントデコードが要る。**
+ *    実配信 (2026-08-16) で、**1 回目を解いた結果が `…%3D` で終わっていた** —
+ *    base64 のパディング `=` がパーセントエンコードされたまま入っている。
+ *    2 段目を素の base64 として `atob` に渡すと `%` で例外になり、**全メッセージが
+ *    「デコードできない」で落ちる**(誰に対しても一度も発火しない状態だった)。
+ *
+ * ⚠️ **これを「1 回目だけ」に戻さない。**T1 の採取記録の「base64 で 2 回」は
+ *    **パーセントデコードの回数を数えていなかった。**合成 fixture 側も `btoa(btoa(…))` で
+ *    `%3D` を含まない形にしてあったため、**テストは緑のまま実機で動かない**状態が続いた
+ *    (plan.md「合成 DOM を仕様にしない」で警告していた轍そのもの)。
+ */
+function decodeBase64(value: string): string {
+  try {
+    const normalized = percentDecode(value).replace(/-/g, '+').replace(/_/g, '/')
     return atob(normalized + '='.repeat((4 - (normalized.length % 4)) % 4))
   } catch {
     return ''
@@ -80,7 +103,7 @@ function decodeBase64(value: string, percentDecode: boolean): string {
 }
 
 /**
- * `params` を base64 で 2 回解いた中身から `UC…` を集める。
+ * `params` を 2 段(**各段ともパーセントデコード + base64**)解いた中身から `UC…` を集める。
  *
  * ✅ 確認済み (2026-08-15 / 実配信): 中身は
  * 「メッセージ ID / {チャンネル ID, 動画 ID} / {チャンネル ID}」で、**`UC…` はちょうど 2 個**。
@@ -194,7 +217,7 @@ export function extractCommentAuthor(
     ?.liveChatItemContextMenuEndpoint?.params
   if (typeof params !== 'string' || !params) return { ok: false, reason: 'params が無い' }
 
-  const blob = decodeBase64(decodeBase64(params, true), false)
+  const blob = decodeBase64(decodeBase64(params))
   if (!blob) return { ok: false, reason: 'デコードできない' }
 
   const ids = collectChannelIds(blob)
