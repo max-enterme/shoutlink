@@ -61,6 +61,7 @@ function params(over: Partial<DecideParams> = {}): DecideParams {
     streamId: STREAM,
     now: NOW,
     ownTexts: new Set<string>(),
+    enabled: true,
     ...over,
   }
 }
@@ -97,6 +98,24 @@ describe('decideCommentReply — 投稿する場合 (AC4 / AC5)', () => {
     expect(decision.action === 'post' && decision.text).not.toContain('リダイレクト用')
   })
 
+  it('**上限を超える文面は 003 と同じ規則で削られる** (AC5)', () => {
+    const decision = decideCommentReply(
+      params({
+        commentTemplate: '{name}さん {msg} {url}',
+        directory: [entry({ nickname: 'れい', commentMessage: 'あ'.repeat(300) })],
+      }),
+    )
+    expect(decision.action).toBe('post')
+    // 上限に収まり、**URL は壊れない**(削り順は 自由文 → 表示名 → 末尾)
+    expect(decision.action === 'post' && decision.text.length).toBeLessThanOrEqual(200)
+    expect(decision.action === 'post' && decision.text).toContain(FAKE_CHANNEL.url)
+  })
+
+  it('**スイッチが OFF なら何も見ずに出さない** (AC1)', () => {
+    const decision = decideCommentReply(params({ enabled: false }))
+    expect(decision).toEqual({ action: 'skip', reason: 'コメント返しが無効' })
+  })
+
   it('**投稿する URL は辞書の URL**(コメントから取った ID ではない / AC5)', () => {
     const decision = decideCommentReply(params())
     expect(decision.action === 'post' && decision.text).toContain(FAKE_CHANNEL.url)
@@ -115,6 +134,13 @@ describe('decideCommentReply — 自己ループの遮断 (AC10)', () => {
   it('**`author-type` が owner なら出さない**(3 枚目)', () => {
     const decision = decideCommentReply(params({ author: author({ authorType: 'owner' }) }))
     expect(decision).toEqual({ action: 'skip', reason: '配信者自身のコメント' })
+  })
+
+  it('**弾くのは owner だけ**(モデレーター・メンバーには反応する)', () => {
+    for (const authorType of ['moderator', 'member', '']) {
+      const decision = decideCommentReply(params({ author: author({ authorType }) }))
+      expect(decision.action, authorType).toBe('post')
+    }
   })
 
   it('**投稿者の ID が持ち主と同じなら出さない**(3 枚目のもう 1 通り)', () => {

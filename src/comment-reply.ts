@@ -17,6 +17,8 @@ import type { CommentAuthor } from './comment-detector'
 
 /** 出さない理由。**そのまま診断ログに出す**(無言で捨てない) */
 export type CommentReplySkip =
+  /** スイッチが OFF (AC1)。**キューに積んだ後に切られた場合もここで止まる** */
+  | { reason: 'コメント返しが無効' }
   /** 自分が投稿した本文と一致する (AC10 の 2 枚目) */
   | { reason: '自分の投稿と本文が一致' }
   /** 配信者自身のコメント (AC10 の 3 枚目) */
@@ -44,6 +46,24 @@ export type DecideParams = {
   now: number
   /** 自分が投稿した本文 (AC10 の 2 枚目) */
   ownTexts: ReadonlySet<string>
+  /**
+   * コメント返しが有効か (AC1)。
+   *
+   * ⚠️ **投稿の直前にも見る。**キューに積んだ後にスイッチを切られた 1 件は、
+   *    `post-queue` の破棄が**待ちの明けにしか効かない**(投稿中の 1 件は止まらない)ので、
+   *    ここでも止める。
+   */
+  enabled: boolean
+}
+
+/** 自分の投稿の本文と一致する / それを含むか (AC10 の 2 枚目) */
+function containsOwnText(ownTexts: ReadonlySet<string>, messageText: string): boolean {
+  if (ownTexts.has(messageText)) return true
+  if (!messageText) return false
+  for (const own of ownTexts) {
+    if (own && messageText.includes(own)) return true
+  }
+  return false
 }
 
 /**
@@ -55,8 +75,16 @@ export type DecideParams = {
 export function decideCommentReply(params: DecideParams): CommentReplyDecision {
   const { author } = params
 
-  // AC10 の 2 枚目: 投稿本文と一致するコメント(1 枚目=要素の記憶が外れたときの受け皿)
-  if (params.ownTexts.has(params.messageText)) {
+  // AC1: OFF の間は何もしない。**積んだ後に切られた場合もここで止まる**
+  if (!params.enabled) return { action: 'skip', reason: 'コメント返しが無効' }
+
+  // AC10 の 2 枚目: 投稿本文と一致するコメント(1 枚目=要素の記憶が外れたときの受け皿)。
+  //
+  // ⚠️ **完全一致だけにしない。**`getMessageText` は `#message` が取れないと
+  //    要素全体のテキスト(タイムスタンプ・表示名込み)に落ちるので、完全一致だと
+  //    **その状態で 2 枚目が黙って常に外れる**(fail-open)。**含んでいれば自分の投稿とみなす。**
+  //    代償として、視聴者が自分の投稿を引用したコメントにも反応しなくなるが、それは安全側。
+  if (containsOwnText(params.ownTexts, params.messageText)) {
     return { action: 'skip', reason: '自分の投稿と本文が一致' }
   }
 

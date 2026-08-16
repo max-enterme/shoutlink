@@ -110,7 +110,11 @@ export function createPostQueue<T>(options: PostQueueOptions<T>): PostQueue<T> {
 
   const kick = (): void => {
     if (running) return
-    running = drain().finally(() => {
+    // **駆動側にも catch を置く** (AC12)。`drain` の中は握ってあるが、ここが素の promise だと
+    // 万一 reject したときに unhandledrejection になり `idle()` も巻き込む
+    running = drain()
+      .catch((err) => onSkip(undefined as never, 'failed', err))
+      .finally(() => {
       running = null
       // 処理中に積まれた分を取りこぼさない
       if (queue.length > 0) kick()
