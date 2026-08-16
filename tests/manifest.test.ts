@@ -13,6 +13,7 @@ import manifestJson from '../public/manifest.json'
  * **「権限は増えたが注入範囲は増えていない」ことを機械で押さえる。**
  */
 const manifest = manifestJson as {
+  key?: string
   permissions: string[]
   host_permissions: string[]
   content_scripts: { matches: string[]; js?: string[]; world?: string; all_frames?: boolean }[]
@@ -78,5 +79,37 @@ describe('manifest.json — 権限 (AC17)', () => {
     // `optional_*` があると「host 権限は YouTube の 2 つだけ」が実質破れる
     expect(manifest.optional_permissions).toBeUndefined()
     expect(manifest.optional_host_permissions).toBeUndefined()
+  })
+})
+
+/**
+ * **`key` が消えると、配布した全員の設定が次の更新で消える。**
+ *
+ * パッケージ化されていない拡張の ID は、`key` が無いと**読み込んだフォルダのパス**から決まる。
+ * 設定 (`chrome.storage.sync`) と呼び名の辞書・投稿履歴 (`chrome.storage.local`) は
+ * **ID に紐づく**ので、版ごとに別フォルダへ展開する配布の形では
+ * **更新のたびに空の拡張が増える**(しかも古い版が残っていると**二重投稿**する)。
+ *
+ * `key` を置くと ID がパスに依らず固定され、
+ * **どこへ展開しても設定が残り、古い版を消し忘れたら Chrome が同じ ID として弾く。**
+ *
+ * ⚠️ **消したこと・変えたことに気づける手段がここしか無い。**
+ *    壊れても**手元では何も起きない**(開発機は同じフォルダを読み続けるため)。
+ *    気づくのは、配った相手の設定が消えたときになる。
+ */
+describe('manifest.json — 拡張 ID の固定 (更新で設定を消さない)', () => {
+  it('**`key` がある**', () => {
+    expect(typeof manifest.key).toBe('string')
+    expect(manifest.key && manifest.key.length).toBeGreaterThan(300)
+  })
+
+  it('**`key` を変えない** — 変えると ID が変わり、既存の利用者の設定が切り離される', () => {
+    // 2026-08-17 に生成した公開鍵。この鍵から決まる拡張 ID は
+    // `bfmfamnekclamfdjbfndmomljgneejgo`
+    // (公開鍵 DER の SHA-256 の先頭 16 バイトを a〜p に写したもの)。
+    // **この値を更新しない** — 更新が要るのは鍵を作り直すと決めたとき = 全員の設定を捨てるときだけ
+    expect(manifest.key).toBe(
+      'MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAlV9451W8agKwrcppxtPhPkRZ7lVl7horDr8tjC96keVPyxTXowsNvchcmIgslT+o8e5ksg90eEQBZRyI66Wz8Pqu9cQ5wKgK/48Zu/thw21lZ8ewnCTRzWzjiglUDShewGMVSF9FKOf9jPWrEjjASSLjWW10jC4h2UxZF/twDANnix1Lh+X3lD3S22HdwSl4L/xckzdD7e0bNCeC/crjETDtNVOM370yAroccQGC8TiIWoftdkvM9kWVBsHKbS3pVIxQpzrJir1BfRM+06e6iaVVFQPWPxkbG285agJld3JsIzGj8buu16Mdh7UM/jAbmx8k+qgXaGZx9aaUYoc5MQIDAQAB',
+    )
   })
 })
