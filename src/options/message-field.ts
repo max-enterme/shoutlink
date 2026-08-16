@@ -212,6 +212,70 @@ export function rowDraftValues(saved: SavedRowValues, draft: RowDraft | undefine
   return { nickname: saved.nickname, message: saved.message, invalid: false, reason: null }
 }
 
+// --- 再描画をまたいでフォーカスとキャレットを保つ (004 T17) -------------------
+//
+// 上の下書きが守るのは**値だけ**で、それで足りていたのは
+// **再描画が必ず人の操作に同期して起きていた**間だけだった。
+// T17 で **`channelId` の fetch が返った瞬間**という、人の操作と無関係な時点で全行が
+// 作り直される経路ができた(チャンネルページは実測 1.3〜1.9 MB で数百 ms〜数秒、
+// 失敗時は `CHANNEL_PAGE_TIMEOUT_MS` = 15 秒まで伸びる)。
+//
+// 入力中に作り直されると `document.activeElement` が `body` へ戻り、
+// **以降の打鍵がどこにも入らない。**打った文字は下書きに残るので消えはしないが、
+// 人が見るのは「途中から入力が効かなくなった」。**値と一緒に位置も戻す。**
+
+/** 行の中のどの入力欄か。**呼び名とコメント返しの自由文を取り違えない**ために欄まで持つ */
+export type RowField = 'nickname' | 'message' | 'commentMessage'
+
+export function isRowField(value: unknown): value is RowField {
+  return value === 'nickname' || value === 'message' || value === 'commentMessage'
+}
+
+/** 再描画の直前に覚えるフォーカス。`selection*` は取れなければ `null` */
+export type FocusTarget = {
+  /** `directoryKey(url)`。**行の同定はこれ**(並び順は `sortForDisplay` で変わりうる) */
+  key: string
+  field: RowField
+  selectionStart: number | null
+  selectionEnd: number | null
+}
+
+/**
+ * 作り直した入力欄を引くための鍵。**行 × 欄**で一意にする。
+ * 行だけで引くと、展開している行で呼び名の位置に自由文のキャレットが載る。
+ */
+export function focusKey(key: string, field: RowField): string {
+  // 区切りは ` `。`directoryKey` は URL 由来なので、この文字は入らない
+  return `${key} ${field}`
+}
+
+/**
+ * 再描画後にキャレットを戻す位置。**戻さないときは `null`。**
+ *
+ * - フォーカスが辞書の入力欄に無かった(`target` が `null`)→ 何もしない
+ * - **その欄が作り直しで消えた**(行を削除した / 展開を畳んだ)→ `valueLength` に `null` を渡す
+ *   ことで何もしない。**消えた欄を探して例外にしない**
+ * - **値の長さで丸める。**下書きの書き戻しで値が変わっていることがあり、
+ *   古いキャレット位置がそのまま使えるとは限らない
+ * - `selection*` が取れなかった欄は**末尾**に置く(先頭に戻すと、続きを打った文字が頭に入る)
+ */
+export function restoreSelection(
+  target: FocusTarget | null,
+  valueLength: number | null,
+): { start: number; end: number } | null {
+  if (!target || valueLength === null) return null
+  const length = Math.max(0, valueLength)
+  const start = clampIndex(target.selectionStart ?? length, 0, length)
+  // 終端は開始より前に来ない(逆転した範囲を DOM へ渡さない)
+  const end = clampIndex(target.selectionEnd ?? start, start, length)
+  return { start, end }
+}
+
+function clampIndex(value: number, min: number, max: number): number {
+  if (!Number.isFinite(value)) return max
+  return Math.min(Math.max(Math.trunc(value), min), max)
+}
+
 // --- 「効かない行」の印と、スイッチの食い違い (AC13) -------------------------
 //
 // **DOM に触らない純関数にしてある。** ここは AC13 が「間違えるな」と名指しした判定で、
@@ -222,15 +286,34 @@ export function rowDraftValues(saved: SavedRowValues, draft: RowDraft | undefine
 export type IneffectiveContext = {
   template: string
   commentTemplate: string
+  /**
+   * その行の `channelId` の解決が**直近で失敗した理由** (AC17)。無ければ `null` / 省略。
+   *
+   * **行ごとに違う値**なので、組み立ては呼び出し側(`options.ts` が行ごとに context を作る)。
+   * 理由を印の `title` にも載せるのは、**畳んだままでも「なぜ効かないのか」まで分かる**ようにするため。
+   * `directoryStatus`(一時表示)だけに出すと、何件か失敗したときに最後の 1 件しか残らない。
+   */
+  channelIdError?: string | null
+  /**
+   * その行の `channelId` が**他の行と重なっている**か (AC17)。
+   *
+   * 重なっている行は `findEntryByChannelId` が `undefined` を返す = **何もしない**ので、
+   * 辞書の上の警告(`duplicateChannelIdWarning`)だけでなく**当の行にも印を出す**
+   * (どの行を消せばよいかは行を見て決めるため)。
+   */
+  duplicateChannelId?: boolean
 }
 
 /**
  * 畳んだ状態でも分かるべき**「設定したのに効かない」理由** (AC13 / AC17)。
  *
- * 出すのは 4 つ:
+ * 出すのは 4 種:
  * 1. コメント返し用の自由文があるのに「コメントに反応する」が OFF(書いた一文が一生使われない)
  * 2. 自由文があるのに、**対応する**テンプレートに `{msg}` が無い(2 組ぶん / 組を跨がない)
- * 3. 「コメントに反応する」が ON なのに**チャンネル ID が未解決**(照合できないので反応しない)
+ * 3. 「コメントに反応する」が ON なのに**チャンネル ID が未解決**(照合できないので反応しない)。
+ *    直近の失敗の理由が分かっていれば**それも添える** (AC17)
+ * 4. 「コメントに反応する」が ON で、**同じ `channelId` の行が他にもある** (AC17)。
+ *    この状態は「特定できないものとして何もしない」と決めた側なので、画面で気づけないと直せない
  *
  * ⚠️ **「フラグ ON で自由文が空」は出さない。**AC16 の既定であり、フラグを付けた直後の
  *    全行がこれに当たる。撃つと辞書全体が印で埋まり、上の理由も AC13 の常時表示も読み飛ばされる。
@@ -254,7 +337,16 @@ export function ineffectiveReasons(
     reasons.push('コメント返し用の自由文がありますが、コメント返しの文面に {msg} がありません。')
   }
   if (entry.replyToComment && !entry.channelId) {
-    reasons.push('チャンネル ID が未解決のため、コメントには反応しません。')
+    reasons.push(
+      context.channelIdError
+        ? `チャンネル ID が未解決のため、コメントには反応しません(${context.channelIdError})。`
+        : 'チャンネル ID が未解決のため、コメントには反応しません。',
+    )
+  }
+  if (entry.replyToComment && entry.channelId && context.duplicateChannelId) {
+    reasons.push(
+      '同じチャンネル ID の行が他にもあるため、どちらを使うか決められず、コメントには反応しません。',
+    )
   }
   return reasons
 }
