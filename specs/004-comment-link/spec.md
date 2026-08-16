@@ -3,7 +3,7 @@ feature: comment-link
 issue: 24
 release: r2
 priority: should
-status: 進行中
+status: レビュー
 ---
 
 # 004 登録した人のコメントに反応してリンクを投稿
