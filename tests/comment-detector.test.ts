@@ -12,7 +12,8 @@ import type { CommentAuthor } from '../src/comment-detector'
 const OWNER = 'UCoooooooooooooooooooooo'
 const AUTHOR = 'UCaaaaaaaaaaaaaaaaaaaaaa'
 const THIRD = 'UCttttttttttttttttttttttt'.slice(0, 24)
-const VIDEO = '5F6x9Zt97ms'
+/** 合成値。**実配信の動画 ID を持ち込まない**(public repo) */
+const VIDEO = 'fakeVideo01'
 
 /**
  * **T1 で実配信から採った `params` の構造をそのまま組み立てる。**
@@ -29,7 +30,15 @@ const VIDEO = '5F6x9Zt97ms'
  * (`docs/004-t1-collect.md`)。
  */
 function buildParams(
-  options: { owner?: string; author?: string; video?: string; withVideo?: boolean; extra?: string } = {},
+  options: {
+    owner?: string
+    author?: string
+    video?: string
+    withVideo?: boolean
+    /** 投稿者側にも動画 ID らしきフィールドを付ける(順序頼みを崩す形) */
+    authorHasVideo?: boolean
+    extra?: string
+  } = {},
 ): string {
   const owner = options.owner ?? OWNER
   const author = options.author ?? AUTHOR
@@ -41,7 +50,8 @@ function buildParams(
   const str = (s: string): number[] => Array.from(s, (c) => c.charCodeAt(0))
 
   // メッセージ ID
-  const messageId = 'COiulf-YopYDFWf5wgQdlsYAOA'
+  // 合成値。長さと文字種だけ実物に合わせる(実物の ID は持ち込まない)
+  const messageId = 'FAKEmessageIdFAKEmessageId'
   push(0x0a, messageId.length + 4, 0x0a, messageId.length + 2, 0x0a, messageId.length, ...str(messageId))
 
   // { 持ち主の UC, 動画 ID }
@@ -53,6 +63,7 @@ function buildParams(
 
   // { 投稿者の UC }
   const authorGroup = [0x0a, author.length, ...str(author)]
+  if (options.authorHasVideo) authorGroup.push(0x12, video.length, ...str(video))
   push(0x32, authorGroup.length, ...authorGroup)
 
   if (options.extra) {
@@ -114,18 +125,30 @@ describe('extractCommentAuthor (AC3 / AC4)', () => {
     expect(result.ok && result.author).toEqual({
       channelId: AUTHOR,
       ownerChannelId: OWNER,
+      // **実測どおりの判定(動画 ID の一致)で当たったこと**を固定する
+      ownerMatchedBy: 'video-id',
       authorType: '',
       timestampText: '5:17 PM',
       detectedAt: 1_000,
     })
   })
 
-  it('**配信者自身のコメントでは投稿者 = 持ち主**になる', () => {
+  it('**配信者自身のコメントはここで捨てる**(持ち主を投稿者として返さない / AC4)', () => {
     const el = makeMessage({ params: buildParams({ author: OWNER }), authorType: 'owner' })
     const result = extractCommentAuthor(el, { streamId: VIDEO })
-    expect(result.ok && result.author.channelId).toBe(OWNER)
-    expect(result.ok && result.author.ownerChannelId).toBe(OWNER)
-    expect(result.ok && result.author.authorType).toBe('owner')
+    expect(result).toEqual({ ok: false, reason: '投稿者が配信の持ち主と同じ' })
+  })
+
+  it('**配信 ID が無くても、構造で持ち主を切り分ける**(理由は structure として残る)', () => {
+    const result = extractCommentAuthor(makeMessage(), { streamId: '' })
+    expect(result.ok && result.author.ownerMatchedBy).toBe('structure')
+  })
+
+  it('**両方が「持ち主に見える」なら捨てる**(先に出てきたほうを採らない)', () => {
+    // 投稿者側にも動画 ID らしきフィールドが続く形。順序頼みだと投稿者を持ち主と誤判定する
+    const el = makeMessage({ params: buildParams({ authorHasVideo: true }) })
+    const result = extractCommentAuthor(el, { streamId: '' })
+    expect(result).toEqual({ ok: false, reason: '持ち主の候補が複数ある' })
   })
 
   it('**配信 ID が空でも切り分けられる**(埋め込みチャットで機能が死なない)', () => {
@@ -134,7 +157,7 @@ describe('extractCommentAuthor (AC3 / AC4)', () => {
   })
 
   it('**配信 ID が食い違えば切り分けない**(別の配信の DOM を読んでいる可能性)', () => {
-    const result = extractCommentAuthor(makeMessage(), { streamId: 'ちがう動画' })
+    const result = extractCommentAuthor(makeMessage(), { streamId: 'otherVideo1' })
     expect(result).toEqual({ ok: false, reason: '配信の持ち主を切り分けられない' })
   })
 
@@ -286,34 +309,102 @@ describe('isFreshComment (AC9)', () => {
 })
 
 describe('startCommentDetector (AC9)', () => {
+  /** 2026-08-15 17:20 に監視を張った、という状況 */
+  const BASE = new Date(2026, 7, 15, 17, 20, 0).getTime()
+  /** 監視開始と同じ分。**猶予を抜けていれば通る** */
+  const FRESH_TS = '5:21 PM'
+
+  /** 1 回目(監視開始)は BASE、以降は猶予を抜けた時刻を返す */
+  function clock(): () => number {
+    let first = true
+    return () => {
+      if (first) {
+        first = false
+        return BASE
+      }
+      return BASE + OBSERVE_GRACE_MS + 1_000
+    }
+  }
+
+  function detect(onComment: (a: CommentAuthor) => void, now = clock()) {
+    return startCommentDetector({ root: doc(), streamId: VIDEO, now, onComment })
+  }
+
+  const tick = (): Promise<void> => new Promise((r) => setTimeout(r, 0))
+
   it('**追加されたコメントだけを渡す。既にあるものは走査しない**', async () => {
     const items = doc().getElementById('items') as HTMLElement
-    items.appendChild(makeMessage()) // 起動前からあるもの
+    items.appendChild(makeMessage({ timestamp: FRESH_TS })) // 起動前からあるもの
 
     const got: CommentAuthor[] = []
-    const handle = startCommentDetector({
-      root: doc(),
-      streamId: VIDEO,
-      onComment: (a) => got.push(a),
-    })
+    const handle = detect((a) => got.push(a))
     expect(got).toEqual([])
 
-    items.appendChild(makeMessage({ params: buildParams({ author: AUTHOR }) }))
-    await new Promise((r) => setTimeout(r, 0))
+    items.appendChild(makeMessage({ timestamp: FRESH_TS }))
+    await tick()
 
     expect(got).toHaveLength(1)
     expect(got[0].channelId).toBe(AUTHOR)
     handle.stop()
   })
 
+  it('**監視開始より前のタイムスタンプは渡さない**(再挿入対策 / AC9)', async () => {
+    const items = doc().getElementById('items') as HTMLElement
+    const got: CommentAuthor[] = []
+    const handle = detect((a) => got.push(a))
+
+    items.appendChild(makeMessage({ timestamp: '5:17 PM' }))
+    await tick()
+
+    expect(got).toEqual([])
+    handle.stop()
+  })
+
+  it('**タイムスタンプの要素が無ければ渡さない**(構造が変わった = 安全側 / AC9)', async () => {
+    const items = doc().getElementById('items') as HTMLElement
+    const got: CommentAuthor[] = []
+    const handle = detect((a) => got.push(a))
+
+    items.appendChild(makeMessage({ timestamp: null }))
+    await tick()
+
+    expect(got).toEqual([])
+    handle.stop()
+  })
+
+  it('**猶予の中は渡さない**(起動直後の一斉投稿を止める / AC9)', async () => {
+    const items = doc().getElementById('items') as HTMLElement
+    const got: CommentAuthor[] = []
+    // 監視開始から 1ms しか経っていない時計
+    const handle = detect((a) => got.push(a), () => BASE + 1)
+
+    items.appendChild(makeMessage({ timestamp: FRESH_TS }))
+    await tick()
+
+    expect(got).toEqual([])
+    handle.stop()
+  })
+
+  it('**読めないタイムスタンプは猶予だけで判定する**(生きているコメントを落とさない)', async () => {
+    const items = doc().getElementById('items') as HTMLElement
+    const got: CommentAuthor[] = []
+    const handle = detect((a) => got.push(a))
+
+    items.appendChild(makeMessage({ timestamp: 'あとで' }))
+    await tick()
+
+    expect(got).toHaveLength(1)
+    handle.stop()
+  })
+
   it('コメント以外の追加ノードは無視する', async () => {
     const items = doc().getElementById('items') as HTMLElement
     const got: CommentAuthor[] = []
-    const handle = startCommentDetector({ root: doc(), streamId: VIDEO, onComment: (a) => got.push(a) })
+    const handle = detect((a) => got.push(a))
 
     items.appendChild(makeMessage({ tag: 'yt-live-chat-paid-message-renderer' }))
     items.appendChild(doc().createElement('div'))
-    await new Promise((r) => setTimeout(r, 0))
+    await tick()
 
     expect(got).toEqual([])
     handle.stop()
@@ -322,14 +413,14 @@ describe('startCommentDetector (AC9)', () => {
   it('同じ要素が付け替えられても 2 度は出さない', async () => {
     const items = doc().getElementById('items') as HTMLElement
     const got: CommentAuthor[] = []
-    const handle = startCommentDetector({ root: doc(), streamId: VIDEO, onComment: (a) => got.push(a) })
+    const handle = detect((a) => got.push(a))
 
-    const el = makeMessage()
+    const el = makeMessage({ timestamp: FRESH_TS })
     items.appendChild(el)
-    await new Promise((r) => setTimeout(r, 0))
+    await tick()
     items.removeChild(el)
     items.appendChild(el)
-    await new Promise((r) => setTimeout(r, 0))
+    await tick()
 
     expect(got).toHaveLength(1)
     handle.stop()
@@ -338,11 +429,11 @@ describe('startCommentDetector (AC9)', () => {
   it('**取れないコメントで例外を投げない**(配信に影響させない / AC12)', async () => {
     const items = doc().getElementById('items') as HTMLElement
     const got: CommentAuthor[] = []
-    const handle = startCommentDetector({ root: doc(), streamId: VIDEO, onComment: (a) => got.push(a) })
+    const handle = detect((a) => got.push(a))
 
     items.appendChild(makeMessage({ rawAttr: 'JSON ではない' }))
     items.appendChild(makeMessage({ params: null }))
-    await new Promise((r) => setTimeout(r, 0))
+    await tick()
 
     expect(got).toEqual([])
     handle.stop()
@@ -351,11 +442,11 @@ describe('startCommentDetector (AC9)', () => {
   it('stop() 以降は渡さない', async () => {
     const items = doc().getElementById('items') as HTMLElement
     const got: CommentAuthor[] = []
-    const handle = startCommentDetector({ root: doc(), streamId: VIDEO, onComment: (a) => got.push(a) })
+    const handle = detect((a) => got.push(a))
     handle.stop()
 
-    items.appendChild(makeMessage())
-    await new Promise((r) => setTimeout(r, 0))
+    items.appendChild(makeMessage({ timestamp: FRESH_TS }))
+    await tick()
 
     expect(got).toEqual([])
   })

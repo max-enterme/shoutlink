@@ -27,6 +27,11 @@ export type CommentAuthor = {
   channelId: string
   /** 同じ `params` から取れた「配信の持ち主」の ID。自分の投稿の判別に使う (AC10) */
   ownerChannelId: string
+  /**
+   * 持ち主をどちらの手段で切り分けたか。**診断ログ用。**
+   * `'video-id'` は T1 で実測した形、`'structure'` は推論(上の `matchOwnerAt`)。
+   */
+  ownerMatchedBy: 'video-id' | 'structure'
   /** `author-type` 属性。`'owner'` なら配信者自身の投稿 (AC10) */
   authorType: string
   /** `#timestamp` のテキスト(`5:17 PM` 形式)。要素が無ければ null (AC9) */
@@ -43,6 +48,8 @@ export type CommentExtractFailure =
   | 'デコードできない'
   | 'チャンネル ID が無い'
   | '配信の持ち主を切り分けられない'
+  | '持ち主の候補が複数ある'
+  | '投稿者が配信の持ち主と同じ'
   | '投稿者を 1 つに絞れない'
 
 export type CommentExtractResult =
@@ -56,9 +63,16 @@ const CHANNEL_ID_IN_BLOB = /UC[A-Za-z0-9_-]{22}/g
 /** 動画 ID の形(`v=` に出るもの)。長さは 11 が通例だが幅を持たせる */
 const VIDEO_ID_SHAPE = /^[\w-]{8,20}$/
 
-function decodeBase64(value: string): string {
+/**
+ * base64 を解く。**失敗したら空文字**(例外を投げない)。
+ *
+ * `percentDecode` は属性から取り出した 1 回目だけ。2 回目の入力は 1 回目の出力
+ * (= 内側の base64 文字列)で `%` は現れず、当たれば `URIError` で**全件破棄**になるだけ。
+ */
+function decodeBase64(value: string, percentDecode: boolean): string {
   try {
-    const normalized = decodeURIComponent(value).replace(/-/g, '+').replace(/_/g, '/')
+    const source = percentDecode ? decodeURIComponent(value) : value
+    const normalized = source.replace(/-/g, '+').replace(/_/g, '/')
     return atob(normalized + '='.repeat((4 - (normalized.length % 4)) % 4))
   } catch {
     return ''
@@ -82,30 +96,71 @@ function collectChannelIds(blob: string): { id: string; at: number }[] {
   return out
 }
 
+/** ID の直後に続く「動画 ID らしき文字列」を見る窓の広さ */
+const VIDEO_ID_WINDOW = 20
+
+/**
+ * ある ID の直後に**動画 ID が続いているか**。続いていればその文字列を返す。
+ *
+ * ⚠️ **判定は 2 通りあり、確からしさが違う。**
+ *
+ * - `'video-id'` … **T1 で実測した形**。`UC…` の直後 20 バイトの窓に、
+ *   **今見ている配信の動画 ID がそのまま入っている**か。実配信の全メッセージで
+ *   この判定が正解と一致した(`docs/004-t1-collect.md`)
+ * - `'structure'` … **推論。**`UC…` の直後が protobuf の `12 <len> <文字列>` の形か。
+ *   **T1 はここまで測っていない**(プローブは窓に動画 ID が入るかだけを見ていた)。
+ *   **配信 ID が取れないとき**(管制室の埋め込みチャット)の唯一の手段なので置いてあるが、
+ *   **外れれば全件が「切り分けられない」に落ちて機能が無言で止まる。**
+ *   どちらで当たったかは診断ログに出す
+ */
+function matchOwnerAt(
+  blob: string,
+  hit: { id: string; at: number },
+  streamId: string,
+): 'video-id' | 'structure' | null {
+  const after = hit.at + hit.id.length
+  if (streamId && blob.slice(after, after + VIDEO_ID_WINDOW).includes(streamId)) return 'video-id'
+
+  if (blob.charCodeAt(after) !== 0x12) return null
+  const length = blob.charCodeAt(after + 1)
+  if (!Number.isFinite(length) || length <= 0 || length > 32) return null
+  const candidate = blob.slice(after + 2, after + 2 + length)
+  if (candidate.length !== length || !VIDEO_ID_SHAPE.test(candidate)) return null
+  // 配信 ID が取れているのに一致しないなら、それは動画 ID ではない
+  if (streamId && candidate !== streamId) return null
+  return 'structure'
+}
+
 /**
  * **「動画 ID とペアになっている ID」= 配信の持ち主**を特定する (AC4)。
  *
  * ⚠️ **順序で決めない。**`params` は公開された仕様ではなく、フィールド番号・順序が変われば
- *    「2 つ目が投稿者」は成り立たなくなる。**構造(その ID の直後に動画 ID が続くか)**で見る。
+ *    「先に出てきたほう」は意味を持たない。**当たった候補を全部集め、1 つに絞れなければ捨てる。**
+ *    先勝ちにすると、投稿者側にも同じ形のフィールドが増えた瞬間に
+ *    **投稿者を持ち主と誤判定し、`channelId` に配信者自身の ID が入る。**
  *
  * ⚠️ **`streamId` が空でも判定を成立させる。**`currentStreamId()` は空を返しうる
  *    (管制室の埋め込みチャット)。一致を必須にすると、その画面で**機能が無言で 1 度も動かない**。
- *    空でないときだけ、余分な確かめとして一致も要求する。
  */
-function findOwnerId(blob: string, ids: { id: string; at: number }[], streamId: string): string | null {
+function findOwnerId(
+  blob: string,
+  ids: { id: string; at: number }[],
+  streamId: string,
+):
+  | { ok: true; id: string; by: 'video-id' | 'structure' }
+  | { ok: false; reason: '配信の持ち主を切り分けられない' | '持ち主の候補が複数ある' } {
+  const hits: { id: string; by: 'video-id' | 'structure' }[] = []
   for (const hit of ids) {
-    // protobuf: `0a 18 <24 バイトの UC>` の直後に `12 <len> <動画 ID>` が続く
-    const tagAt = hit.at + hit.id.length
-    if (blob.charCodeAt(tagAt) !== 0x12) continue
-    const length = blob.charCodeAt(tagAt + 1)
-    if (!Number.isFinite(length) || length <= 0 || length > 32) continue
-    const candidate = blob.slice(tagAt + 2, tagAt + 2 + length)
-    if (candidate.length !== length || !VIDEO_ID_SHAPE.test(candidate)) continue
-    // 配信 ID が取れているなら、それと一致することも確かめる
-    if (streamId && candidate !== streamId) continue
-    return hit.id
+    const by = matchOwnerAt(blob, hit, streamId)
+    if (by) hits.push({ id: hit.id, by })
   }
-  return null
+  if (hits.length === 0) return { ok: false, reason: '配信の持ち主を切り分けられない' }
+  const distinct = new Set(hits.map((h) => h.id))
+  // **2 つ以上が「持ち主に見える」なら決められない**(順序で選ばない)
+  if (distinct.size > 1) return { ok: false, reason: '持ち主の候補が複数ある' }
+  // 実測で当たったものがあればそちらを理由として報告する
+  const picked = hits.find((h) => h.by === 'video-id') ?? hits[0]
+  return { ok: true, id: picked.id, by: picked.by }
 }
 
 export type ExtractOptions = {
@@ -139,29 +194,32 @@ export function extractCommentAuthor(
     ?.liveChatItemContextMenuEndpoint?.params
   if (typeof params !== 'string' || !params) return { ok: false, reason: 'params が無い' }
 
-  const blob = decodeBase64(decodeBase64(params))
+  const blob = decodeBase64(decodeBase64(params, true), false)
   if (!blob) return { ok: false, reason: 'デコードできない' }
 
   const ids = collectChannelIds(blob)
   if (ids.length === 0) return { ok: false, reason: 'チャンネル ID が無い' }
 
   const streamId = options.streamId ?? ''
-  const ownerChannelId = findOwnerId(blob, ids, streamId)
+  const owner = findOwnerId(blob, ids, streamId)
   // **持ち主を切り分けられないまま「残り」を採らない** (AC4)。
   // 採ると**持ち主(= 配信者自身)の ID を投稿者として採りうる**。配信者自身は辞書に載りうるので、
   // その行が ON だと**視聴者の全コメントが「自分への返し」を撃つ**
-  if (!ownerChannelId) return { ok: false, reason: '配信の持ち主を切り分けられない' }
+  if (!owner.ok) return { ok: false, reason: owner.reason }
 
-  const others = new Set(ids.filter((hit) => hit.id !== ownerChannelId).map((hit) => hit.id))
-  // 配信者自身の投稿では、投稿者の ID も持ち主と同じになる(`others` が空)
-  const channelId = others.size === 0 ? ownerChannelId : others.size === 1 ? [...others][0] : null
-  if (!channelId) return { ok: false, reason: '投稿者を 1 つに絞れない' }
+  const others = new Set(ids.filter((hit) => hit.id !== owner.id).map((hit) => hit.id))
+  // **配信者自身の投稿(投稿者 = 持ち主)はここで捨てる。**
+  // AC4 は「残りが 1 つに絞れたときだけ」なので、`others` が空のときに持ち主を返さない。
+  // 弾く対象なので捨てても結果は同じで、**下流(AC10)への依存が 1 つ減る**
+  if (others.size === 0) return { ok: false, reason: '投稿者が配信の持ち主と同じ' }
+  if (others.size > 1) return { ok: false, reason: '投稿者を 1 つに絞れない' }
 
   return {
     ok: true,
     author: {
-      channelId,
-      ownerChannelId,
+      channelId: [...others][0],
+      ownerChannelId: owner.id,
+      ownerMatchedBy: owner.by,
       authorType: getCommentAuthorType(el),
       timestampText: getCommentTimestampText(el),
       detectedAt: options.now ?? Date.now(),
@@ -173,7 +231,13 @@ export function extractCommentAuthor(
 
 /** 1 日の分数 */
 const MINUTES_PER_DAY = 24 * 60
-/** 日付が無いので、これ以上離れて見える値は「読めなかった」に倒す */
+/**
+ * 日付が無いので、これ以上離れて見える値は「読めなかった」に倒す。
+ *
+ * ⚠️ **先に ±12 時間へ折り返しているので、ここに当たるのは「ちょうど 12 時間差」だけ。**
+ *    13 時間前のコメントは折り返して「1 時間後」に見えるため `after` になる
+ *    (投稿の可否は `unreadable` と同じく猶予任せなので挙動は変わらない)。
+ */
 const MAX_MINUTE_DISTANCE = 12 * 60
 
 /**
@@ -275,7 +339,10 @@ export type CommentDetectorHandle = {
 
 export type CommentDetectorOptions = {
   root?: ParentNode & Node
-  /** **新しく現れたコメント**だけが渡る */
+  /**
+   * **AC9 を通ったコメントだけが渡る** — 監視開始より前のもの・猶予の中のもの・
+   * タイムスタンプの要素が無いものは、ここへ来る前に捨てられる。
+   */
   onComment: (author: CommentAuthor) => void
   streamId?: string
   now?: () => number
@@ -289,16 +356,19 @@ export type CommentDetectorOptions = {
  * ⚠️ **`scanExisting` を作らない。**リダイレクト側は初期走査が唯一の検知経路だが、
  *    コメント側は「起動時に既にあるものには反応しない」が要件 (AC9)。
  *
- * ⚠️ **監視する範囲はチャット項目リストではなく `body` 全体にしない。**
- *    コメントは項目リストの中にしか出ない。広げると自分の投稿・バナー・
- *    メニューの出現まで拾って無駄が増える(リダイレクト通知はリストの外に出るので
- *    あちらは `body` を見ている / detector.ts)。
+ * ⚠️ **監視するのは `body` 全体。**チャット項目リストに絞ると、**リストごと差し替えられたとき
+ *    (ポップアウトの開き直し・フィルタ切替)に observer が外れて無言で止まる。**
+ *    代償として、**項目リストの外に現れる `yt-live-chat-text-message-renderer` も拾いうる**
+ *    (固定バナーの中など。固定時の DOM はまだ確認していない / selectors.ts)。
+ *    そこは AC10 の自己ループ遮断(T8)と AC9 の時刻判定で受ける。
  */
 export function startCommentDetector(options: CommentDetectorOptions): CommentDetectorHandle {
   const root = options.root ?? document
   const now = options.now ?? (() => Date.now())
   const isDebug = options.debug ?? (() => false)
   const startedAt = now()
+  // 分単位の比較には「監視を張った時刻の時分」が要る (AC9)
+  const startedAtDate = new Date(startedAt)
   const seen = new WeakSet<Element>()
 
   const handleNode = (node: Node): void => {
@@ -315,6 +385,19 @@ export function startCommentDetector(options: CommentDetectorOptions): CommentDe
       if (isDebug()) log.info('[debug] コメントから投稿者を取れなかった:', result.reason)
       return
     }
+
+    // **AC9 はここで適用する。**下流(T8)に委ねると、R3 の 1 枚目の歯止めが
+    // 「渡ってきたものは新しい」という思い込みで抜ける
+    const { fresh, freshness } = isFreshComment(result.author, startedAt, startedAtDate)
+    if (!fresh) {
+      if (isDebug()) log.info('[debug] 監視開始より前のコメントとして捨てた:', freshness)
+      return
+    }
+    // 読めなかった場合は**通したうえで**残しておく。猶予しか効いていないことが分かるように
+    if (isDebug() && freshness === 'unreadable') {
+      log.info('[debug] タイムスタンプを読めなかった。猶予だけで判定した')
+    }
+
     options.onComment(result.author)
   }
 
