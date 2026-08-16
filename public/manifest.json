@@ -9,6 +9,7 @@
     "48": "icons/icon48.png",
     "128": "icons/icon128.png"
   },
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAlV9451W8agKwrcppxtPhPkRZ7lVl7horDr8tjC96keVPyxTXowsNvchcmIgslT+o8e5ksg90eEQBZRyI66Wz8Pqu9cQ5wKgK/48Zu/thw21lZ8ewnCTRzWzjiglUDShewGMVSF9FKOf9jPWrEjjASSLjWW10jC4h2UxZF/twDANnix1Lh+X3lD3S22HdwSl4L/xckzdD7e0bNCeC/crjETDtNVOM370yAroccQGC8TiIWoftdkvM9kWVBsHKbS3pVIxQpzrJir1BfRM+06e6iaVVFQPWPxkbG285agJld3JsIzGj8buu16Mdh7UM/jAbmx8k+qgXaGZx9aaUYoc5MQIDAQAB",
   "permissions": ["storage"],
   "host_permissions": ["https://studio.youtube.com/*", "https://www.youtube.com/*"],
   "content_scripts": [
