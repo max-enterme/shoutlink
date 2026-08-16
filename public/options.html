@@ -38,8 +38,6 @@
       table.directory td:last-child, table.directory th:last-child { width: 2.5em; padding-right: 0; }
       table.directory .handle { word-break: break-all; }
       table.directory .unseen { color: #888; }
-      /* 自由文は一番長い入力なので、呼び名より広く取る */
-      table.directory .msg { width: 40%; }
       table.directory .remaining { display: block; color: #666; font-size: 11px; margin-top: 2px; }
       /* 負(超過)は色でも分かるようにする。投稿時に削られるが保存は妨げない (AC8) */
       table.directory .remaining.over { color: #b3261e; }
@@ -57,11 +55,13 @@
         border: none; background: none; padding: 0 2px; color: #666; cursor: pointer; line-height: 1;
       }
       /* 「効かない行」の印は**アイコン + 行の背景色**の両方 (T14 で確定) */
+      /* 展開している行では**詳細行にも**付ける(上段だけ色が変わると半端になる) */
       table.directory tr.ineffective > td { background: #fff6f6; }
+      table.directory tr.ineffective > td.detail { background: #fff2f2; }
       table.directory .mark { color: #b3261e; cursor: help; margin-left: 4px; }
-      table.directory td.detail { background: #fafafa; border-left: 3px solid #ddd; padding: 8px 10px; }
+      /* 詳細セルは `colspan` なので `td:last-child` の幅指定が当たる。ここで戻す */
+      table.directory td.detail { background: #fafafa; border-left: 3px solid #ddd; padding: 8px 10px; width: auto; }
       table.directory .detail-field { display: block; color: #666; font-size: 12px; margin-top: 8px; }
-      table.directory .detail-field:first-child { margin-top: 0; }
       table.directory .detail .row { margin-bottom: 4px; }
     </style>
   </head>

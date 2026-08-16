@@ -24,9 +24,11 @@ import type { PostLog } from '../post-log'
 import type { Config, PinMode, RedirectEvent } from '../types'
 import {
   captureRowDraft,
+  commentMismatchMessage,
+  countReplyToComment,
   entryRemainingLength,
   formatRemaining,
-  hasMsgPlaceholder,
+  ineffectiveReasons,
   msgPlaceholderWarning,
   rowDraftValues,
   validateEntryMessage,
@@ -143,18 +145,29 @@ const commentDrafts = new Map<string, RowDraft>()
 function captureRowDrafts(): void {
   for (const row of liveRows) {
     const saved = findEntry(directory, row.url)
-    const draft = saved ? captureRowDraft(saved, row.shown, row.read(), row.shownFromDraft) : null
+    // **辞書から消えた行の下書きは、両方まとめて捨てる。**
+    // ⚠️ 掃除をコメント側の `if (!row.comment) continue` の後ろに置くと、
+    //    `row.comment` は**展開している行にしか付かない**ので、
+    //    **畳んだまま削除した行のコメント側の下書きだけが残る。**
+    //    同じハンドルを ＋ から再登録したときに、弾かれた 200 字超が赤枠つきで復活する
+    if (!saved) {
+      rowDrafts.delete(row.key)
+      commentDrafts.delete(row.key)
+      expandedRows.delete(row.key)
+      continue
+    }
+    const draft = captureRowDraft(saved, row.shown, row.read(), row.shownFromDraft)
     if (draft) rowDrafts.set(row.key, draft)
     else rowDrafts.delete(row.key)
 
     if (!row.comment) continue
     // コメント側は `message` の位置に `commentMessage` を入れて同じ判定を通す
-    const savedComment = saved
-      ? { nickname: saved.nickname, message: saved.commentMessage }
-      : undefined
-    const commentDraft = savedComment
-      ? captureRowDraft(savedComment, row.comment.shown, row.comment.read(), row.comment.shownFromDraft)
-      : null
+    const commentDraft = captureRowDraft(
+      { nickname: saved.nickname, message: saved.commentMessage },
+      row.comment.shown,
+      row.comment.read(),
+      row.comment.shownFromDraft,
+    )
     if (commentDraft) commentDrafts.set(row.key, commentDraft)
     else commentDrafts.delete(row.key)
   }
@@ -189,15 +202,14 @@ function renderCommentTemplateWarning(): void {
  * 「保存した」のような消える表示にすると、次に開いたときに気づけない。
  */
 function renderCommentMismatch(): void {
-  const on = directory.filter((entry) => entry.replyToComment).length
-  let message: string | null = null
-  if (commentReplyEnabled.checked && on === 0) {
-    message = '辞書で「コメントに反応する」を付けた人が 0 件です。このままでは何も起きません。'
-  } else if (!commentReplyEnabled.checked && on > 0) {
-    message = `辞書で ${on} 人に「コメントに反応する」が付いていますが、このスイッチが OFF なので動きません。`
-  }
+  const message = commentMismatchMessage(commentReplyEnabled.checked, countReplyToComment(directory))
   commentMismatch.textContent = message ?? ''
   commentMismatch.hidden = message === null
+}
+
+/** **いつ見ても正しい**必要があるもの(AC13 の常時表示と AC16 の警告)をまとめて描き直す */
+function renderAlwaysOnNotices(): void {
+  renderAlwaysOnNotices()
 }
 
 function renderTemplateWarning(): void {
@@ -221,39 +233,6 @@ async function persistDirectory(message: string): Promise<void> {
   setDirectoryStatus(message)
 }
 
-/**
- * **畳んだ状態でも分かるべき「設定したのに効かない」理由** (AC13 / T14 で確定)。
- *
- * 出すのは 3 種類:
- * 1. コメント返し用の自由文があるのに「コメントに反応する」が OFF(書いた一文が一生使われない)
- * 2. 自由文があるのに、**対応する**テンプレートに `{msg}` が無い(組を跨いで判定しない / AC16)
- * 3. 「コメントに反応する」が ON なのに**チャンネル ID が未解決**(照合できないので反応しない / AC17)
- *
- * ⚠️ **「フラグ ON で自由文が空」は出さない。**AC16 の既定であり、
- *    フラグを付けた直後の全行がこれに当たる。撃つと辞書全体が印で埋まり、
- *    上の 3 種類も AC13 の常時表示も読み飛ばされる。
- */
-function ineffectiveReasons(
-  entry: Directory[number],
-  message: string,
-  commentMessage: string,
-): string[] {
-  const reasons: string[] = []
-  if (commentMessage.trim() && !entry.replyToComment) {
-    reasons.push('コメント返し用の自由文がありますが、「コメントに反応する」が OFF です。この一文は使われません。')
-  }
-  if (message.trim() && !hasMsgPlaceholder(currentTemplate())) {
-    reasons.push('自由文がありますが、リダイレクト返礼の文面に {msg} がありません。')
-  }
-  if (commentMessage.trim() && !hasMsgPlaceholder(currentCommentTemplate())) {
-    reasons.push('コメント返し用の自由文がありますが、コメント返しの文面に {msg} がありません。')
-  }
-  if (entry.replyToComment && !entry.channelId) {
-    reasons.push('チャンネル ID が未解決のため、コメントには反応しません。')
-  }
-  return reasons
-}
-
 function renderDirectory(): void {
   // **行を消す前に**編集中の値を退避する。ここを飛ばすと未保存の入力がそのまま消える
   captureRowDrafts()
@@ -269,7 +248,10 @@ function renderDirectory(): void {
     cell.textContent = 'まだ登録がありません。リダイレクトを受けると自動で追加されます。'
     row.appendChild(cell)
     directoryRows.appendChild(row)
-    renderTemplateWarning()
+    // ⚠️ **早期 return でも 3 本とも呼ぶ。**片方だけにすると「最後の 1 件を削除した」遷移で
+    //    AC13 の常時表示と AC16 の警告が**古い内容のまま残る**(次の描画でも同じ経路を通るので
+    //    自己回復しない)。常時表示は「いつ見ても正しい」ことが要件
+    renderAlwaysOnNotices()
     return
   }
 
@@ -312,7 +294,10 @@ function renderDirectory(): void {
     handleCell.textContent = displayHandle(entry)
     handleCell.title = entry.lastSeenAt ? entry.url : `${entry.url}(まだリダイレクトを受けていない)`
 
-    const reasons = ineffectiveReasons(entry, shown.message, commentShown.message)
+    const reasons = ineffectiveReasons(entry, shown.message, commentShown.message, {
+      template: currentTemplate(),
+      commentTemplate: currentCommentTemplate(),
+    })
     if (reasons.length > 0) {
       // T14 で確定: **アイコン + 行の背景色の両方**。理由はアイコンの title に出す
       row.classList.add('ineffective')
@@ -402,7 +387,7 @@ function renderDirectory(): void {
       getTemplate: () => string,
       save: (text: string) => void,
       setInvalid: (reason: string | null) => void,
-    ): { input: HTMLInputElement; read: () => RowDraft } => {
+    ): HTMLInputElement => {
       const label = document.createElement('label')
       label.className = 'detail-field'
       label.textContent = labelText
@@ -454,15 +439,9 @@ function renderDirectory(): void {
 
       label.append(field, remaining)
       detailCell.appendChild(label)
-      return {
-        input: field,
-        read: () => ({
-          nickname: input.value,
-          message: field.value,
-          invalid: false,
-          reason: null,
-        }),
-      }
+      // **`read` は返さない。**下書きの読み取りは `liveRows` 側が組み立てる。
+      // ここでも返すと `invalid` 固定の版が紛れ、うっかり使うと下書きが壊れる
+      return field
     }
 
     const messageField = makeMessageField(
@@ -505,7 +484,7 @@ function renderDirectory(): void {
       shownFromDraft: savedDraft !== undefined,
       read: () => ({
         nickname: input.value,
-        message: messageField.input.value,
+        message: messageField.value,
         invalid: invalidReason !== null,
         reason: invalidReason,
       }),
@@ -514,7 +493,7 @@ function renderDirectory(): void {
         shownFromDraft: commentSavedDraft !== undefined,
         read: () => ({
           nickname: input.value,
-          message: commentField.input.value,
+          message: commentField.value,
           invalid: commentInvalidReason !== null,
           reason: commentInvalidReason,
         }),
@@ -522,9 +501,7 @@ function renderDirectory(): void {
     })
   }
 
-  renderTemplateWarning()
-  renderCommentTemplateWarning()
-  renderCommentMismatch()
+  renderAlwaysOnNotices()
 }
 
 addEntry.addEventListener('click', () => {

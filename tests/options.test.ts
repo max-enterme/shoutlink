@@ -15,14 +15,16 @@ import {
 import type { Directory } from '../src/directory'
 import {
   captureRowDraft,
+  commentMismatchMessage,
   countEntriesWithMessage,
+  countReplyToComment,
+  ineffectiveReasons,
   entryRemainingLength,
   entryTemplateValues,
   formatRemaining,
   hasMsgPlaceholder,
   msgPlaceholderWarning,
   rowDraftValues,
-  shouldUpsertMessage,
   validateEntryMessage,
 } from '../src/options/message-field'
 import type { RowDraft } from '../src/options/message-field'
@@ -272,21 +274,6 @@ describe('captureRowDraft / rowDraftValues (再描画で未保存の入力を失
   })
 })
 
-describe('shouldUpsertMessage (＋ の欄からの再登録)', () => {
-  it('既に登録がある相手を、空の自由文欄で上書きしない', () => {
-    expect(shouldUpsertMessage({ nickname: '', message: '大事な一言' }, '')).toBe(false)
-    expect(shouldUpsertMessage({ nickname: '', message: '大事な一言' }, '   ')).toBe(false)
-  })
-
-  it('自由文を書いてあれば既存の登録でも上書きする', () => {
-    expect(shouldUpsertMessage({ nickname: '', message: '古い一言' }, '新しい一言')).toBe(true)
-  })
-
-  it('新規の登録は空でも行を作る(呼び名だけの登録と同じ)', () => {
-    expect(shouldUpsertMessage(undefined, '')).toBe(true)
-  })
-})
-
 // --- 004: 組(テンプレート × 自由文)ごとの判定 (AC16) -------------------------
 
 describe('countEntriesWithMessage — field ごとに数える (AC16)', () => {
@@ -336,5 +323,87 @@ describe('msgPlaceholderWarning — 組を跨がない (AC16)', () => {
     expect(msgPlaceholderWarning('{name}', onlyComment, 'commentMessage')).toContain(
       'コメント返し用の自由文',
     )
+  })
+})
+
+// --- 004: 「効かない行」の印 (AC13 / AC17) ------------------------------------
+
+describe('ineffectiveReasons (AC13)', () => {
+  const withMsg = { template: '{name} {msg} {url}', commentTemplate: '{name} {msg} {url}' }
+  const noMsg = { template: '{name} {url}', commentTemplate: '{name} {url}' }
+  const row = (over: Partial<Directory[number]> = {}) =>
+    entry({ replyToComment: false, channelId: '', ...over })
+
+  it('何も設定していない行には印を出さない', () => {
+    expect(ineffectiveReasons(row(), '', '', withMsg)).toEqual([])
+  })
+
+  it('**「フラグ ON で自由文が空」は撃たない**(AC16 の既定。撃つと全行が印で埋まる)', () => {
+    const reasons = ineffectiveReasons(
+      row({ replyToComment: true, channelId: 'UCaaaaaaaaaaaaaaaaaaaaaa' }),
+      '',
+      '',
+      withMsg,
+    )
+    expect(reasons).toEqual([])
+  })
+
+  it('コメント用の自由文があるのにフラグが OFF なら出す', () => {
+    const reasons = ineffectiveReasons(row(), '', 'コメント用', withMsg)
+    expect(reasons).toHaveLength(1)
+    expect(reasons[0]).toContain('OFF')
+  })
+
+  it('**テンプレートの {msg} 不在は組ごとに判定する**(組を跨がない / AC16)', () => {
+    // リダイレクト側だけ {msg} が無い
+    const onlyRedirectMissing = { template: '{name} {url}', commentTemplate: '{name} {msg} {url}' }
+    const reasons = ineffectiveReasons(
+      row({ replyToComment: true, channelId: 'UCaaaaaaaaaaaaaaaaaaaaaa' }),
+      'リダイレクト用',
+      'コメント用',
+      onlyRedirectMissing,
+    )
+    expect(reasons).toHaveLength(1)
+    expect(reasons[0]).toContain('リダイレクト返礼の文面')
+  })
+
+  it('**フラグ ON なのにチャンネル ID が未解決なら出す** (AC17)', () => {
+    const reasons = ineffectiveReasons(row({ replyToComment: true, channelId: '' }), '', '', withMsg)
+    expect(reasons).toHaveLength(1)
+    expect(reasons[0]).toContain('チャンネル ID が未解決')
+  })
+
+  it('複数当てはまればすべて出す', () => {
+    const reasons = ineffectiveReasons(row(), 'リダイレクト用', 'コメント用', noMsg)
+    // フラグ OFF + {msg} 不在 × 2
+    expect(reasons).toHaveLength(3)
+  })
+
+  it('空白だけの自由文は「書いた」とみなさない', () => {
+    expect(ineffectiveReasons(row(), '   ', '   ', noMsg)).toEqual([])
+  })
+})
+
+describe('commentMismatchMessage (AC13)', () => {
+  it('**ON なのにフラグが 0 件**なら出す', () => {
+    expect(commentMismatchMessage(true, 0)).toContain('0 件')
+  })
+
+  it('**OFF なのにフラグが付いている**なら件数つきで出す', () => {
+    expect(commentMismatchMessage(false, 3)).toContain('3 人')
+  })
+
+  it('食い違っていなければ出さない', () => {
+    expect(commentMismatchMessage(true, 1)).toBeNull()
+    expect(commentMismatchMessage(false, 0)).toBeNull()
+  })
+
+  it('countReplyToComment はフラグが ON の件数を数える', () => {
+    const directory: Directory = [
+      entry({ url: FAKE_CHANNEL.url, replyToComment: true }),
+      entry({ url: 'https://www.youtube.com/@b', replyToComment: false }),
+      entry({ url: 'https://www.youtube.com/@c', replyToComment: true }),
+    ]
+    expect(countReplyToComment(directory)).toBe(2)
   })
 })
