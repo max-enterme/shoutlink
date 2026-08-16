@@ -49,7 +49,23 @@ feature: comment-link
 
 - [x] T9: 設定画面 — 有効化スイッチ / コメント用テンプレート + プレビュー / 辞書テーブルの**フラグ列とコメント返し用の自由文列**(**どちらも行編集で即保存**)/ **行を畳む表示**(既定は現状の 3 列 = ハンドル・呼び名・削除ボタンだけ。**削除は畳んだ状態でも押せる**。**畳んだ状態でも「設定したのに効かない」行が分かる** — 自由文があるのにフラグが false / テンプレートに `{msg}` が無い。**フラグ ON で自由文が空は正常なので撃たない**)/ スイッチとフラグ件数の不整合の常時表示 / **投稿履歴の表に種別列**。自由文の 200 字検証・残り文字数・`{msg}` 不在の警告は **`commentTemplate` × `commentMessage` の組**で判定する(組を跨がない) (AC13 / AC16)。**文言はベタ書きの日本語**(003 spec.md D2 の決定により 002 は後に載るため、`_locales/` 化はしない)。**T14 のモックが確定してから着手する**(SPEC-OPS §10 / plan.md R9)  <!-- #33 -->
 - [x] T17: 設定画面の **`channelId` 解決まわり**(AC17)— 「コメントに反応する」を ON にしたときに解決を走らせる / **未解決の行が畳んだ状態でも分かる**(ON なのに `channelId` が空 = コメントに反応しない)/ **失敗の理由を出す** / **未解決の行を再試行できる** / **同じ `channelId` の行が 2 件以上あるときの警告**(AC17 でその状態は「何もしない」と決めたので、画面で気づけないと直せない)。**T15 が土台、T9 の後**(同じ辞書テーブルを触るため)  <!-- #54 -->
-- [ ] T10: ドキュメント — README / `docs/install.md` / `docs/index.html` / `docs/for-testers.md` / `docs/privacy-policy.md` / `docs/setup-and-verify.md` に、**引き金が増えたこと・既定 OFF・保存項目の追加**(`replyToComment` / `commentMessage` / `channelId`)を反映する。**あわせて `host_permissions` が増えたことを説明する**(AC17 / plan.md R11)— **インストール時の許可表示が変わる**こと、**注入ではなく設定画面からの 1 回の取得**であること、**ライブチャットの画面では通信しない**こと、**事故 1(`www` で content script が動いた)とは別物**であること。`docs/privacy-policy.md` には**どこへ何のために通信するか**を書く。`scripts/make-site-assets.mjs` の見本データに**フラグと自由文**を足す。**T11 は決着済み(2026-08-13)** — 書くのは「**引き金が増えても 001 D3 の結論は変わらない**」という判断と、**D5 の決定に基づく未検証の明記**(README / `docs/install.md` / **`docs/index.html`(公開ページ)/ `docs/for-testers.md`** に「実配信での通し確認は未実施」。T12 が済んだら外す)。<br>⚠️ **`scripts/package.mjs` の `INSTALL.txt` を必ず直す** — **ZIP を展開した人がまず読むのはこれ**で、現在「**YouTube Studio のライブ管制室のチャットでのみ動きます (www.youtube.com では動きません)**」と書いてある。T16 で許可表示に `www.youtube.com` が出るようになるので、**このままだと同梱文書と許可表示が正面から矛盾する**(#48 で直したばかりの場所)。**注入はしない / チャット画面では通信しない / 設定画面から 1 回取りに行くだけ**を書き分ける。<br>⚠️ **`docs/for-testers.md` は ZIP に同梱されていない**(`scripts/package.mjs` が入れるのは `dist/` と `INSTALL.txt` だけ)。従来ここにあった「ZIP に START-HERE として同梱される唯一の説明」という記述は**事実と違う**ので落とした  <!-- #34 -->
+- [x] T10: ドキュメント — README / `docs/install.md` / `docs/index.html` / `docs/for-testers.md` / `docs/privacy-policy.md` / `docs/setup-and-verify.md` に、**引き金が増えたこと・既定 OFF・保存項目の追加**(`replyToComment` / `commentMessage` / `channelId`)を反映する。**あわせて `host_permissions` が増えたことを説明する**(AC17 / plan.md R11)— **インストール時の許可表示が変わる**こと、**注入ではなく設定画面からの 1 回の取得**であること、**ライブチャットの画面では通信しない**こと、**事故 1(`www` で content script が動いた)とは別物**であること。`docs/privacy-policy.md` には**どこへ何のために通信するか**を書く。`scripts/make-site-assets.mjs` の見本データに**フラグと自由文**を足す。**T11 は決着済み(2026-08-13)** — 書くのは「**引き金が増えても 001 D3 の結論は変わらない**」という判断と、**D5 の決定に基づく未検証の明記**(README / `docs/install.md` / **`docs/index.html`(公開ページ)/ `docs/for-testers.md`** に「実配信での通し確認は未実施」。T12 が済んだら外す)。<br>⚠️ **`scripts/package.mjs` の `INSTALL.txt` を必ず直す** — **ZIP を展開した人がまず読むのはこれ**で、現在「**YouTube Studio のライブ管制室のチャットでのみ動きます (www.youtube.com では動きません)**」と書いてある。T16 で許可表示に `www.youtube.com` が出るようになるので、**このままだと同梱文書と許可表示が正面から矛盾する**(#48 で直したばかりの場所)。**注入はしない / チャット画面では通信しない / 設定画面から 1 回取りに行くだけ**を書き分ける。<br>⚠️ **`docs/for-testers.md` は ZIP に同梱されていない**(`scripts/package.mjs` が入れるのは `dist/` と `INSTALL.txt` だけ)。従来ここにあった「ZIP に START-HERE として同梱される唯一の説明」という記述は**事実と違う**ので落とした  <!-- #34 -->
+  - **2026-08-16 完了。**上記 6 文書 + **`scripts/package.mjs` の `INSTALL.txt`** に、
+    引き金が 2 種類になったこと / **既定 OFF はスイッチと辞書のフラグの両方**であること /
+    保存項目の追加(`replyToComment` / `commentMessage` / `channelId`)/ 投稿履歴の**種別** /
+    **許可表示に `www.youtube.com` が増えたこと**(注入ではない・チャット画面では通信しない・
+    事故 1 とは別物)を反映した。**D5 に従い「実配信での通し確認は未実施」を
+    README / install.md / index.html / for-testers.md に明記**(**T12 が済んだら外す**)
+  - **`docs/privacy-policy.md` は「ネットワーク通信を一切行いません」と書いていたので、
+    そのままでは嘘になる。**「いつ・どこへ・何のために・何を送るか」の表に書き換えた
+    (**利用者のデータは送らない / `credentials: 'omit'` / チャット画面では通信しない**)
+  - `docs/security-review.md` は S10 と重複させず、**変わった前提だけを追記**した
+    (「外部通信は無し」の行 / S5 の「ZIP に同梱される」という**事実誤認の訂正**)
+  - `scripts/make-site-assets.mjs` の見本データに `replyToComment` / `commentMessage` /
+    `channelId` と**投稿履歴 2 件(種別つき)**を足した。**`channelId` は解決済みと未解決を混ぜてある** —
+    T13 の絵で「**設定したのに効かない行**」の ⚠ と再試行の導線が見えるようにするため
+  - **`docs/for-testers.md` にテスト H(コメント返し)を足した。** 配信者自身のコメントには
+    反応しないので、**別アカウントが要る**ことを明記している
 
 ## 人手・実機が要るもの(SPEC-OPS §08 — `/spec-implement` に投げても止まる)
 
@@ -92,6 +108,11 @@ feature: comment-link
       `docs/assets/screenshot-3-directory.png` を撮り直す(§08 非コード成果物)。
       **T9 の実装と T10 の見本データ更新の後**。003 の T8 と重なるので、**後に入るほうが 1 回で撮る**
       (004 は行を畳む表示になるため、**畳んだ状態と展開した状態の両方**が要るか T14 のモックで決める)
+  - ⚠️ **画像と一緒に `docs/index.html` の `alt` と `figcaption` も直す。**
+    現在この 2 つは「ハンドル・呼び名・自由文 (`{msg}`) の列が行ごとに並び」という
+    **T9 以前の辞書テーブル**を説明したままで、実物は
+    [public/options.html](../../public/options.html) の **caret / ハンドル / 呼び名 / 削除**。
+    **画像も文章も古いので、撮り直しと同時に直すのが正しい**(T10 では直していない)
 
 ## 実装フロー(SPEC-OPS §11)
 

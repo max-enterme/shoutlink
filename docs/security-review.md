@@ -31,7 +31,7 @@
 
 | 観点 | 結果 |
 |---|---|
-| 外部通信 | **無し。**`fetch` / `XMLHttpRequest` / `WebSocket` / `sendBeacon` / 動的 `import()` の使用箇所ゼロ。for-testers.md の「外部のサーバーとは通信しません」は正確 |
+| 外部通信 | **点検時は無し。**`fetch` / `XMLHttpRequest` / `WebSocket` / `sendBeacon` / 動的 `import()` の使用箇所ゼロ。<br>⚠️ **2026-08-15 に変わった (004 / S10)** — [channel-id.ts](../src/channel-id.ts) が **`fetch` を 1 か所使う**(設定画面から、辞書に登録されたチャンネルのページを取得 / `credentials: 'omit'`)。**開発者のサーバは無いまま**だが、「通信を一切行わない」ではなくなったので、**for-testers.md / privacy-policy.md の文言を T10 で書き換えた** |
 | リモートコード実行 | `eval` / `new Function` / 文字列 `setTimeout` 無し。MV3 なので既定 CSP のまま |
 | DOM インジェクション | `src/` の `innerHTML` は `manual-trigger.ts:119` の 1 箇所のみで**静的文字列**。動的な値は全て `textContent` / `dataset` 経由。options ページも `createElement` + `textContent` |
 | 権限 | `permissions: ["storage"]` のみ。`web_accessible_resources` 無し・background 無し |
@@ -236,7 +236,15 @@ normalizeChannelUrl('/@%3Cscript%3E')
 - `docs/for-testers.md` §1「何をする拡張か(権限の説明)」→
   「`youtube.com/live_chat` と `studio.youtube.com/live_chat`」と書いてあった。
   この文書は**外部のテスターに「この拡張は何をするか」を説明する唯一の資料**で、
-  ZIP の `START-HERE.md` として同梱される。
+  ~~ZIP の `START-HERE.md` として同梱される。~~
+
+  > **訂正 (2026-08-16 / 004 T10): `docs/for-testers.md` は ZIP に同梱されていない。**
+  > [scripts/package.mjs](../scripts/package.mjs) が ZIP に入れるのは **`dist/` の中身と
+  > `INSTALL.txt` だけ**で、`START-HERE.md` は存在しない(for-testers.md は別途手渡す /
+  > [setup-and-verify.md](setup-and-verify.md) §8)。
+  > **したがって「ZIP を展開した人がまず読む文書」は `INSTALL.txt`** であり、
+  > 配布物と食い違ってはいけないのはそちら。S5 と同型の食い違いは 004 の
+  > `host_permissions` 追加でも起こりうるため、**T10 で `INSTALL.txt` にも許可の説明を入れた。**
 - `docs/setup-and-verify.md` §4「動く場所」→ 同上。
   さらに冒頭の警告が「T1 未実施 / セレクタはすべて推測」のままで、現状と合っていなかった。
 
@@ -343,6 +351,9 @@ for-testers.md §7 には④の採取について注意書きがあるので、�
 - **利用者から見た許可表示は変わる。**インストール時に `www.youtube.com` が出るので、
   README / install.md / index.html / for-testers.md / privacy-policy.md と
   **配布 ZIP の `INSTALL.txt`**(`scripts/package.mjs`)に説明を入れる(004 T10)
+  → **反映済み (2026-08-16 / T10)。**この表の「事故 1 との違い」を各文書の言葉で書き分けた。
+  **privacy-policy.md には「どこへ・いつ・何のために・何を送るか」を書いた** —
+  同ポリシーは「ネットワーク通信を一切行いません」と書いていたので、**そのままだと嘘になる**
 
 ## 回帰テストの穴
 
