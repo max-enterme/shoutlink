@@ -64,6 +64,40 @@ export const SELECTORS = {
     'yt-live-chat-membership-item-renderer',
   ],
 
+  /**
+   * **コメント返しの対象にする要素** (004 / AC3)。
+   *
+   * ⚠️ **`chatTextMessage` を流用しない。**あちらは
+   * `yt-live-chat-paid-message-renderer`(スパチャ)と
+   * `yt-live-chat-membership-item-renderer`(メンバー加入)を含むうえ、
+   * **除外用にも使われている**定数。コメント経路が対象にしてよいのは**通常のテキストコメントだけ**。
+   *
+   * ✅ 確認済み (2026-08-15 / 実配信): 項目リストに出ていたのは
+   * `yt-live-chat-text-message-renderer` と
+   * `yt-live-chat-viewer-engagement-message-renderer`(システムメッセージ)の 2 種類。
+   * 後者は投稿者が存在しないので、下の `getCommentAuthorParams` が空を返して自然に外れる。
+   */
+  commentTextMessage: ['yt-live-chat-text-message-renderer'],
+
+  // ⚠️ **削除済みメッセージのプレースホルダは未確認** (AC3)。
+  //    T1 の採取では出てこなかった(項目リストにあったのは通常のコメントと
+  //    システムメッセージの 2 種)。**タグごと差し替わるなら上の許可リストで自然に外れるが、
+  //    同じタグのまま属性で表される場合は素通りする。**推測でセレクタを足さず、
+  //    T12(実配信の通し確認)で見る。
+
+  /**
+   * **コメントの投稿者が入っている属性** (004 / AC4)。
+   *
+   * ✅ 確認済み (2026-08-15 / 実配信): `whole-message-clickable` の JSON の中の
+   * `liveChatItemContextMenuEndpoint.params` を **base64 で 2 回**解くと、
+   * 「メッセージ ID / {チャンネル ID, 動画 ID} / {チャンネル ID}」が出る。
+   * 実配信の全メッセージでページ内部の正解と一致した。
+   */
+  commentAuthorParamsAttribute: ['whole-message-clickable'],
+
+  /** コメントのタイムスタンプ。✅ 確認済み: `5:17 PM` 形式(**分単位・日付なし**) */
+  commentTimestamp: ['#timestamp'],
+
   /** チャットメッセージ本文 */
   chatMessageText: ['#message', '#content #message', '.message'],
 
@@ -455,4 +489,42 @@ export function hasUnpinMenuItem(root: ParentNode): boolean {
     const label = textOf(item)
     return !!label && UNPIN_MENU_LABELS.some((l) => label.includes(l))
   })
+}
+
+// --- コメント経路のアクセサ (004) ------------------------------------------
+
+/** 対象は**通常のテキストコメントだけ** (AC3)。`chatTextMessage` を流用しない */
+export function isCommentTextMessage(el: Element): boolean {
+  return matchesAny(el, SELECTORS.commentTextMessage)
+}
+
+/**
+ * 投稿者が入っている属性の**生の値**(JSON 文字列)。
+ * 解析は [comment-detector.ts](./comment-detector.ts) の純関数が行う。
+ */
+export function getCommentAuthorParams(el: Element): string | null {
+  for (const name of SELECTORS.commentAuthorParamsAttribute) {
+    const value = el.getAttribute(name)
+    if (value) return value
+  }
+  return null
+}
+
+/**
+ * `author-type` 属性 (AC10)。
+ * ✅ 確認済み (2026-08-15): 配信者のコメントは `owner`、他の視聴者は空文字。**追加ノードにも付く**。
+ */
+export function getCommentAuthorType(el: Element): string {
+  return el.getAttribute('author-type') ?? ''
+}
+
+/**
+ * タイムスタンプのテキスト (AC9)。
+ *
+ * **要素が無いことと、テキストが空であることを区別する** — 前者は「構造が変わった」で
+ * 安全側に倒し、後者は猶予で判定する(AC9)。
+ */
+export function getCommentTimestampText(el: ParentNode): string | null {
+  const node = queryFirst(el, SELECTORS.commentTimestamp)
+  return node ? textOf(node) : null
 }
