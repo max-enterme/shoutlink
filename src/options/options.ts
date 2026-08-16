@@ -1,7 +1,7 @@
 /**
  * 設定 UI (T7)。テンプレート編集 / ON・OFF / クールダウン / 固定モード。
  */
-import { compose } from '../composer'
+import { compose, composeText } from '../composer'
 import { DEFAULT_CONFIG, loadConfig, saveConfig } from '../config'
 import { normalizeChannelUrl } from '../detector'
 import {
@@ -13,8 +13,10 @@ import {
   removeEntry,
   saveDirectory,
   sortForDisplay,
+  upsertCommentMessage,
   upsertMessage,
   upsertNickname,
+  setReplyToComment,
 } from '../directory'
 import type { Directory } from '../directory'
 import { clearPostLog, loadPostLog } from '../post-log'
@@ -24,9 +26,9 @@ import {
   captureRowDraft,
   entryRemainingLength,
   formatRemaining,
+  hasMsgPlaceholder,
   msgPlaceholderWarning,
   rowDraftValues,
-  shouldUpsertMessage,
   validateEntryMessage,
 } from './message-field'
 import type { RowDraft } from './message-field'
@@ -44,6 +46,9 @@ const SAMPLE_EVENT: RedirectEvent = {
  */
 const SAMPLE_MESSAGE = 'いつも遊びに来てくれてありがとう!'
 
+/** コメント返しのプレビュー用。**リダイレクト返礼とは別の自由文**であることが見て分かる文にする */
+const SAMPLE_COMMENT_MESSAGE = '今日も来てくれてうれしい!'
+
 function el<T extends HTMLElement>(id: string): T {
   const found = document.getElementById(id)
   if (!found) throw new Error(`要素が見つからない: #${id}`)
@@ -56,11 +61,15 @@ const pinMode = el<HTMLSelectElement>('pinMode')
 const cooldownSec = el<HTMLInputElement>('cooldownSec')
 const showManualTrigger = el<HTMLInputElement>('showManualTrigger')
 const debug = el<HTMLInputElement>('debug')
+const commentReplyEnabled = el<HTMLInputElement>('commentReplyEnabled')
+const commentTemplate = el<HTMLTextAreaElement>('commentTemplate')
+const commentTemplateWarning = el<HTMLElement>('commentTemplateWarning')
+const commentMismatch = el<HTMLElement>('commentMismatch')
 const directoryRows = el<HTMLElement>('directoryRows')
 const directoryStatus = el<HTMLElement>('directoryStatus')
 const newHandle = el<HTMLInputElement>('newHandle')
 const newNickname = el<HTMLInputElement>('newNickname')
-const newMessage = el<HTMLInputElement>('newMessage')
+
 const addEntry = el<HTMLButtonElement>('addEntry')
 const templateWarning = el<HTMLElement>('templateWarning')
 const postLogRows = el<HTMLElement>('postLogRows')
@@ -108,6 +117,12 @@ const liveRows: Array<{
   /** `shown` が保存済みの値ではなく下書きから来たか(`captureRowDraft` の条件 2 を飛ばす) */
   shownFromDraft: boolean
   read: () => RowDraft
+  /** コメント返し用の自由文。**同じ仕組みを field ごとに持つ**(組を跨がない / AC16) */
+  comment?: {
+    shown: { nickname: string; message: string }
+    shownFromDraft: boolean
+    read: () => RowDraft
+  }
 }> = []
 
 /**
@@ -115,17 +130,42 @@ const liveRows: Array<{
  * 触られていない行・保存に反映済みの行・辞書から消えた行の下書きは捨てる
  * (古い値が勝ち続けると、他のタブや ＋ の欄からの変更が画面に出なくなる)。
  */
+/**
+ * **展開している行**(T14 で確定: 左端の `▸` で開閉)。
+ * AC13 は「展開状態は保存しなくてよい」だが、**再描画のたびに畳むと自由文が書けない**ので
+ * セッション中はここで覚える(保存はしない)。
+ */
+const expandedRows = new Set<string>()
+
+/** コメント返し用の自由文の下書き。リダイレクト側と同じ仕組みを field ごとに持つ */
+const commentDrafts = new Map<string, RowDraft>()
+
 function captureRowDrafts(): void {
   for (const row of liveRows) {
     const saved = findEntry(directory, row.url)
     const draft = saved ? captureRowDraft(saved, row.shown, row.read(), row.shownFromDraft) : null
     if (draft) rowDrafts.set(row.key, draft)
     else rowDrafts.delete(row.key)
+
+    if (!row.comment) continue
+    // コメント側は `message` の位置に `commentMessage` を入れて同じ判定を通す
+    const savedComment = saved
+      ? { nickname: saved.nickname, message: saved.commentMessage }
+      : undefined
+    const commentDraft = savedComment
+      ? captureRowDraft(savedComment, row.comment.shown, row.comment.read(), row.comment.shownFromDraft)
+      : null
+    if (commentDraft) commentDrafts.set(row.key, commentDraft)
+    else commentDrafts.delete(row.key)
   }
   liveRows.length = 0
 }
 
 /** 保存前のテンプレート欄の値。空ならプレビューと同じく既定テンプレートで見積もる */
+function currentCommentTemplate(): string {
+  return commentTemplate.value || DEFAULT_CONFIG.commentTemplate
+}
+
 function currentTemplate(): string {
   return template.value || DEFAULT_CONFIG.template
 }
@@ -134,6 +174,32 @@ function currentTemplate(): string {
  * 「自由文はあるのにテンプレートに `{msg}` が無い」の警告 (AC7)。
  * **保存を待たずに**出す / 消すため、テンプレートの `input` と辞書の再描画の両方から呼ぶ。
  */
+/**
+ * `{msg}` 不在の警告 (AC7 / AC16)。
+ * **`template` × `message` と `commentTemplate` × `commentMessage` の組で判定し、組を跨がない。**
+ */
+function renderCommentTemplateWarning(): void {
+  const warning = msgPlaceholderWarning(currentCommentTemplate(), directory, 'commentMessage')
+  commentTemplateWarning.textContent = warning ?? ''
+  commentTemplateWarning.hidden = warning === null
+}
+
+/**
+ * スイッチと辞書のフラグの食い違い (AC13)。**一時表示ではなく常時出す。**
+ * 「保存した」のような消える表示にすると、次に開いたときに気づけない。
+ */
+function renderCommentMismatch(): void {
+  const on = directory.filter((entry) => entry.replyToComment).length
+  let message: string | null = null
+  if (commentReplyEnabled.checked && on === 0) {
+    message = '辞書で「コメントに反応する」を付けた人が 0 件です。このままでは何も起きません。'
+  } else if (!commentReplyEnabled.checked && on > 0) {
+    message = `辞書で ${on} 人に「コメントに反応する」が付いていますが、このスイッチが OFF なので動きません。`
+  }
+  commentMismatch.textContent = message ?? ''
+  commentMismatch.hidden = message === null
+}
+
 function renderTemplateWarning(): void {
   const warning = msgPlaceholderWarning(currentTemplate(), directory)
   templateWarning.textContent = warning ?? ''
@@ -153,6 +219,39 @@ async function persistDirectory(message: string): Promise<void> {
   await saveDirectory(directory)
   renderDirectory()
   setDirectoryStatus(message)
+}
+
+/**
+ * **畳んだ状態でも分かるべき「設定したのに効かない」理由** (AC13 / T14 で確定)。
+ *
+ * 出すのは 3 種類:
+ * 1. コメント返し用の自由文があるのに「コメントに反応する」が OFF(書いた一文が一生使われない)
+ * 2. 自由文があるのに、**対応する**テンプレートに `{msg}` が無い(組を跨いで判定しない / AC16)
+ * 3. 「コメントに反応する」が ON なのに**チャンネル ID が未解決**(照合できないので反応しない / AC17)
+ *
+ * ⚠️ **「フラグ ON で自由文が空」は出さない。**AC16 の既定であり、
+ *    フラグを付けた直後の全行がこれに当たる。撃つと辞書全体が印で埋まり、
+ *    上の 3 種類も AC13 の常時表示も読み飛ばされる。
+ */
+function ineffectiveReasons(
+  entry: Directory[number],
+  message: string,
+  commentMessage: string,
+): string[] {
+  const reasons: string[] = []
+  if (commentMessage.trim() && !entry.replyToComment) {
+    reasons.push('コメント返し用の自由文がありますが、「コメントに反応する」が OFF です。この一文は使われません。')
+  }
+  if (message.trim() && !hasMsgPlaceholder(currentTemplate())) {
+    reasons.push('自由文がありますが、リダイレクト返礼の文面に {msg} がありません。')
+  }
+  if (commentMessage.trim() && !hasMsgPlaceholder(currentCommentTemplate())) {
+    reasons.push('コメント返し用の自由文がありますが、コメント返しの文面に {msg} がありません。')
+  }
+  if (entry.replyToComment && !entry.channelId) {
+    reasons.push('チャンネル ID が未解決のため、コメントには反応しません。')
+  }
+  return reasons
 }
 
 function renderDirectory(): void {
@@ -175,19 +274,56 @@ function renderDirectory(): void {
   }
 
   for (const entry of sortForDisplay(directory)) {
-    const row = document.createElement('tr')
     const key = directoryKey(entry.url)
-    // 未保存の入力があればそれを出す。無ければ保存済みの値
+    const expanded = expandedRows.has(key)
+
+    // 未保存の入力があればそれを出す。無ければ保存済みの値(field ごとに持つ)
     const savedDraft = rowDrafts.get(key)
     const shown = rowDraftValues(entry, savedDraft)
+    const commentSaved = { nickname: entry.nickname, message: entry.commentMessage }
+    const commentSavedDraft = commentDrafts.get(key)
+    const commentShown = rowDraftValues(commentSaved, commentSavedDraft)
+
     /** AC6 で弾かれたまま直っていない理由。再描画をまたいで持ち回る */
     let invalidReason: string | null = shown.invalid ? shown.reason : null
+    let commentInvalidReason: string | null = commentShown.invalid ? commentShown.reason : null
 
+    const row = document.createElement('tr')
+
+    // --- 展開の操作子 (T14 で確定: 左端の ▸) ------------------------------
+    const caretCell = document.createElement('td')
+    caretCell.className = 'caret'
+    const caret = document.createElement('button')
+    caret.type = 'button'
+    caret.className = 'caret'
+    caret.textContent = expanded ? '▾' : '▸'
+    caret.title = expanded ? '閉じる' : '自由文とフラグを開く'
+    caret.setAttribute('aria-expanded', String(expanded))
+    caret.addEventListener('click', () => {
+      if (expandedRows.has(key)) expandedRows.delete(key)
+      else expandedRows.add(key)
+      renderDirectory()
+    })
+    caretCell.appendChild(caret)
+
+    // --- ハンドル + 「効かない行」の印 -------------------------------------
     const handleCell = document.createElement('td')
     handleCell.className = entry.lastSeenAt ? 'handle' : 'handle unseen'
     handleCell.textContent = displayHandle(entry)
     handleCell.title = entry.lastSeenAt ? entry.url : `${entry.url}(まだリダイレクトを受けていない)`
 
+    const reasons = ineffectiveReasons(entry, shown.message, commentShown.message)
+    if (reasons.length > 0) {
+      // T14 で確定: **アイコン + 行の背景色の両方**。理由はアイコンの title に出す
+      row.classList.add('ineffective')
+      const mark = document.createElement('span')
+      mark.className = 'mark'
+      mark.textContent = '⚠'
+      mark.title = reasons.join('\n')
+      handleCell.appendChild(mark)
+    }
+
+    // --- 呼び名 -----------------------------------------------------------
     const nicknameCell = document.createElement('td')
     const input = document.createElement('input')
     input.type = 'text'
@@ -199,76 +335,7 @@ function renderDirectory(): void {
     })
     nicknameCell.appendChild(input)
 
-    // --- 自由文 (`{msg}`) --------------------------------------------------
-    const messageCell = document.createElement('td')
-    messageCell.className = 'msg'
-    const messageInput = document.createElement('input')
-    messageInput.type = 'text'
-    messageInput.value = shown.message
-    messageInput.placeholder = '(未設定 — {msg} は消える)'
-    if (invalidReason !== null) {
-      // 弾かれた状態のまま作り直した行。赤枠と理由も一緒に戻す
-      messageInput.classList.add('invalid')
-      messageInput.title = invalidReason
-    }
-
-    const remaining = document.createElement('span')
-    remaining.className = 'remaining'
-
-    // 残りは**展開後の投稿文全体**に対して出す (AC8)。呼び名は保存前の入力値を使う
-    // (保存を待って数字が動くと、書いている最中の値と食い違う)
-    const updateRemaining = (): void => {
-      const left = entryRemainingLength(
-        currentTemplate(),
-        { url: entry.url, nickname: input.value },
-        messageInput.value.trim(),
-      )
-      remaining.textContent = formatRemaining(left)
-      remaining.classList.toggle('over', left < 0)
-      remaining.title =
-        left < 0
-          ? '投稿時に 自由文 → 表示名 → 末尾 の順で削られます(保存はできます)'
-          : '投稿文全体 (200 字) に対する残り'
-    }
-    updateRemaining()
-    messageInput.addEventListener('input', updateRemaining)
-    input.addEventListener('input', updateRemaining)
-    templateDependents.push(updateRemaining)
-
-    messageInput.addEventListener('change', () => {
-      const checked = validateEntryMessage(messageInput.value)
-      if (!checked.ok) {
-        // **切り詰めて黙って保存しない** (AC6)。入力はそのまま残し、その場で直せるようにする。
-        // 他の行を触って再描画が走っても消えないよう、理由も下書きに載せる
-        invalidReason = checked.reason
-        messageInput.classList.add('invalid')
-        messageInput.title = checked.reason
-        setDirectoryStatus(`${displayHandle(entry)}: ${checked.reason}`)
-        return
-      }
-      invalidReason = null
-      messageInput.classList.remove('invalid')
-      messageInput.title = ''
-      directory = upsertMessage(directory, entry.url, checked.value)
-      void persistDirectory(`${displayHandle(entry)} の自由文を保存した`)
-    })
-    messageCell.append(messageInput, remaining)
-
-    liveRows.push({
-      key,
-      url: entry.url,
-      shown: { nickname: shown.nickname, message: shown.message },
-      // 下書きから描いた行では「shown と同じ = 打っていない」が成り立たない。
-      // これを渡さないと、再描画 2 回目で下書きが自分自身を捨てる
-      shownFromDraft: savedDraft !== undefined,
-      read: () => ({
-        nickname: input.value,
-        message: messageInput.value,
-        invalid: invalidReason !== null,
-        reason: invalidReason,
-      }),
-    })
-
+    // --- 削除(**畳んだ状態でも押せる** / AC13) ---------------------------
     const actionCell = document.createElement('td')
     const remove = document.createElement('button')
     remove.type = 'button'
@@ -276,15 +343,188 @@ function renderDirectory(): void {
     remove.title = '一覧から削除する'
     remove.addEventListener('click', () => {
       directory = removeEntry(directory, entry.url)
+      expandedRows.delete(key)
       void persistDirectory(`${displayHandle(entry)} を削除した`)
     })
     actionCell.appendChild(remove)
 
-    row.append(handleCell, nicknameCell, messageCell, actionCell)
+    row.append(caretCell, handleCell, nicknameCell, actionCell)
     directoryRows.appendChild(row)
+
+    if (!expanded) {
+      // 畳んだ行でも下書きは拾う(呼び名は畳んだ状態でも編集できる)
+      liveRows.push({
+        key,
+        url: entry.url,
+        shown: { nickname: shown.nickname, message: shown.message },
+        shownFromDraft: savedDraft !== undefined,
+        read: () => ({
+          nickname: input.value,
+          message: shown.message,
+          invalid: invalidReason !== null,
+          reason: invalidReason,
+        }),
+      })
+      continue
+    }
+
+    // --- 展開したときだけ出すもの -----------------------------------------
+    const detailRow = document.createElement('tr')
+    const detailCell = document.createElement('td')
+    detailCell.className = 'detail'
+    detailCell.colSpan = 4
+
+    // 「コメントに反応する」(行編集で即保存 / AC13)
+    const flagRow = document.createElement('div')
+    flagRow.className = 'row'
+    const flag = document.createElement('input')
+    flag.type = 'checkbox'
+    flag.checked = entry.replyToComment
+    const flagLabel = document.createElement('label')
+    flagLabel.style.margin = '0'
+    flagLabel.textContent = 'コメントに反応する'
+    flag.addEventListener('change', () => {
+      directory = setReplyToComment(directory, entry.url, flag.checked)
+      void persistDirectory(
+        `${displayHandle(entry)} のコメント返しを${flag.checked ? 'ON' : 'OFF'}にした`,
+      )
+    })
+    flagLabel.prepend(flag)
+    flagRow.appendChild(flagLabel)
+    detailCell.appendChild(flagRow)
+
+    /** 自由文 1 本ぶんの欄を作る。**リダイレクト用とコメント用で同じ規則を使う** (AC16) */
+    const makeMessageField = (
+      labelText: string,
+      value: string,
+      placeholder: string,
+      initialInvalid: string | null,
+      getTemplate: () => string,
+      save: (text: string) => void,
+      setInvalid: (reason: string | null) => void,
+    ): { input: HTMLInputElement; read: () => RowDraft } => {
+      const label = document.createElement('label')
+      label.className = 'detail-field'
+      label.textContent = labelText
+      const field = document.createElement('input')
+      field.type = 'text'
+      field.value = value
+      field.placeholder = placeholder
+      if (initialInvalid !== null) {
+        field.classList.add('invalid')
+        field.title = initialInvalid
+      }
+      const remaining = document.createElement('span')
+      remaining.className = 'remaining'
+
+      // 残りは**展開後の投稿文全体**に対して出す (AC8)。テンプレートは組ごとに違う
+      const updateRemaining = (): void => {
+        const left = entryRemainingLength(
+          getTemplate(),
+          { url: entry.url, nickname: input.value },
+          field.value.trim(),
+        )
+        remaining.textContent = formatRemaining(left)
+        remaining.classList.toggle('over', left < 0)
+        remaining.title =
+          left < 0
+            ? '投稿時に 自由文 → 表示名 → 末尾 の順で削られます(保存はできます)'
+            : '投稿文全体 (200 字) に対する残り'
+      }
+      updateRemaining()
+      field.addEventListener('input', updateRemaining)
+      input.addEventListener('input', updateRemaining)
+      templateDependents.push(updateRemaining)
+
+      field.addEventListener('change', () => {
+        const checked = validateEntryMessage(field.value)
+        if (!checked.ok) {
+          // **切り詰めて黙って保存しない** (AC6)。入力はそのまま残し、その場で直せるようにする
+          setInvalid(checked.reason)
+          field.classList.add('invalid')
+          field.title = checked.reason
+          setDirectoryStatus(`${displayHandle(entry)}: ${checked.reason}`)
+          return
+        }
+        setInvalid(null)
+        field.classList.remove('invalid')
+        field.title = ''
+        save(checked.value)
+      })
+
+      label.append(field, remaining)
+      detailCell.appendChild(label)
+      return {
+        input: field,
+        read: () => ({
+          nickname: input.value,
+          message: field.value,
+          invalid: false,
+          reason: null,
+        }),
+      }
+    }
+
+    const messageField = makeMessageField(
+      '自由文(リダイレクト返礼 / {msg})',
+      shown.message,
+      '(未設定 — {msg} は消える)',
+      invalidReason,
+      currentTemplate,
+      (text) => {
+        directory = upsertMessage(directory, entry.url, text)
+        void persistDirectory(`${displayHandle(entry)} の自由文を保存した`)
+      },
+      (reason) => {
+        invalidReason = reason
+      },
+    )
+
+    const commentField = makeMessageField(
+      '自由文(コメント返し / {msg})',
+      commentShown.message,
+      '(未設定 — {msg} は消える)',
+      commentInvalidReason,
+      currentCommentTemplate,
+      (text) => {
+        directory = upsertCommentMessage(directory, entry.url, text)
+        void persistDirectory(`${displayHandle(entry)} のコメント返し用の自由文を保存した`)
+      },
+      (reason) => {
+        commentInvalidReason = reason
+      },
+    )
+
+    detailRow.appendChild(detailCell)
+    directoryRows.appendChild(detailRow)
+
+    liveRows.push({
+      key,
+      url: entry.url,
+      shown: { nickname: shown.nickname, message: shown.message },
+      shownFromDraft: savedDraft !== undefined,
+      read: () => ({
+        nickname: input.value,
+        message: messageField.input.value,
+        invalid: invalidReason !== null,
+        reason: invalidReason,
+      }),
+      comment: {
+        shown: { nickname: shown.nickname, message: commentShown.message },
+        shownFromDraft: commentSavedDraft !== undefined,
+        read: () => ({
+          nickname: input.value,
+          message: commentField.input.value,
+          invalid: commentInvalidReason !== null,
+          reason: commentInvalidReason,
+        }),
+      },
+    })
   }
 
   renderTemplateWarning()
+  renderCommentTemplateWarning()
+  renderCommentMismatch()
 }
 
 addEntry.addEventListener('click', () => {
@@ -293,28 +533,18 @@ addEntry.addEventListener('click', () => {
     setDirectoryStatus('チャンネルの @ハンドル または URL を入れてください')
     return
   }
-  // 新規登録も**行の編集と同じ検証**を通す (AC6)。ここだけ素通しすると 200 字超が入る
-  const checked = validateEntryMessage(newMessage.value)
-  if (!checked.ok) {
-    newMessage.classList.add('invalid')
-    setDirectoryStatus(checked.reason)
-    return
-  }
-  newMessage.classList.remove('invalid')
-  // **既に登録されているハンドルを ＋ の欄から入れ直したときに、空欄で自由文を消さない。**
-  // 呼び名の上書きは 003 より前からの挙動なのでそのまま(ここでは変えない)
-  const existing = findEntry(directory, url)
-  const withNickname = upsertNickname(directory, url, newNickname.value.trim())
-  directory = shouldUpsertMessage(existing, checked.value)
-    ? upsertMessage(withNickname, url, checked.value)
-    : withNickname
+  // **自由文は ＋ の欄から入れない** — 行を畳む表示にしたので、登録してから ▸ で開いて書く。
+  // 「空欄で保存済みの自由文を消さない」ための分岐(003 の `shouldUpsertMessage`)も、
+  // 入口が無くなったので要らない
+  directory = upsertNickname(directory, url, newNickname.value.trim())
   newHandle.value = ''
   newNickname.value = ''
-  newMessage.value = ''
+  // 新しく登録した行はすぐ書けるように開いておく
+  expandedRows.add(directoryKey(url))
   void persistDirectory('登録した')
 })
 
-for (const input of [newHandle, newNickname, newMessage]) {
+for (const input of [newHandle, newNickname]) {
   input.addEventListener('keydown', (ev) => {
     if (ev.key === 'Enter') addEntry.click()
   })
@@ -339,7 +569,7 @@ function renderPostLog(log: PostLog): void {
   if (log.length === 0) {
     const row = document.createElement('tr')
     const cell = document.createElement('td')
-    cell.colSpan = 3
+    cell.colSpan = 4
     cell.className = 'empty'
     cell.textContent = 'まだ投稿していません。'
     row.appendChild(cell)
@@ -355,6 +585,10 @@ function renderPostLog(log: PostLog): void {
     handleCell.textContent = record.handle
     handleCell.title = record.url
 
+    // **種別** (AC13)。どちらの引き金で出た投稿かが分からないと、抑止の効き方 (AC8) を読めない
+    const kindCell = document.createElement('td')
+    kindCell.textContent = record.kind === 'comment' ? 'コメント返し' : 'リダイレクト返礼'
+
     const textCell = document.createElement('td')
     textCell.className = 'text'
     textCell.textContent = record.text
@@ -363,7 +597,7 @@ function renderPostLog(log: PostLog): void {
     timeCell.textContent = new Date(record.postedAt).toLocaleString()
     timeCell.title = record.streamId ? `配信 ID: ${record.streamId}` : '配信 ID が取れなかった回'
 
-    row.append(handleCell, textCell, timeCell)
+    row.append(handleCell, kindCell, textCell, timeCell)
     postLogRows.appendChild(row)
   }
 }
@@ -379,12 +613,19 @@ clearPostLogButton.addEventListener('click', () => {
 
 void loadPostLog().then(renderPostLog)
 const preview = el<HTMLElement>('preview')
+const commentPreview = el<HTMLElement>('commentPreview')
 const status = el<HTMLElement>('status')
 const save = el<HTMLButtonElement>('save')
 
 function renderPreview(): void {
   // サンプルの自由文を入れて出す (AC7)。`{msg}` を足したときの見た目がその場で分かる
   preview.textContent = compose(currentTemplate(), SAMPLE_EVENT, { message: SAMPLE_MESSAGE })
+  // コメント返しは `RedirectEvent` を持たないので `{ name, url }` を直接渡す (AC5)
+  commentPreview.textContent = composeText(
+    currentCommentTemplate(),
+    { name: SAMPLE_EVENT.sourceChannelName, url: SAMPLE_EVENT.sourceChannelUrl },
+    { message: SAMPLE_COMMENT_MESSAGE },
+  )
 }
 
 function apply(config: Config): void {
@@ -394,15 +635,31 @@ function apply(config: Config): void {
   cooldownSec.value = String(config.cooldownSec)
   showManualTrigger.checked = config.showManualTrigger
   debug.checked = config.debug
+  commentReplyEnabled.checked = config.commentReplyEnabled
+  commentTemplate.value = config.commentTemplate
   renderPreview()
   refreshTemplateDependent()
+  renderCommentTemplateWarning()
+  renderCommentMismatch()
 }
 
 // **保存を待たずに**警告と残り文字数を追従させる (AC7 / AC8)
 template.addEventListener('input', () => {
   renderPreview()
   refreshTemplateDependent()
+  renderDirectory()
 })
+
+commentTemplate.addEventListener('input', () => {
+  renderPreview()
+  refreshTemplateDependent()
+  renderCommentTemplateWarning()
+  // 「効かない行」の印は**組ごと**に判定するので、こちらの変更でも描き直す (AC13 / AC16)
+  renderDirectory()
+})
+
+// スイッチと辞書の食い違いは**常時表示**。保存を待たずに追従させる (AC13)
+commentReplyEnabled.addEventListener('change', renderCommentMismatch)
 
 save.addEventListener('click', () => {
   void (async () => {
@@ -413,6 +670,8 @@ save.addEventListener('click', () => {
       cooldownSec: Number(cooldownSec.value),
       showManualTrigger: showManualTrigger.checked,
       debug: debug.checked,
+      commentReplyEnabled: commentReplyEnabled.checked,
+      commentTemplate: commentTemplate.value,
     })
     apply(saved)
     status.textContent = '保存した'

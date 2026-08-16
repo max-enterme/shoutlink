@@ -55,8 +55,18 @@ export function hasMsgPlaceholder(template: string): boolean {
 }
 
 /** 自由文が入っている(空白だけではない)登録の件数 */
-export function countEntriesWithMessage(directory: Directory): number {
-  return directory.filter((entry) => entry.message.trim()).length
+/**
+ * どちらの自由文か (004 / AC16)。
+ * **判定は `template` × `message` と `commentTemplate` × `commentMessage` の組で行い、
+ * 組を跨がない** — 片方のテンプレートに `{msg}` があることで、もう片方の警告が消えてはいけない。
+ */
+export type MessageField = 'message' | 'commentMessage'
+
+export function countEntriesWithMessage(
+  directory: Directory,
+  field: MessageField = 'message',
+): number {
+  return directory.filter((entry) => entry[field].trim()).length
 }
 
 /**
@@ -65,11 +75,16 @@ export function countEntriesWithMessage(directory: Directory): number {
  * 既定テンプレートに `{msg}` を入れても `normalizeConfig` が保存済みテンプレートを尊重するため
  * 既存利用者には届かない。**代わりにこの警告で気づかせる**(spec.md「既定テンプレートは変えない」)。
  */
-export function msgPlaceholderWarning(template: string, directory: Directory): string | null {
+export function msgPlaceholderWarning(
+  template: string,
+  directory: Directory,
+  field: MessageField = 'message',
+): string | null {
   if (hasMsgPlaceholder(template)) return null
-  const count = countEntriesWithMessage(directory)
+  const count = countEntriesWithMessage(directory, field)
   if (count === 0) return null
-  return `自由文を ${count} 件登録していますが、テンプレートに {msg} がありません。このままでは自由文は投稿に出ません。`
+  const what = field === 'commentMessage' ? 'コメント返し用の自由文' : '自由文'
+  return `${what}を ${count} 件登録していますが、テンプレートに {msg} がありません。このままでは投稿に出ません。`
 }
 
 // --- AC8: 展開後の投稿文に対する残り文字数 ---------------------------------

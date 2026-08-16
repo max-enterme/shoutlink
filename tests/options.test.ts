@@ -286,3 +286,55 @@ describe('shouldUpsertMessage (＋ の欄からの再登録)', () => {
     expect(shouldUpsertMessage(undefined, '')).toBe(true)
   })
 })
+
+// --- 004: 組(テンプレート × 自由文)ごとの判定 (AC16) -------------------------
+
+describe('countEntriesWithMessage — field ごとに数える (AC16)', () => {
+  const directory: Directory = [
+    entry({ url: FAKE_CHANNEL.url, message: 'リダイレクト用', commentMessage: '' }),
+    entry({ url: 'https://www.youtube.com/@b', message: '', commentMessage: 'コメント用' }),
+    entry({ url: 'https://www.youtube.com/@c', message: 'A', commentMessage: 'B' }),
+  ]
+
+  it('既定は 003 の自由文を数える', () => {
+    expect(countEntriesWithMessage(directory)).toBe(2)
+  })
+
+  it('コメント返し用の自由文だけを数えられる', () => {
+    expect(countEntriesWithMessage(directory, 'commentMessage')).toBe(2)
+  })
+
+  it('空白だけは数えない', () => {
+    expect(countEntriesWithMessage([entry({ commentMessage: '   ' })], 'commentMessage')).toBe(0)
+  })
+})
+
+describe('msgPlaceholderWarning — 組を跨がない (AC16)', () => {
+  const onlyComment: Directory = [entry({ message: '', commentMessage: 'コメント用' })]
+
+  it('**組を跨がない** — リダイレクト側に {msg} があっても、コメント側の判定は独立している', () => {
+    const redirectTemplate = '{name} {msg} {url}' // {msg} あり
+    const commentTemplateWithout = '{name} {url}' // {msg} なし
+
+    // リダイレクト側: 自由文が 0 件なので出ない
+    expect(msgPlaceholderWarning(redirectTemplate, onlyComment, 'message')).toBeNull()
+    // コメント側: 自由文が 1 件あってテンプレートに {msg} が無いので**出る**
+    expect(msgPlaceholderWarning(commentTemplateWithout, onlyComment, 'commentMessage')).not.toBeNull()
+  })
+
+  it('自分の組のテンプレートに {msg} があれば出ない', () => {
+    expect(msgPlaceholderWarning('{msg}', onlyComment, 'commentMessage')).toBeNull()
+  })
+
+  it('自分の組の自由文が 0 件なら出ない', () => {
+    const onlyRedirect: Directory = [entry({ message: 'リダイレクト用', commentMessage: '' })]
+    expect(msgPlaceholderWarning('{name} {url}', onlyRedirect, 'commentMessage')).toBeNull()
+    expect(msgPlaceholderWarning('{name} {url}', onlyRedirect, 'message')).not.toBeNull()
+  })
+
+  it('文面にどちらの自由文かが出る', () => {
+    expect(msgPlaceholderWarning('{name}', onlyComment, 'commentMessage')).toContain(
+      'コメント返し用の自由文',
+    )
+  })
+})
