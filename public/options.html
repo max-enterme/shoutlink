@@ -63,6 +63,13 @@
       table.directory td.detail { background: #fafafa; border-left: 3px solid #ddd; padding: 8px 10px; width: auto; }
       table.directory .detail-field { display: block; color: #666; font-size: 12px; margin-top: 8px; }
       table.directory .detail .row { margin-bottom: 4px; }
+      /* --- 004 AC17: チャンネル ID の解決 --- */
+      /* 展開したときの 1 行(状態 + 再試行)。理由は**行ごと**に出す */
+      table.directory .channel-id { margin: 6px 0 0; color: #666; font-size: 12px; }
+      table.directory .channel-id.failed { color: #b3261e; }
+      table.directory .channel-id button { margin-left: 6px; }
+      /* 走っている間の表示。畳んだ行でも分かるようにハンドルの横に出す */
+      table.directory .resolving { color: #666; font-size: 11px; margin-left: 4px; }
     </style>
   </head>
   <body>
@@ -207,6 +214,14 @@
         呼び名の取り違えなら「誰かの名前」が出るだけですが、自由文は宛先を間違えると内容そのものが
         事故になります。<strong>取り違えて別の人に読まれても困らない内容だけを書いてください。</strong>
       </p>
+      <!-- AC17: 同じチャンネル ID の行が 2 件以上 = どちらを使うか決められないので何もしない。**常時表示** -->
+      <p class="warn" id="channelIdDuplicate" hidden></p>
+      <!-- AC17 / T14 の決定 3: 再試行は「展開したときの個別」と「ここのまとめて」の 2 つ -->
+      <p class="hint" id="channelIdRetryRow" hidden>
+        <button id="retryChannelIds" type="button"></button>
+        「コメントに反応する」が ON なのに<strong>チャンネル ID を取得できていない行</strong>です。
+        取得できるまで、その人のコメントには反応しません。
+      </p>
       <table class="directory">
         <thead>
           <tr><th class="caret"></th><th>ハンドル</th><th>呼び名</th><th></th></tr>
@@ -223,7 +238,10 @@
       </table>
       <p class="hint">
         <strong>▸ を押すと、自由文 2 本と「コメントに反応する」が開きます。</strong>
-        畳んだ状態でも、<strong>設定したのに効かない行には ⚠ が出ます</strong>(理由はアイコンにカーソルを合わせると出ます)。
+        畳んだ状態でも、<strong>設定したのに効かない行には ⚠ が出ます</strong>(理由はアイコンにカーソルを合わせると出ます)。<br />
+        「コメントに反応する」を ON にすると、<strong>その人のチャンネルページを 1 回だけ見に行って照合用の ID を控えます</strong>
+        (ライブチャットの画面では通信しません)。失敗しても他の機能は動きますが、<strong>その人のコメントには反応しません</strong>
+        — 理由は行を開くと出ます。
       </p>
       <p class="hint" id="directoryStatus"></p>
     </fieldset>
