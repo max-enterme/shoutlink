@@ -47,8 +47,8 @@ const PROMO = `<!doctype html>
       <path d="M19 56 L47 35 V77 Z" fill="#fff" />
     </svg>
     <div>
-      <h1>リダイレクト返礼ピン</h1>
-      <p>受け取ったライブリダイレクトを検知して、<br />送信元チャンネルの URL をチャットに投稿・固定します。</p>
+      <h1>返礼リンク</h1>
+      <p>来てくれた人のチャンネル URL を、<br />ライブチャットへ代わりに投稿します。</p>
     </div>
     <span class="tag">YouTube Studio のライブチャット用</span>
   </body>

@@ -3,16 +3,16 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>yt-redirect-pin — ライブリダイレクトの返礼を自動化する Chrome 拡張</title>
+    <title>返礼リンク — 来てくれた人のチャンネル URL をチャットに投稿する Chrome 拡張</title>
     <meta
       name="description"
-      content="YouTube のライブ配信で受け取ったライブリダイレクトを検知し、送信元チャンネルの URL をライブチャットへ投稿して固定する Chrome 拡張 (MV3)。"
+      content="YouTube のライブ配信で受け取ったライブリダイレクトや、登録した人のコメントを検知して、その人のチャンネル URL をライブチャットへ投稿する Chrome 拡張 (MV3)。"
     />
     <meta property="og:type" content="website" />
-    <meta property="og:title" content="yt-redirect-pin" />
+    <meta property="og:title" content="返礼リンク (yt-redirect-pin)" />
     <meta
       property="og:description"
-      content="ライブリダイレクトを検知して、送信元チャンネルの URL をチャットに投稿・固定する Chrome 拡張。"
+      content="来てくれた人のチャンネル URL を、ライブチャットへ代わりに投稿する Chrome 拡張。"
     />
     <!-- OG のクローラは絶対 URL でないと解決しないものが多い -->
     <meta property="og:url" content="https://max-enterme.github.io/yt-redirect-pin/" />
@@ -194,10 +194,10 @@
           />
           <path d="M19 56 L47 35 V77 Z" fill="#fff" />
         </svg>
-        <h1>yt-redirect-pin</h1>
+        <h1>返礼リンク</h1>
         <p class="tagline">
-          ライブリダイレクトを受け取ったら、送信元チャンネルの URL を<br />
-          チャットに投稿して固定する Chrome 拡張。
+          ライブリダイレクトを受け取ったとき、登録した人がコメントしたとき —<br />
+          その人のチャンネル URL をチャットに投稿する Chrome 拡張。
         </p>
         <div class="cta">
           <a class="btn btn-primary" href="https://github.com/max-enterme/yt-redirect-pin/releases/latest"
@@ -350,11 +350,12 @@
           width="1280"
           height="800"
           loading="lazy"
-          alt="呼び名の辞書の表。ハンドル・呼び名・自由文 ({msg}) の列が行ごとに並び、自由文の欄の下に投稿文全体に対する残り字数が出ている。末尾に新規登録用の入力欄がある"
+          alt="呼び名の辞書の表。ハンドルと呼び名の行が並び、各行は畳まれていて三角印で開くと自由文などが出る。チャンネル ID を取得できていない行は色が付き ⚠ が出ている。末尾に新規登録用の入力欄がある"
         />
         <figcaption>
           リダイレクトを受けた相手は自動で載る (呼び名も自由文も空のまま)。
-          自由文の下の「残り N 字」は<b>投稿文全体</b>に対する残り
+          行を開くと自由文やコメント返しの設定が出る。<b>⚠ の行はコメントに反応しない</b>
+          (チャンネル ID が取れていない)
         </figcaption>
       </figure>
 
