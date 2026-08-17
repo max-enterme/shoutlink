@@ -1,4 +1,4 @@
-# yt-redirect-pin
+# 返礼リンク (yt-redirect-pin)
 
 **YouTube のライブ配信で他チャンネルからライブリダイレクトを受け取ったとき、送信元チャンネルの
 URL をライブチャットへ投稿して固定する Chrome 拡張 (MV3)。**

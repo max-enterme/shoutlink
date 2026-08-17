@@ -1,6 +1,6 @@
 # 導入手順と動作確認
 
-対象: yt-redirect-pin (Chrome 拡張 / MV3)。実装は T2–T7 まで。
+対象: 返礼リンク (yt-redirect-pin / Chrome 拡張 / MV3)。実装は T2–T7 まで。
 
 > ⚠️ **spec.md D3(自動投稿の是非)は決着した** — グレーであることを開示した上で GitHub 配布する
 > ([d3-automation-policy.md](d3-automation-policy.md))。自動投稿に不安があるなら、
@@ -48,14 +48,14 @@ npm run typecheck && npx vitest run
 1. `chrome://extensions` を開く
 2. 右上の **デベロッパーモード** を ON
 3. **「パッケージ化されていない拡張機能を読み込む」** → このリポジトリの `dist/` を選ぶ
-4. カードに **「リダイレクト返礼ピン」** が出れば読み込み完了
+4. カードに **「返礼リンク」** が出れば読み込み完了
 
 **コードを直したら `npm run build` → `chrome://extensions` のカードの ⟳(更新)を押す。**
 押し忘れると古いコードが動き続ける。
 
 ## 3. 設定
 
-`chrome://extensions` の「リダイレクト返礼ピン」 → **詳細** → **拡張機能のオプション**(別タブで開く)。
+`chrome://extensions` の「返礼リンク」 → **詳細** → **拡張機能のオプション**(別タブで開く)。
 
 | 項目 | 内容 | 既定 |
 |---|---|---|
