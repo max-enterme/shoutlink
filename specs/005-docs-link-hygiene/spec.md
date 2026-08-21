@@ -24,8 +24,8 @@ status: 未着手
 
 ### 参照は多く、壊れても静か
 
-`docs/*.md` は 9 本・計 192,188 B。`README.md` と `docs/*.md` の Markdown リンクは **85 本**あり、
-現時点で切れは 0。だが**それを確かめる手段が repo に無い**。
+`docs/*.md` は 9 本・計 192,188 B。`README.md` と `docs/*.md` の Markdown リンクは **132 本**
+(うち**相対 85 本** / `http(s):` 44 / ページ内アンカー 3)で、現時点で相対リンクの切れは 0。だが**それを確かめる手段が repo に無い**。
 `.github/workflows/ci.yml` が回すのは `npm run typecheck` / `npm test` / `npm run package` の 3 本だけ。
 
 ### 説明ページは GitHub Pages のサイトルートで、リンクの形が違う
@@ -59,7 +59,7 @@ README・他の md・index.html のいずれからも参照されていない。
 |---|---|
 | `docs/security-review.md` の**コードフェンス内**に HTML アンカー | `href="/@sender"` 等が **4 本**(L87 / L141 / L143 / L145)。HTML 属性を md に当てると初日から誤検出 |
 | Markdown 記法 `](…)` はフェンス内に | **0 本**。md は Markdown 記法だけ見れば誤検出しない |
-| `docs/index.html` の og:image | `https://max-enterme.github.io/yt-redirect-pin/assets/ogp-440x280.png` の **Pages 絶対 URL**。`blob/main` ではないので還元対象に足さないと素通りする |
+| `docs/index.html` の og:url / og:image | **`<meta content="…">` にある**(L18 / L21)。`href` / `src` には Pages URL が **0 本**なので、抽出面に `content` を足さないと還元規則ごと死ぬ。`og:url` は `…/yt-redirect-pin/` = **ディレクトリ**なので還元対象から外す |
 | favicon | `href="data:image/svg+xml,…"`。相対パスとして扱うと誤検出 |
 | md 見出しアンカーは 6 本 | **相対 5 本 + index.html の絶対 URL 1 本**。②の還元を通して初めて 6 本になる |
 
@@ -89,29 +89,34 @@ README・他の md・index.html のいずれからも参照されていない。
 
 ## 受け入れ条件
 
-- [ ] AC1: `node scripts/check-links.mjs` が **exit 0**
+- [ ] AC1: `npm run check-links` が **exit 0**
 - [ ] AC2: 検査は次の 4 種。**それぞれについて、下記の壊し方で非 0 になることを
       `tests/check-links.test.ts` で固定する**
 
       ① **相対リンクの実在**
       　対象: `README.md` / `docs/**/*.md` は **Markdown 記法 `](…)` のみ**、
-      　`docs/index.html` は **`href` と `src`**。
+      　`docs/index.html` は **`href` / `src` / `<meta content>`**。
       　**いずれもコードフェンス内は対象外。`data:` と `mailto:` は除外。**
       　壊し方: 実在しないファイルへの相対リンクを 1 本置く
 
       ② **自リポジトリの絶対 URL をパスへ還元した実在確認**
       　対象: `https://github.com/max-enterme/yt-redirect-pin/blob/main/…` と
       　**`https://max-enterme.github.io/yt-redirect-pin/…`(Pages 絶対 URL → `docs/`)**。
+      　**末尾が `/` のもの(= `docs/` 自身を指す `og:url`)は還元対象から外す。**
       　**他リポジトリ・`releases`・`issues` への URL は還元しない**(誤検出になる)。
       　壊し方: 実在しないパスを指す `blob/main` URL を 1 本置く
 
-      ③ **md の見出しアンカー**(`…install.md#上限が効かない場合` の形)
+      ③ **md の見出しアンカー**(`…install.md#上限が効かない場合` の形)。
+      　見出しレベルは混在するので **`^#{1,6}`** を見る(h2 / h3 / h4 の実例がある)
       　壊し方: **実在する md ファイル + 実在しない見出しアンカー**。
       　**あわせて正例を固定する** — 実在する日本語見出し(`#上限が効かない場合`)が
       　解決されることを確かめる。**これが無いと③を空実装のまま①で緑にできる**
 
       ④ **孤立検出** — `docs/**/*.md` で **`README.md` から参照されていないもの**
       　壊し方: どこからも参照されない md を 1 本置く
+
+      **各テストは exit code だけでなく、出力に違反したパスが含まれることも見る**
+      (検査の取り違えを防ぐ)
 
 - [ ] AC3: `docs/**/*.md` に **`README.md` から参照されていないファイルが無い**。
       **被参照元を README に一本化する**理由は 2 つ。
@@ -136,13 +141,26 @@ README・他の md・index.html のいずれからも参照されていない。
   `specs` に 70 本、`src` / `tests` に裸のパス混じりで存在するが、
   **md を動かさない限り壊れない。**動かすと決めたら 006 で広げる。
   **006 はまだ `specs/` に存在しない**ので、この保留が解けるのは 006 を切ってから。
-- **D3: `tsconfig.json` を変更しない。**
-  `include: ["src", "tests"]` / `allowJs` 無し / `strict` のため、
-  `tests/*.ts` から `scripts/check-links.mjs` を import すると **TS7016 で typecheck が落ちる**
-  (両レビューが独立に再現)。`allowJs` を足すのは **repo 全体の型検査条件の変更**であり、
-  「新規依存を足さない」「記述内容を変えない」というこの feature の性格と釣り合わない。
-  **回帰テストは子プロセス起動で exit code を見る**(→ AC5)。
-- **他の feature が docs に md を足すと、README 一覧表への追記も必須になる。**
+- **D3: `tsconfig.json` を変更しない。代わりに `@types/node` を devDependency に足し、
+  テストファイルの冒頭に `/// <reference types="node" />` を書く。**
+  この repo は `tsconfig` が `"types": ["chrome"]` / `include: ["src", "tests"]` /
+  `allowJs` 無し / `strict` で、**`@types/node` が入っていない**
+  (`node_modules/@types/` は chrome / estree / filesystem / filewriter / har-format のみ。
+  既存の `src` `tests` に `node:` の import は 1 本も無い)。
+  そのため `tests/*.ts` から `node:fs` / `node:child_process` を読むと **TS2307 で落ちる**
+  (両レビューが独立に再現)。
+  **`@types/node` の追加 + トリプルスラッシュ参照で、`types` 配列を触らずに緑になることを実測で確認した。**
+  `types` に `"node"` を足す形は tsconfig の変更にあたるので採らない。
+  > **plan.md の「新規依存を足さない」は `check-links.mjs` の実行時依存の話であり、
+  > 型定義の devDependency 追加は別。**`scripts/check-links.mjs` 自体は Node 標準のみで書く。
+- **検査対象ファイルの中にも、検査されない裸のパスがある(006 へ申し送り)。**
+  `docs/security-review.md` の **L104 / L236 / L241 / L248 / L286** に、Markdown リンクではなく
+  バッククォート付きの裸パスで `docs/for-testers.md` / `docs/setup-and-verify.md` /
+  `docs/install.md` を指す記述が **5 本**ある。検査①は Markdown 記法のみなので拾わない。
+  **005 では範囲を広げない**(誤検出が増える)が、**006 で md を移動・改名すると黙って壊れる。**
+- **006 が「公開サイト専用の md」を作ると検査④で落ちる。**
+  被参照元を README に一本化したため。意図した挙動だが、006 側で踏むので記録しておく。
+- **他の feature が docs に md を足すと、README への追記も必須になる。**
   例: **003 T6**(issue #20, open)は `docs/003-findings.md` を新設する予定で、
   README に足さないと**検査④で CI が落ちる**。意図した挙動だが、理由が分からないと踏む。
 - **GUI 要件は無い。**`docs/index.html` の**見た目を一切変えない**ため §10 は該当しない。
