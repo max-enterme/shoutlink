@@ -1,6 +1,6 @@
 ---
 feature: docs-link-hygiene
-issue: TBD
+issue: 70
 release: r2
 priority: should
 status: 未着手
