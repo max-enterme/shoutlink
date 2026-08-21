@@ -365,6 +365,31 @@ yt-redirect-pin-0.1.0.zip
 > 配布は GitHub Releases + デベロッパーモードでの読み込み。
 > `.crx` を直接配るのは Chrome 側がブロックするので使えない。
 
+## ソースの地図
+
+どのファイルが何を持つか。**DOM に触る箇所と、純関数として切り出した箇所**の
+区別がテストの書きやすさを決めるので、そこを軸に並べる。
+
+| ファイル | 役割 |
+|---|---|
+| `src/selectors.ts` | **主要な DOM セレクタの集約点。** 候補の配列を先頭から試す。原則ここに置き、他モジュールで `document.querySelector` を直接呼ばない (`detector.ts` `pinner.ts` には局所的な例外が残っている) |
+| `src/detector.ts` | MutationObserver → `RedirectEvent`。抽出部は純関数 (`extractRedirectEvent`) として分離 |
+| `src/comment-detector.ts` | コメント返しの検知。**追加されたコメントだけ**を見る (既存のコメントは拾わない)。抽出部は純関数 (`extractCommentAuthor`) |
+| `src/comment-reply.ts` | コメント 1 件に返すかどうかの判断(純関数)。**自己ループの遮断を辞書の照合より先に置く。**照合は `channelId` のみで、抑止は種別を問わない (AC7 / AC8 / AC10) |
+| `src/comment-runner.ts` | コメント経路の配線。検知 → 判断 → キュー → 投稿。**キューに積んだ後、投稿の直前にもう一度判断する**(順番待ちの間に状況が変わるため) |
+| `src/post-queue.ts` | コメント返しの逐次処理。最低 5 秒間隔 / 1 配信 20 件の上限 / 無効化時に未処理を捨てる。**間隔の起点はメモリのみ**(リロードで戻る) |
+| `src/channel-id.ts` | チャンネルページから照合用の `UC…` を取り出す。**設定画面からしか呼ばない** (チャット画面では通信しない) |
+| `src/composer.ts` | テンプレート差し込み (`{name}` `{url}` `{msg}`) |
+| `src/directory.ts` | 相手ごとの辞書 (`chrome.storage.local`)。呼び名 / リダイレクト返礼用の自由文 (`message`) / **コメントに反応するか (`replyToComment`)** / **コメント返し用の自由文 (`commentMessage`)** / **照合用のチャンネル ID (`channelId`)**。**端末間で同期しない。**`sync` からは 1 度だけ引き継ぐ(`sync` 側は消さない) |
+| `src/dedupe.ts` | 同一送信元・クールダウンの多重発火抑止。**クールダウンは同一配信内でのみ適用**(配信が違えば通す)。**配信 ID が無く、かつ前の起動から読み戻した記録**にだけ 6 時間の下限を当てる (`cooldownSec = 0` は下限ごと外す逃げ道) |
+| `src/post-log.ts` | 投稿履歴 (`chrome.storage.local`)。**リロードをまたいで再投稿を止める土台。**誰に・何を・いつ・どの配信で・**どちらの種別で** (リダイレクト返礼 / コメント返し) |
+| `src/poster.ts` | チャット入力欄への投稿と、投稿した自分のメッセージ要素の特定 |
+| `src/pinner.ts` | `PinMode` の解釈と「固定」の実行 |
+| `src/manual-trigger.ts` | 手動トリガー UI(設定 `showManualTrigger` / **既定 OFF**)。自動検知と同じ `RedirectEvent` を同じパイプラインに流す |
+| `src/self-echo.ts` | 自分の投稿(とその固定バナー)を通知として拾い直す自己ループの抑止。**設定と独立** |
+| `src/config.ts` | `chrome.storage.sync` への設定の永続化と、`local` を使う側の入口 |
+| `src/main.ts` | 配線。全体を try/catch (AC6) |
+
 ## 9. 既知の制約
 
 - **ブラウザを開きっぱなしにする必要がある。**ライブチャットのページが閉じていれば何も動かない。
