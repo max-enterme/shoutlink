@@ -21,12 +21,16 @@
       content="https://max-enterme.github.io/yt-redirect-pin/assets/ogp-440x280.png"
     />
     <meta name="twitter:card" content="summary" />
+    <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#0f1116" media="(prefers-color-scheme: dark)" />
     <link
       rel="icon"
       href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='22' fill='%232447b5'/%3E%3Cpath d='M74 24 V56 H27' stroke='white' stroke-width='17' stroke-linecap='round' stroke-linejoin='round' fill='none'/%3E%3Cpath d='M19 56 L47 35 V77 Z' fill='white'/%3E%3C/svg%3E"
     />
     <style>
       :root {
+        /* ダーク時にスクロールバーとフォーム部品を地に合わせる */
+        color-scheme: light dark;
         --brand: #2447b5;
         /* ボタンの地。--brand はダークで明るくなるので、白文字を載せる面は別に持つ */
         --brand-solid: #2447b5;
@@ -59,6 +63,29 @@
       }
 
       * { box-sizing: border-box; }
+
+      /* 目次から飛んだ見出しが画面の上端に貼り付かないように */
+      h2[id], h3[id], h4[id] { scroll-margin-top: 24px; }
+
+      /* キーボード操作時のフォーカスを見えるようにする(クリック時には出さない) */
+      a:focus-visible, .skip:focus-visible {
+        outline: 2px solid var(--brand);
+        outline-offset: 3px;
+        border-radius: 3px;
+      }
+
+      /* 本文へ飛ばすリンク。フォーカスされるまで見えない */
+      .skip {
+        position: absolute;
+        left: -9999px;
+        top: 8px;
+        padding: 10px 16px;
+        background: var(--bg);
+        border: 1px solid var(--brand);
+        border-radius: 8px;
+        z-index: 10;
+      }
+      .skip:focus { left: 8px; }
       body {
         margin: 0;
         background: var(--bg);
@@ -158,6 +185,26 @@
       th, td { text-align: left; padding: 9px 12px 9px 0; border-bottom: 1px solid var(--line); vertical-align: top; }
       th { color: var(--muted); font-weight: 600; white-space: nowrap; }
 
+      /* --- 目次 --- */
+      .toc {
+        margin: 40px 0 0;
+        padding: 16px 20px;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        background: var(--card);
+        font-size: 15px;
+      }
+      .toc p {
+        margin: 0 0 8px;
+        color: var(--muted);
+        font-size: 13px;
+        font-weight: 600;
+      }
+      .toc ol, .toc ul { margin: 0; padding-left: 1.4em; }
+      .toc ul { list-style: none; padding-left: 1em; }
+      .toc ul li::before { content: "└ "; color: var(--muted); }
+      .toc li { margin: 2px 0; }
+
       ol.steps { padding-left: 1.4em; }
       ol.steps li { margin: 10px 0; }
 
@@ -183,6 +230,7 @@
     </style>
   </head>
   <body>
+    <a class="skip" href="#main">本文へ移動</a>
     <header>
       <div class="wrap">
         <svg class="mark" viewBox="0 0 100 100" aria-hidden="true">
@@ -212,9 +260,9 @@
       </div>
     </header>
 
-    <main class="wrap">
+    <main class="wrap" id="main">
       <div class="warn">
-        <h2>⚠️ 使う前に読んでください</h2>
+        <h2 id="warning">⚠️ 使う前に読んでください</h2>
         <ul>
           <li>
             <b>YouTube の規約上、グレーな行為を含みます。</b>
@@ -250,7 +298,27 @@
         </p>
       </div>
 
-      <h2>何をするか</h2>
+
+      <nav class="toc" aria-labelledby="toc-title">
+        <p id="toc-title">このページの内容</p>
+        <ol>
+          <li><a href="#what">何をするか</a>
+            <ul>
+              <li><a href="#comment-reply">コメント返し (既定 OFF)</a></li>
+              <li><a href="#limits">上限が効かない場合</a></li>
+            </ul>
+          </li>
+          <li><a href="#install">入れかた</a>
+            <ul>
+              <li><a href="#manual">自動投稿を使わない設定</a></li>
+            </ul>
+          </li>
+          <li><a href="#why-no-store">なぜストアに出さないのか</a></li>
+          <li><a href="#data">データの扱い</a></li>
+        </ol>
+      </nav>
+
+      <h2 id="what">何をするか</h2>
       <ol class="flow">
         <li><strong>① 検知</strong>リダイレクトの受信通知を、ライブチャットの画面から検知する</li>
         <li><strong>② 投稿</strong>「◯◯さんからリダイレクトありがとうございます! URL」をチャットへ投稿する</li>
@@ -265,14 +333,17 @@
       <table>
         <tr><th scope="row">投稿文</th><td>テンプレートで編集できる (<code>{name}</code> に表示名、<code>{url}</code> にチャンネル URL、<code>{msg}</code> に送信元ごとの自由文)</td></tr>
         <tr><th scope="row">呼び名</th><td>送信元ごとに呼び名を登録できる。リダイレクトを受けた相手は自動で一覧に載る</td></tr>
-        <tr><th scope="row">自由文 (<code>{msg}</code>)</th><td>送信元ごとに「その相手への一言」を登録できる (1 件 200 字まで)。<b>これはリダイレクト返礼用で、コメント返し用の自由文は別のフィールド</b>(下の「コメント返し」)。<b>未登録の相手では <code>{msg}</code> ごと消える</b>。設定画面には投稿文全体 (200 字) に対する残り字数が出る。上限を超えた分は投稿時に 自由文 → 表示名 → 末尾 の順で削られ、<b>自由文か表示名を削って収まる場合、URL は壊れない</b>(両方削っても収まらないときは末尾を切ります)</td></tr>
+        <tr><th scope="row">自由文 (<code>{msg}</code>)</th><td>送信元ごとに「その相手への一言」を登録できる (1 件 200 字まで)。<b>これはリダイレクト返礼用</b>で、<a href="#comment-reply">コメント返し</a>用の自由文とは別のフィールド</td></tr>
+        <tr><th scope="row">自由文が未登録のとき</th><td><b>その相手への投稿では <code>{msg}</code> ごと消える</b> (プレースホルダは残らない)</td></tr>
+        <tr><th scope="row">200 字を超えたとき</th><td>投稿時に 自由文 → 表示名 → 末尾 の順で削る。<b>自由文か表示名を削って収まる場合、URL は壊れない</b> (両方削っても収まらないときだけ末尾を切る)。設定画面には投稿文全体に対する残り字数が出る</td></tr>
         <tr><th scope="row">固定モード</th><td><code>off</code> 固定しない / <code>ifEmpty</code> 既存の固定が無いときだけ (既定) / <code>always</code> 上書き</td></tr>
-        <tr><th scope="row">多重発火の抑止</th><td>同一送信元はクールダウン内 1 回まで (既定 6 時間)。<b>同じ配信の中でだけ</b>効き、投稿履歴に基づくのでリロードをまたいでも引き継がれる (<b>配信 ID を取れない画面では、前の起動から読み戻した記録に 6 時間の下限</b>をかけます → 下の「上限の但し書き」)</td></tr>
+        <tr><th scope="row">多重発火の抑止</th><td>同一送信元はクールダウン内 1 回まで (既定 6 時間)。<b>同じ配信の中でだけ</b>効き、投稿履歴に基づくのでリロードをまたいでも引き継がれる</td></tr>
+        <tr><th scope="row">配信 ID が取れない画面</th><td><b>前の起動から読み戻した記録に 6 時間の下限</b>をかける → <a href="#limits">上限が効かない場合</a></td></tr>
         <tr><th scope="row">手動トリガー</th><td>チャット右下の「↩ 返礼」。<b>既定は OFF</b> (配信画面への映り込み対策)。設定で出せば、自動投稿を切っていても実行できる</td></tr>
         <tr><th scope="row">止める</th><td>設定の「リダイレクトを自動検知して投稿する」を外せば、リダイレクト返礼の自動投稿は即止まる (<b>コメント返しは別のスイッチ</b>)</td></tr>
       </table>
 
-      <h3>コメント返し (既定 OFF)</h3>
+      <h3 id="comment-reply">コメント返し (既定 OFF)</h3>
       <p>
         リダイレクトの受信とは<b>別の引き金</b>です。<b>辞書で「コメントに反応する」を付けた人</b>が
         ライブチャットにコメントすると、その人のチャンネル URL を投稿します。
@@ -280,16 +351,19 @@
         リダイレクトを受けて自動で一覧に載った相手にも、フラグは付きません。
       </p>
       <table>
-        <tr><th scope="row">投稿文</th><td><b>リダイレクト返礼とは別のテンプレート</b> (既定 <code>{name}さん、来てくれてありがとうございます! {url}</code>)。<code>{msg}</code> に入るのも<b>コメント返し用の自由文</b>で、リダイレクト返礼用の自由文とは別のフィールド。<code>{name}</code> <code>{url}</code> は<b>辞書に登録されている呼び名と URL</b> を使う (コメント側の表示名は使わない)</td></tr>
+        <tr><th scope="row">投稿文</th><td><b>リダイレクト返礼とは別のテンプレート</b> (既定 <code>{name}さん、来てくれてありがとうございます! {url}</code>)。<code>{msg}</code> に入るのも<b>コメント返し用の自由文</b>で、リダイレクト返礼用とは別のフィールド</td></tr>
+        <tr><th scope="row">名前と URL の出どころ</th><td><code>{name}</code> <code>{url}</code> は<b>辞書に登録されている呼び名と URL</b> を使う。<b>コメント側の表示名は使わない</b> (第三者が自由に決められる文字列を配信者名義の投稿に載せないため)</td></tr>
         <tr><th scope="row">固定</th><td><b>しない。</b>固定枠は 1 件しかなく、コメントのたびに上書きするとリダイレクト返礼の固定が流れるため</td></tr>
-        <tr><th scope="row">頻度の上限</th><td>同じ配信・同じ人には <b>1 回</b>まで / 投稿の間隔は<b>最低 5 秒</b> / <b>1 配信あたり 20 件</b>まで (設定ではなく固定値)。ただし下の「上限の但し書き」を読んでください</td></tr>
+        <tr><th scope="row">頻度の上限</th><td>同じ配信・同じ人には <b>1 回</b>まで / 投稿の間隔は<b>最低 5 秒</b> / <b>1 配信あたり 20 件</b>まで (設定ではなく固定値)。<b>3 つとも無条件ではありません</b> → <a href="#limits">上限が効かない場合</a></td></tr>
         <tr><th scope="row">リダイレクト返礼との関係</th><td><b>抑止は非対称です。</b>同じ配信でその人へ<b>リダイレクト返礼を投稿済みなら、コメント返しはしません。</b>逆に、<b>コメント返し済みでもリダイレクト返礼は投稿します</b> (そちらが本命のため)</td></tr>
-        <tr><th scope="row">反応しない</th><td>辞書に載っていない人 / フラグが OFF の人 / <b>配信者自身</b> / スーパーチャット・メンバー加入・システムメッセージ / <b>スイッチを入れた時点で既にあるコメント</b> (但し書きは下)</td></tr>
+        <tr><th scope="row">反応しない</th><td>辞書に載っていない人 / フラグが OFF の人 / <b>配信者自身</b> / スーパーチャット・メンバー加入・システムメッセージ / <b>スイッチを入れた時点で既にあるコメント</b> (<a href="#limits">例外あり</a>)</td></tr>
         <tr><th scope="row">照合</th><td>コメントから取れる投稿者の ID (<code>UC…</code>) と、<b>辞書に控えたチャンネル ID</b> の一致だけで判定する。<b>表示名では照合しない</b> (同名の別人・改名・なりすましで別人のリンクを貼るため)</td></tr>
-        <tr><th scope="row">チャンネル ID</th><td>照合に使う <code>UC…</code> は、<b>まだ控えていない行で、URL から直接 ID を取れないときだけ</b>、その人のチャンネルページを <b>1 回</b>読みに行って控える (「コメントに反応する」を ON にしたとき / 再試行を押したとき)。<code>.../channel/UC…</code> の形の URL なら通信せずその場で分かる。<b>この取得を行うのは設定画面だけで、ライブチャットの画面では行わない。</b>取れなかった行は<b>コメントに反応しない</b> (設定画面に ⚠ が出る)。リダイレクト返礼は今までどおり動く</td></tr>
+        <tr><th scope="row">チャンネル ID を控える</th><td>照合に使う <code>UC…</code> は、<b>まだ控えていない行で、URL から直接 ID を取れないときだけ</b>、その人のチャンネルページを <b>1 回</b>読みに行って控える。<code>.../channel/UC…</code> の形の URL なら通信せずその場で分かる</td></tr>
+        <tr><th scope="row">取得する場面</th><td>「コメントに反応する」を ON にしたとき / 再試行を押したとき。<b>どちらも設定画面での操作で、ライブチャットの画面では取得しない</b></td></tr>
+        <tr><th scope="row">取れなかった行</th><td><b>コメントに反応しない</b> (設定画面に ⚠ が出る)。リダイレクト返礼は今までどおり動く</td></tr>
       </table>
 
-      <h4>上限が効かない場合</h4>
+      <h4 id="limits">上限が効かない場合</h4>
       <p>
         上の表の「頻度の上限」は無条件ではありません。<b>自動投稿の量に直結するので、ON にする前に読んでください。</b>
       </p>
@@ -357,7 +431,7 @@
         </figcaption>
       </figure>
 
-      <h2>入れかた</h2>
+      <h2 id="install">入れかた</h2>
       <p>
         <b>未署名の拡張です。</b>デベロッパーモードでの読み込みになり、<b>自動更新もされません</b>
         (新しい版への入れ替え方は
@@ -390,7 +464,7 @@
         にあります。
       </p>
 
-      <h3>自動投稿を使わない設定</h3>
+      <h3 id="manual">自動投稿を使わない設定</h3>
       <p>
         設定で「リダイレクトを自動検知して投稿する」を外し、<b>「コメントに反応して投稿する」も
         外したまま</b>にして (<b>既定 OFF</b>。これは別のスイッチで、片方を外しても止まりません)、
@@ -402,7 +476,7 @@
         (一覧に相手が載るだけで、チャットには何も出ません)。
       </p>
 
-      <h2>なぜストアに出さないのか</h2>
+      <h2 id="why-no-store">なぜストアに出さないのか</h2>
       <p>
         Chrome ウェブストアの審査は、<b>YouTube の規約に触れるかどうかを見てくれません。</b>
         見るのは単一用途・権限の妥当性・データの扱いです。つまり審査を通っても
@@ -418,7 +492,7 @@
         読んで自分で判断できる人だけが使えばいい、という形です。
       </p>
 
-      <h2>データの扱い</h2>
+      <h2 id="data">データの扱い</h2>
       <ul>
         <li><b>開発者のサーバへデータを送ることはありません。</b>開発者のサーバはなく、解析も広告もありません</li>
         <li>
