@@ -6,3 +6,5 @@ release/
 *.log
 .DS_Store
 .playwright-mcp/
+# 設計スキルの中間成果物(IA 等)。決定は specs/ に落とす
+.design/
