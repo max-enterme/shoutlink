@@ -95,7 +95,19 @@
         font-size: 16px;
         -webkit-font-smoothing: antialiased;
       }
-      .wrap { max-width: 760px; margin: 0 auto; padding: 0 24px; }
+      .wrap { max-width: 1140px; margin: 0 auto; padding: 0 32px; }
+
+      /* 目次を左に置き、本文は読みやすい幅のまま保つ */
+      .shell {
+        max-width: 1140px;
+        margin: 0 auto;
+        padding: 0 32px;
+        display: grid;
+        grid-template-columns: 248px minmax(0, 1fr);
+        gap: 48px;
+        align-items: start;
+      }
+      .doc { max-width: 760px; padding-bottom: 24px; }
       a { color: var(--brand); }
       code {
         background: var(--code);
@@ -194,24 +206,58 @@
 
       /* --- 目次 --- */
       .toc {
+        position: sticky;
+        top: 24px;
         margin: 40px 0 0;
-        padding: 16px 20px;
-        border: 1px solid var(--line);
-        border-radius: 10px;
-        background: var(--card);
-        font-size: 15px;
+        font-size: 14px;
       }
       .toc p {
-        margin: 0 0 8px;
+        margin: 0 0 10px;
         color: var(--muted);
-        font-size: 13px;
-        font-weight: 600;
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: 0.04em;
       }
-      .toc ol, .toc ul { margin: 0; padding-left: 1.4em; }
-      .toc ul { list-style: none; padding-left: 0; }
-      .toc ul li::before { content: "・"; color: var(--muted); }
-      .toc li { margin: 2px 0; }
-      .toc .toc-rest { margin: 14px 0 6px; }
+      .toc ol, .toc ul {
+        margin: 0;
+        padding: 0;
+        list-style: none;
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+      }
+      .toc li a {
+        display: block;
+        padding: 6px 12px;
+        border-radius: 6px;
+        border-left: 2px solid transparent;
+        color: var(--fg);
+      }
+      .toc li a:hover { background: var(--card); }
+      /* いま読んでいる節 */
+      .toc li a[aria-current="location"] {
+        background: var(--brand-soft);
+        border-left-color: var(--brand);
+        color: var(--brand);
+        font-weight: 700;
+      }
+      .toc .toc-rest { margin: 18px 0 10px; }
+
+      /* 目次を横に置けない幅では、本文の上へ畳む */
+      @media (max-width: 1000px) {
+        .shell { display: block; padding: 0 24px; }
+        .doc { max-width: none; }
+        .toc {
+          position: static;
+          padding: 16px 20px;
+          border: 1px solid var(--line);
+          border-radius: 10px;
+          background: var(--card);
+        }
+        .toc li a { padding: 4px 0; border-left: 0; }
+        .toc li a:hover { background: none; }
+        .toc li a[aria-current="location"] { background: none; }
+      }
 
       ol.steps { padding-left: 1.4em; }
       ol.steps li { margin: 10px 0; }
@@ -268,7 +314,24 @@
       </div>
     </header>
 
-    <main class="wrap" id="main">
+    <div class="shell">
+        <nav class="toc" aria-labelledby="toc-title">
+            <p id="toc-title">まず読むなら、上から 3 つ</p>
+          <ol>
+            <li><a href="#what">何をするか</a></li>
+            <li><a href="#install">入れかた</a></li>
+            <li><a href="#manual">自動投稿を使わない設定</a></li>
+          </ol>
+          <p class="toc-rest">使い始めてから引くもの</p>
+          <ul>
+            <li><a href="#settings">細かい設定</a></li>
+            <li><a href="#comment-reply">コメント返し (既定 OFF)</a></li>
+            <li><a href="#why-no-store">なぜストアに出さないのか</a></li>
+            <li><a href="#data">データの扱い</a></li>
+          </ul>
+      </nav>
+
+      <main class="doc" id="main">
       <p class="lead">
         <b>配信中にリダイレクトを受け取ったら、相手のチャンネル URL をチャットに出して固定します。</b>
         送信元を確かめ、URL をコピーし、投稿して、固定する。この 4 手を受け取った時点で肩代わりするので、
@@ -308,22 +371,6 @@
           判断がつかない場合は、使わないでください。
         </p>
       </div>
-
-      <nav class="toc" aria-labelledby="toc-title">
-        <p id="toc-title">まず読むなら、上から 3 つ</p>
-        <ol>
-          <li><a href="#what">何をするか</a> (受け取ってから固定するまで)</li>
-          <li><a href="#install">入れかた</a> (ストアには無いので手で読み込む)</li>
-          <li><a href="#manual">自動投稿を使わない設定</a> (手動ボタンからだけ使う)</li>
-        </ol>
-        <p class="toc-rest">使い始めてから引くもの</p>
-        <ul>
-          <li><a href="#settings">細かい設定</a></li>
-          <li><a href="#comment-reply">コメント返し (既定 OFF)</a></li>
-          <li><a href="#why-no-store">なぜストアに出さないのか</a></li>
-          <li><a href="#data">データの扱い</a></li>
-        </ul>
-      </nav>
 
       <h2 id="what">何をするか</h2>
       <ol class="flow">
@@ -530,7 +577,8 @@
         <a href="https://github.com/max-enterme/yt-redirect-pin/blob/main/docs/privacy-policy.md">プライバシーポリシー</a>
       </p>
 
-    </main>
+      </main>
+    </div>
 
     <footer class="wrap">
       <div>
@@ -544,5 +592,43 @@
         YouTube は Google LLC の商標です。<b>無保証です。</b>
       </p>
     </footer>
+    <script>
+      // 目次にいま読んでいる節を出す。
+      // これが動かなくても目次はリンクとして成立するので、失敗しても壊れない。
+      (function () {
+        var items = [].slice.call(document.querySelectorAll('.toc a[href^="#"]'))
+          .map(function (a) {
+            return { link: a, el: document.getElementById(decodeURIComponent(a.getAttribute('href').slice(1))) };
+          })
+          .filter(function (i) { return i.el; });
+        if (!items.length) return;
+
+        var shown = -1;
+        function update() {
+          // 画面の上端ちょうどではなく、少し下を基準にする
+          var line = 88;
+          var found = 0;
+          for (var i = 0; i < items.length; i++) {
+            if (items[i].el.getBoundingClientRect().top <= line) found = i;
+          }
+          // 最下部まで来たら最後の節にする(短い節が選ばれないまま終わるのを防ぐ)。
+          // 読み込み途中は高さが確定しておらず「最下部」に見えるので、スクロール後だけ見る
+          if (window.pageYOffset > 0 &&
+              window.innerHeight + window.pageYOffset >= document.body.scrollHeight - 2) {
+            found = items.length - 1;
+          }
+          // 変わったときだけ書き換える(スクロールのたびに DOM を触らない)
+          if (found === shown) return;
+          if (shown >= 0) items[shown].link.removeAttribute('aria-current');
+          items[found].link.setAttribute('aria-current', 'location');
+          shown = found;
+        }
+        window.addEventListener('scroll', update, { passive: true });
+        window.addEventListener('resize', update);
+        // 画像の読み込みで高さが変わったあとに、もう一度合わせる
+        window.addEventListener('load', update);
+        update();
+      })();
+    </script>
   </body>
 </html>
