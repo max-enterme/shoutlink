@@ -39,6 +39,7 @@
         --fg: #1a1c22;
         --muted: #5c6270;
         --line: #e3e6ed;
+        --rule: #1a1c22;
         --card: #f7f8fb;
         --warn-bg: #fff8e8;
         --warn-line: #e6cb8a;
@@ -54,6 +55,7 @@
           --fg: #e6e8ee;
           --muted: #969cab;
           --line: #262a34;
+          --rule: #656e82;
           --card: #171a21;
           --warn-bg: #2a2313;
           --warn-line: #6b5a2a;
@@ -116,14 +118,34 @@
         font-size: 0.9em;
         font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace;
       }
+      /* 本文 16px に対して 17 / 19 / 24 と段を付ける。
+         h3 が本文と同じ大きさ、h4 が本文より小さい状態だと見出しに見えない */
       h2 {
-        font-size: 21px;
-        margin: 64px 0 16px;
-        padding-bottom: 8px;
-        border-bottom: 1px solid var(--line);
+        font-size: 24px;
+        font-weight: 700;
+        line-height: 1.5;
+        letter-spacing: -0.01em;
+        margin: 72px 0 18px;
+        padding-bottom: 10px;
+        border-bottom: 2px solid var(--rule);
       }
-      h3 { font-size: 16px; margin: 32px 0 8px; }
-      h4 { font-size: 15px; margin: 24px 0 8px; }
+      h3 {
+        font-size: 19px;
+        font-weight: 700;
+        line-height: 1.6;
+        margin: 44px 0 10px;
+        padding-left: 12px;
+        border-left: 4px solid var(--brand);
+      }
+      h4 {
+        font-size: 17px;
+        font-weight: 700;
+        line-height: 1.6;
+        margin: 32px 0 10px;
+        color: var(--brand);
+      }
+      /* 節の 1 つ目の見出しは、上の余白を詰める */
+      .doc > h2:first-child { margin-top: 32px; }
       p { margin: 12px 0; }
 
       /* --- hero --- */
@@ -163,10 +185,11 @@
         margin: 40px 0 0;
       }
       .warn h2 {
-        margin: 0 0 8px;
+        margin: 0 0 10px;
         border: 0;
         padding: 0;
-        font-size: 18px;
+        font-size: 19px;
+        letter-spacing: normal;
         color: var(--warn-fg);
       }
       .warn ul { margin: 12px 0; padding-left: 1.3em; }
@@ -179,10 +202,11 @@
 
       /* --- 冒頭の一段落 --- */
       .lead {
-        margin: 40px 0 0;
+        margin: 20px 0 0;
         font-size: 17px;
         line-height: 1.9;
       }
+      .lead .kicker { font-size: 19px; }
 
       /* --- 目次 --- */
       .toc {
@@ -239,12 +263,12 @@
         .toc li a[aria-current="location"] { background: none; }
       }
 
-      /* 引き金 2 つ。カードの見た目は他のカード面と揃える */
+      /* 引き金 2 つ。横に並べず、1 段ずつ縦に積む */
       .cases {
-        display: grid;
-        grid-template-columns: repeat(2, minmax(0, 1fr));
+        display: flex;
+        flex-direction: column;
         gap: 12px;
-        margin: 20px 0 0;
+        margin: 24px 0 0;
         padding: 0;
         list-style: none;
       }
@@ -252,20 +276,20 @@
         background: var(--card);
         border: 1px solid var(--line);
         border-radius: 10px;
-        padding: 18px 20px;
+        padding: 20px 24px;
       }
-      .cases strong {
-        display: block;
-        color: var(--brand);
-        font-size: 15px;
+      /* 見出しの行。幅が広いので、流れは右端へ寄せる */
+      .case-head {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 4px 16px;
         margin-bottom: 8px;
       }
-      .cases p { margin: 0; font-size: 14px; line-height: 1.8; }
-      .cases .seq {
-        margin-top: 10px;
-        color: var(--muted);
-        font-size: 13px;
-      }
+      .cases strong { color: var(--brand); font-size: 17px; }
+      .cases p { margin: 0; font-size: 15px; line-height: 1.8; }
+      .cases .seq { color: var(--muted); font-size: 13px; white-space: nowrap; }
       .cases .off {
         display: inline-block;
         margin-left: 8px;
@@ -278,8 +302,6 @@
         font-weight: 700;
         vertical-align: 1px;
       }
-      @media (max-width: 620px) { .cases { grid-template-columns: 1fr; } }
-
       ol.steps { padding-left: 1.4em; }
       ol.steps li { margin: 10px 0; }
 
@@ -356,24 +378,29 @@
       <h2 id="what">何ができるか</h2>
       <p class="lead">
         配信中に来てくれた人へ、<b>その人のチャンネル URL をチャットに出して返礼する</b>のを
-        肩代わりします。引き金は 2 つあります。
+        肩代わりします。<br />
+        <b class="kicker">引き金は、2 つ。</b>
       </p>
       <ol class="cases">
         <li>
-          <strong>リダイレクトを受け取ったとき</strong>
+          <div class="case-head">
+            <strong>リダイレクトを受け取ったとき</strong>
+            <span class="seq">受信を検知 → 投稿 → 固定</span>
+          </div>
           <p>
             他チャンネルからライブリダイレクトを受け取ると、<b>送信元のチャンネル URL を
             チャットへ投稿し、その投稿をチャット上部に固定します。</b>
           </p>
-          <p class="seq">受信を検知 → 投稿 → 固定</p>
         </li>
         <li>
-          <strong>登録した人がコメントしたとき<span class="off">既定 OFF</span></strong>
+          <div class="case-head">
+            <strong>登録した人がコメントしたとき<span class="off">既定 OFF</span></strong>
+            <span class="seq">コメントを検知 → 投稿 (固定はしない)</span>
+          </div>
           <p>
             辞書で「コメントに反応する」を付けた人がライブチャットにコメントすると、
             <b>その人のチャンネル URL をチャットへ投稿します。</b>
           </p>
-          <p class="seq">コメントを検知 → 投稿 (固定はしない)</p>
         </li>
       </ol>
       <p>
