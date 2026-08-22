@@ -173,26 +173,6 @@
       .warn li { margin: 8px 0; }
       .warn .close { margin-bottom: 0; font-weight: 700; }
 
-      /* --- flow --- */
-      .flow {
-        display: grid;
-        grid-template-columns: repeat(3, 1fr);
-        gap: 12px;
-        margin: 24px 0;
-        padding: 0;
-        list-style: none;
-      }
-      .flow li {
-        background: var(--card);
-        border: 1px solid var(--line);
-        border-radius: 10px;
-        padding: 16px;
-        font-size: 14px;
-        line-height: 1.7;
-      }
-      .flow strong { display: block; color: var(--brand); font-size: 13px; margin-bottom: 6px; }
-      @media (max-width: 620px) { .flow { grid-template-columns: 1fr; } }
-
       table { width: 100%; border-collapse: collapse; margin: 20px 0; font-size: 15px; }
       th, td { text-align: left; padding: 9px 12px 9px 0; border-bottom: 1px solid var(--line); vertical-align: top; }
       th { color: var(--muted); font-weight: 600; white-space: nowrap; }
@@ -259,6 +239,47 @@
         .toc li a[aria-current="location"] { background: none; }
       }
 
+      /* 引き金 2 つ。カードの見た目は他のカード面と揃える */
+      .cases {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 12px;
+        margin: 20px 0 0;
+        padding: 0;
+        list-style: none;
+      }
+      .cases li {
+        background: var(--card);
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        padding: 18px 20px;
+      }
+      .cases strong {
+        display: block;
+        color: var(--brand);
+        font-size: 15px;
+        margin-bottom: 8px;
+      }
+      .cases p { margin: 0; font-size: 14px; line-height: 1.8; }
+      .cases .seq {
+        margin-top: 10px;
+        color: var(--muted);
+        font-size: 13px;
+      }
+      .cases .off {
+        display: inline-block;
+        margin-left: 8px;
+        padding: 1px 8px;
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        background: var(--bg);
+        color: var(--muted);
+        font-size: 11px;
+        font-weight: 700;
+        vertical-align: 1px;
+      }
+      @media (max-width: 620px) { .cases { grid-template-columns: 1fr; } }
+
       ol.steps { padding-left: 1.4em; }
       ol.steps li { margin: 10px 0; }
 
@@ -318,7 +339,7 @@
         <nav class="toc" aria-labelledby="toc-title">
             <p id="toc-title">まず読むなら、上から 3 つ</p>
           <ol>
-            <li><a href="#what">何をするか</a></li>
+            <li><a href="#what">何ができるか</a></li>
             <li><a href="#install">入れかた</a></li>
             <li><a href="#manual">自動投稿を使わない設定</a></li>
           </ol>
@@ -332,10 +353,34 @@
       </nav>
 
       <main class="doc" id="main">
+      <h2 id="what">何ができるか</h2>
       <p class="lead">
-        <b>配信中にリダイレクトを受け取ったら、相手のチャンネル URL をチャットに出して固定します。</b>
-        送信元を確かめ、URL をコピーし、投稿して、固定する。この 4 手を受け取った時点で肩代わりするので、
-        <b>配信を止めずに返礼できます。</b>
+        配信中に来てくれた人へ、<b>その人のチャンネル URL をチャットに出して返礼する</b>のを
+        肩代わりします。引き金は 2 つあります。
+      </p>
+      <ol class="cases">
+        <li>
+          <strong>リダイレクトを受け取ったとき</strong>
+          <p>
+            他チャンネルからライブリダイレクトを受け取ると、<b>送信元のチャンネル URL を
+            チャットへ投稿し、その投稿をチャット上部に固定します。</b>
+          </p>
+          <p class="seq">受信を検知 → 投稿 → 固定</p>
+        </li>
+        <li>
+          <strong>登録した人がコメントしたとき<span class="off">既定 OFF</span></strong>
+          <p>
+            辞書で「コメントに反応する」を付けた人がライブチャットにコメントすると、
+            <b>その人のチャンネル URL をチャットへ投稿します。</b>
+          </p>
+          <p class="seq">コメントを検知 → 投稿 (固定はしない)</p>
+        </li>
+      </ol>
+      <p>
+        手でやるなら、誰から来たのかを確かめ、チャンネル URL をコピーし、投稿して、固定する。
+        リダイレクトもコメントも相手からの厚意なので、返礼を取りこぼすと実害があるのに、
+        配信中は手が離せません。<b>この一連を受け取った時点で肩代わりするので、配信を止めずに
+        返礼できます。</b>
       </p>
 
       <div class="warn">
@@ -371,17 +416,6 @@
           判断がつかない場合は、使わないでください。
         </p>
       </div>
-
-      <h2 id="what">何をするか</h2>
-      <ol class="flow">
-        <li><strong>① 検知</strong>リダイレクトの受信通知を、ライブチャットの画面から検知する</li>
-        <li><strong>② 投稿</strong>「◯◯さんからリダイレクトありがとうございます! URL」をチャットへ投稿する</li>
-        <li><strong>③ 固定</strong>その投稿をチャット上部に固定する</li>
-      </ol>
-      <p>
-        リダイレクトは相手からの厚意です。返礼を取りこぼすと実害があるのに、
-        配信中は手が離せません。そこを埋めるための拡張です。
-      </p>
 
       <figure>
         <img
