@@ -361,8 +361,10 @@ yt-redirect-pin-0.1.0.zip
   [for-testers.md](for-testers.md) のテスト H(別アカウントが要る)
 - 動かなかった項目こそ知りたい。[for-testers.md](for-testers.md) 末尾の報告テンプレを埋めてもらう
 
-> **Chrome ウェブストアには出さない**([README](../README.md) の「使う前に読んでください」)。
-> 配布は GitHub Releases + デベロッパーモードでの読み込み。
+> **配布経路はウェブストアの「限定公開 (Unlisted)」へ切り替える**(2026-08-23 に決定 →
+> [d3-automation-policy.md](d3-automation-policy.md) の「判断の履歴 / 配布経路の切り替え — 限定公開へ」)。
+> **まだ掲載していないので、いまの配布は GitHub Releases + デベロッパーモードでの読み込みのまま。**
+> 掲載が通ったら**新しい版は Releases へ出さず、ストアへ一本化する**(過去の Release は残す)。
 > `.crx` を直接配るのは Chrome 側がブロックするので使えない。
 
 ## ソースの地図
