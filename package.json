@@ -10,6 +10,7 @@
   "scripts": {
     "build": "node scripts/build.mjs",
     "package": "node scripts/build.mjs --release && node scripts/package.mjs",
+    "package:store": "node scripts/build.mjs --release && node scripts/package-store.mjs",
     "icons": "node scripts/make-icons.mjs",
     "site-assets": "node scripts/build.mjs && node scripts/make-site-assets.mjs",
     "typecheck": "tsc --noEmit",

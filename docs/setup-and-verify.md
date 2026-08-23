@@ -367,6 +367,42 @@ yt-redirect-pin-0.1.0.zip
 > 掲載が通ったら**新しい版は Releases へ出さず、ストアへ一本化する**(過去の Release は残す)。
 > `.crx` を直接配るのは Chrome 側がブロックするので使えない。
 
+### ストア提出用の ZIP を作る
+
+```bash
+npm run package:store
+```
+
+`release/yt-redirect-pin-<version>-store.zip` ができる(ビルドも一緒に走る)。
+**`npm run package`(Releases 用)とは別物。**取り違えるとどちらも通らない。
+
+```
+yt-redirect-pin-0.3.0-store.zip
+  manifest.json    ← **ルート直下**。ストアはここに manifest が無いと弾く
+  content.js / options.html / options.js / icons/
+```
+
+| | Releases 用 (`package`) | ストア用 (`package:store`) |
+|---|---|---|
+| 包み | `yt-redirect-pin-<version>/` で 1 枚包む | **包まない**(ルートに `manifest.json`) |
+| `INSTALL.txt` | **入れる**(デベロッパーモード読み込みの手順) | **入れない**(手順が食い違う) |
+| `key` | 入れる | **落とす**(→ 上の「ストアへ移すと拡張 ID が変わる」) |
+
+**`public/manifest.json` と `dist/` の `key` はそのまま。**書き換えるのは ZIP へ入れる分だけなので、
+`npm run package:store` を流しても手元の拡張 ID は動かない。
+
+`package-store.mjs` は作る前に落ちる検査を持っている。**黙って壊れた ZIP を吐かない:**
+
+- `package.json` と `manifest.json` の版が食い違っていたら止まる
+- 必須ファイル(`manifest.json` / `content.js` / `options.html` / `options.js` / アイコン)が
+  欠けていたら止まる
+- **リモートコードらしきものがあったら止まる** — `eval()` / `new Function()` /
+  `importScripts()` / 動的 `import()` / HTML の外部 `src`・`href`。
+  ストアの申告(リモートコードなし)と提出物が食い違わないようにするため。
+  ⚠️ **「ネットワークに一切触らない」ことの確認ではない。** 設定ページは
+  `www.youtube.com` のチャンネルページを 1 回 GET する(AC17)。
+  **取得した HTML を読むだけでコードとして実行しない**ので、この検査では落とさない
+
 ### ストアへ移すと拡張 ID が変わる (2026-08-23 決定)
 
 **結論: 設定・辞書・投稿履歴は引き継がれない。ストア版は別の拡張として扱われる。**
