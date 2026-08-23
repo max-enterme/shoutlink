@@ -2,7 +2,7 @@
 
 対象: 返礼リンク (yt-redirect-pin / Chrome 拡張 / MV3)。実装は T2–T7 まで。
 
-> ⚠️ **spec.md D3(自動投稿の是非)は決着した** — グレーであることを開示した上で GitHub 配布する
+> ⚠️ **spec.md D3(自動投稿の是非)は決着した** — グレーであることを開示した上で配布する
 > ([d3-automation-policy.md](d3-automation-policy.md))。自動投稿に不安があるなら、
 > **「リダイレクトを自動検知して投稿する」= OFF** のまま入れて**手動トリガーだけ**を使う。
 > この形なら書き込みは人が押したときにしか起きない。
@@ -366,6 +366,41 @@ yt-redirect-pin-0.1.0.zip
 > **まだ掲載していないので、いまの配布は GitHub Releases + デベロッパーモードでの読み込みのまま。**
 > 掲載が通ったら**新しい版は Releases へ出さず、ストアへ一本化する**(過去の Release は残す)。
 > `.crx` を直接配るのは Chrome 側がブロックするので使えない。
+
+### ストアへ移すと拡張 ID が変わる (2026-08-23 決定)
+
+**結論: 設定・辞書・投稿履歴は引き継がれない。ストア版は別の拡張として扱われる。**
+
+**一次情報:** [Keep a consistent extension ID](https://developer.chrome.com/docs/extensions/reference/manifest/key)
+が示す手順は **「まずダッシュボードへ ZIP を上げる → Package タブの View public key で公開鍵を取る →
+それを `manifest.json` の `key` に入れる」**。つまり**鍵と ID を作るのはストア側**で、
+こちらの `key` を持ち込む手順ではない。
+`public/manifest.json` にいま入っている自前の `key`(0.3.0 で追加)から決まるローカル ID と、
+**ストアが割り当てる ID は一致しない。**
+
+**決めたこと:**
+
+1. **`key` はストア提出用 ZIP から外す**(→ `npm run package:store`)。
+   - `public/manifest.json`(開発用)からは**外さない。**ローカルの ID が動くと開発中に困る。
+   - **初回アップロードの後、Package タブの公開鍵を `public/manifest.json` の `key` へ入れ替える。**
+     以後のローカルビルドがストア版と同じ ID になり、開発中に二重に入る事故が防げる。
+     **これは既存利用者の移行にはならない** — 既に入っている版は旧 ID のまま。
+   - 補足: 新規アイテムの初回アップロードで `key field is not allowed in manifest` が出るという報告が
+     [chromium-extensions (2021)](https://groups.google.com/a/chromium.org/g/chromium-extensions/c/x_NBS6_-NKs)
+     にある。**コミュニティの報告で公式の記述ではなく、常に出るとは限らない。**
+     外しておけばどちらでも通るので、外す。
+2. **移行は「エクスポート → 旧版を削除 → ストア版を入れる → インポート」。**
+   設定・辞書の JSON エクスポート / インポートは**別 feature として起こす**(2026-08-23 / 人間)。
+   - **エクスポートを積んだ版を、ストア掲載より前に GitHub Releases へ 1 回出す。**
+     出さないと、いま使っている人が中身を持ち出す手段を持てない。
+     (掲載後に Releases を止める方針とは矛盾しない — 止めるのは掲載が通ってから)
+   - **順番は「削除が先、ストア版が後」。** 並存させると **ID が違うので Chrome の重複防止
+     (「同じ ID の拡張機能が既にあります」) が効かず、両方が動いて同じ相手へ 2 回投稿する。**
+3. **移行手順の文言の置き場** — 上の 4 手順を、**この順で・手順の先頭に**置く:
+   ストアの掲載文 / `README.md` の入れかた / [install.md](install.md) の「新しい版に入れ替える」 /
+   [for-testers.md](for-testers.md) / **エクスポートを積んだ最後の配布 ZIP の `INSTALL.txt`**。
+   - **「設定は引き継がれます」と書いてある現在の記述**(install.md / `INSTALL.txt`)は
+     **ストア版には当てはまらない。**そのまま残すと嘘になる。
 
 ## ソースの地図
 
