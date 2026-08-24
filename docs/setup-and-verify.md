@@ -425,18 +425,39 @@ yt-redirect-pin-0.3.0-store.zip
      [chromium-extensions (2021)](https://groups.google.com/a/chromium.org/g/chromium-extensions/c/x_NBS6_-NKs)
      にある。**コミュニティの報告で公式の記述ではなく、常に出るとは限らない。**
      外しておけばどちらでも通るので、外す。
-2. **移行は「エクスポート → 旧版を削除 → ストア版を入れる → インポート」。**
-   設定・辞書の JSON エクスポート / インポートは**別 feature として起こす**(2026-08-23 / 人間)。
-   - **エクスポートを積んだ版を、ストア掲載より前に GitHub Releases へ 1 回出す。**
-     出さないと、いま使っている人が中身を持ち出す手段を持てない。
-     (掲載後に Releases を止める方針とは矛盾しない — 止めるのは掲載が通ってから)
-   - **順番は「削除が先、ストア版が後」。** 並存させると **ID が違うので Chrome の重複防止
+2. **移行は手作業で行う。エクスポート / インポート機能は作らない**(2026-08-23 / 人間)。
+   - **いま辞書を育てて使っているのは自分だけ**なので、他人に配れる移行機能は要らない。
+     設定・辞書の JSON エクスポート / インポートは**あると便利だが、掲載の前提ではない**
+     (作るとしても後回しの単独 feature。ストア版になれば自動更新が効くので、後から足すほうが楽)。
+   - **順番は「先に控える → 旧版を削除 → ストア版を入れる → 書き戻す」。**
+     **削除がストア版より先。** 並存させると **ID が違うので Chrome の重複防止
      (「同じ ID の拡張機能が既にあります」) が効かず、両方が動いて同じ相手へ 2 回投稿する。**
-3. **移行手順の文言の置き場** — 上の 4 手順を、**この順で・手順の先頭に**置く:
-   ストアの掲載文 / `README.md` の入れかた / [install.md](install.md) の「新しい版に入れ替える」 /
-   [for-testers.md](for-testers.md) / **エクスポートを積んだ最後の配布 ZIP の `INSTALL.txt`**。
-   - **「設定は引き継がれます」と書いてある現在の記述**(install.md / `INSTALL.txt`)は
-     **ストア版には当てはまらない。**そのまま残すと嘘になる。
+
+   **控えかた / 書き戻しかた。** 設定ページは拡張オリジンで動くので、その DevTools から
+   ストレージを丸ごと出し入れできる(`storage` 権限は既にある)。保存先は
+   `ytRedirectPin.config` が `sync`、`ytRedirectPin.directory` と `ytRedirectPin.postLog` が
+   `local` だが、**`get(null)` で全部取れるのでキーを覚える必要はない。**
+
+   ```js
+   // ① 旧版の設定ページ (chrome-extension://<旧 ID>/options.html) の DevTools コンソール
+   Promise.all([chrome.storage.local.get(null), chrome.storage.sync.get(null)])
+     .then(([local, sync]) => copy(JSON.stringify({ local, sync })))
+   // → クリップボードに入った JSON をファイルへ保存しておく
+
+   // ② 旧版を削除 → ストア版を入れる → ストア版の設定ページの DevTools コンソール
+   const saved = /* ① の JSON を貼る */
+   Promise.all([chrome.storage.local.set(saved.local), chrome.storage.sync.set(saved.sync)])
+     .then(() => location.reload())
+   ```
+
+   ⚠️ **投稿履歴 (`ytRedirectPin.postLog`) も一緒に書き戻す。** 捨てると再投稿の抑止が白紙になり、
+   同じ配信で既に返礼した相手へもう一度投稿しうる。
+3. **移行手順の文言の置き場** — **自分用の手順なので掲載文には書かない。**
+   要るのは、**デベロッパーモード版を入れている人に「先に旧版を削除する」「設定は引き継がれない」を
+   伝えること**だけ。置き場は `README.md` の入れかた / [install.md](install.md) の
+   「新しい版に入れ替える」 / [for-testers.md](for-testers.md)。
+   - **「設定は引き継がれます」と書いてある現在の記述**(install.md L52・L68 / `INSTALL.txt` /
+     `README.md` L85)は、**いまは正しいがストア版には当てはまらない。**そのまま残すと嘘になる。
 
 ## ソースの地図
 
