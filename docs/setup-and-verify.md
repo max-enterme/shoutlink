@@ -418,8 +418,10 @@ shoutlink-0.3.0-store.zip
 
 1. **`key` はストア提出用 ZIP から外す**(→ `npm run package:store`)。
    - `public/manifest.json`(開発用)からは**外さない。**ローカルの ID が動くと開発中に困る。
-   - **初回アップロードの後、Package タブの公開鍵を `public/manifest.json` の `key` へ入れ替える。**
-     以後のローカルビルドがストア版と同じ ID になり、開発中に二重に入る事故が防げる。
+   - ~~初回アップロードの後、Package タブの公開鍵を `public/manifest.json` の `key` へ入れ替える。~~
+     → **2026-08-23 に実施済み。** ローカルビルドの ID は
+     **`kpjfmcppkncdmehdpgcochaanbmodaim`**(ストアのアイテム ID と同じ)になった。
+     旧 ID は `bfmfamnekclamfdjbfndmomljgneejgo`。
      **これは既存利用者の移行にはならない** — 既に入っている版は旧 ID のまま。
    - 補足: 新規アイテムの初回アップロードで `key field is not allowed in manifest` が出るという報告が
      [chromium-extensions (2021)](https://groups.google.com/a/chromium.org/g/chromium-extensions/c/x_NBS6_-NKs)

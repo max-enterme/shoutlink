@@ -37,6 +37,16 @@
     **GitHub Pages は旧 URL をリダイレクトしない(404 になる)。**
     リポジトリの URL は 301 で新しい名前へ追従する(blob URL も含む)。
   - `docs/t1-findings.md` の旧名は**観測記録なので書き換えていない。**
+- **`manifest.json` の `key` を、Chrome ウェブストアが割り当てた公開鍵に差し替えた。**
+  **拡張 ID が `bfmfamnekclamfdjbfndmomljgneejgo` から
+  `kpjfmcppkncdmehdpgcochaanbmodaim` に変わる**(ストアのアイテム ID と同じ)。
+  - ⚠️ **デベロッパーモードで入れている場合、この版を読み込むと別の拡張として扱われ、
+    設定・呼び名の辞書・投稿履歴を引き継がない。**
+    入れ替える前に設定ページの DevTools で `chrome.storage` を書き出しておくこと
+    (手順 → [docs/setup-and-verify.md](docs/setup-and-verify.md) 「ストアへ移すと拡張 ID が変わる」)。
+  - **揃えた理由は二重投稿の防止。** ID が違うとストア版と並存できてしまい、
+    **両方が動いて同じ相手へ 2 回投稿する。**揃えれば Chrome の重複防止が効く。
+  - ストア提出用 ZIP は今までどおり `key` を落とすので、`npm run package:store` の出力は変わらない。
 - **`host_permissions` に `https://www.youtube.com/*` が増えた。**
   **インストール時の許可表示が変わる。**用途は**設定画面から 1 回チャンネル ID を取りに行く**ことだけで、
   **注入範囲は増えていない**(content script は `studio.youtube.com/live_chat*` のまま)。
