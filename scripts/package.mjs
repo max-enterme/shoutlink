@@ -1,7 +1,7 @@
 // GitHub Releases に添付する ZIP を作る。
 //
-//   release/yt-redirect-pin-<version>.zip
-//     yt-redirect-pin-<version>/
+//   release/shoutlink-<version>.zip
+//     shoutlink-<version>/
 //       INSTALL.txt      … 展開した人がまず読むもの
 //       manifest.json    … 「パッケージ化されていない拡張機能を読み込む」で選ぶのはこのフォルダ
 //       content.js / options.html / options.js / icons/
@@ -34,7 +34,7 @@ if (manifest.version !== version) {
 
 // README を経由せず ZIP だけ手渡しされることがある。**この文書が唯一の告知になりうる**ので、
 // 警告を手順より先に置く。
-const INSTALL = `返礼リンク (yt-redirect-pin) ${version}
+const INSTALL = `返礼リンク (shoutlink) ${version}
 
 ■ 使う前に必ず読んでください
 
@@ -51,7 +51,7 @@ const INSTALL = `返礼リンク (yt-redirect-pin) ${version}
 自由文 ({msg}) 入りの文面は、実配信での通し確認 (検知 → 投稿 → 固定) が未実施です。
 コメント返し (下記) も、実配信での通し確認が未実施です。
 
-  詳細: https://max-enterme.github.io/yt-redirect-pin/
+  詳細: https://max-enterme.github.io/shoutlink/
 
 ■ 前提
 
@@ -134,7 +134,7 @@ chrome://extensions のカード →「詳細」→「拡張機能のオプシ�
 ・Chrome が起動のたびに「デベロッパー モードの拡張機能を無効にする」と聞いてきます。
   未署名の拡張なので正常です。「キャンセル」で閉じてください。
 ・自動更新はされません。新しい版はここから取ってください。
-  https://github.com/max-enterme/yt-redirect-pin/releases/latest
+  https://github.com/max-enterme/shoutlink/releases/latest
 
 ■ 新しい版に入れ替えるとき
 
@@ -170,7 +170,7 @@ if (missing.length > 0) {
   process.exit(1)
 }
 
-const top = `yt-redirect-pin-${version}`
+const top = `shoutlink-${version}`
 const entries = [{ name: `${top}/INSTALL.txt`, data: Buffer.from(INSTALL, 'utf8') }]
 for (const file of files.sort()) {
   entries.push({

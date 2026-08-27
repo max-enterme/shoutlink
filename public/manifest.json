@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "返礼リンク (yt-redirect-pin)",
+  "name": "返礼リンク (shoutlink)",
   "version": "0.3.0",
   "description": "配信中に受け取ったライブリダイレクトや、登録した人のコメントを検知して、その人のチャンネル URL をライブチャットへ投稿します。",
   "icons": {

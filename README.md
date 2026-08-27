@@ -1,13 +1,13 @@
-# 返礼リンク (yt-redirect-pin)
+# 返礼リンク (shoutlink)
 
 **YouTube のライブ配信で他チャンネルからライブリダイレクトを受け取ったとき、送信元チャンネルの
 URL をライブチャットへ投稿して固定する Chrome 拡張 (MV3)。**
 **辞書で「コメントに反応する」を付けた人のコメントにも反応できます (既定 OFF / 固定はしません)。**
 
-[![release](https://img.shields.io/github/v/release/max-enterme/yt-redirect-pin?label=release&sort=semver)](https://github.com/max-enterme/yt-redirect-pin/releases/latest)
+[![release](https://img.shields.io/github/v/release/max-enterme/shoutlink?label=release&sort=semver)](https://github.com/max-enterme/shoutlink/releases/latest)
 [![license](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-説明ページ → **<https://max-enterme.github.io/yt-redirect-pin/>**
+説明ページ → **<https://max-enterme.github.io/shoutlink/>**
 
 ---
 
@@ -84,8 +84,8 @@ URL をライブチャットへ投稿して固定する Chrome 拡張 (MV3)。**
 **未署名の拡張です。** デベロッパーモードでの読み込みになり、**自動更新もされません**
 (新しい版への入れ替え方は [docs/install.md](docs/install.md#新しい版に入れ替える) / 設定は引き継がれます)。
 
-1. [Releases](https://github.com/max-enterme/yt-redirect-pin/releases/latest) から
-   `yt-redirect-pin-<version>.zip` を落とす
+1. [Releases](https://github.com/max-enterme/shoutlink/releases/latest) から
+   `shoutlink-<version>.zip` を落とす
 2. 展開する。**消さない場所に置く** (Chrome はこのフォルダを読み続けます)
 3. Chrome で `chrome://extensions` を開き、右上の **「デベロッパー モード」** を ON
 4. **「パッケージ化されていない拡張機能を読み込む」** → 展開したフォルダを選ぶ
@@ -183,7 +183,7 @@ Node.js **20.1 以上**。
 npm install
 npm run typecheck && npm test
 npm run build      # dist/ に読み込める形が出る
-npm run package    # release/yt-redirect-pin-<version>.zip
+npm run package    # release/shoutlink-<version>.zip
 ```
 
 ソースの構成 (どのファイルが何を持つか) は

@@ -93,11 +93,11 @@ feature: comment-link
       **AC17 で増えた分も対象に含める** — **未解決の印**(ON なのに `channelId` が空)/
       **解決に失敗した理由の出し方** / **再試行の操作子** / **同じ `channelId` の行が 2 件以上ある**ときの警告。
       **畳んだ状態は現状の 3 列(ハンドル / 呼び名 / 削除ボタン)を出発点にする** — 新しい列を増やさない。
-      **モックは配置済み** — <http://localhost:19052/published/yt-redirect-pin/004-directory-collapse-mock.html>
-      (`F:\home\dashboard\published\yt-redirect-pin-directory-collapse-mock.html`)。
-      **`yt-redirect-pin` は projects.json に未登録**なので、Projects 配下ではなく**グローバルの Pages タブ**に出る。
+      **モックは配置済み** — <http://localhost:19052/published/shoutlink/004-directory-collapse-mock.html>
+      (`F:\home\dashboard\published\shoutlink-directory-collapse-mock.html`)。
+      **`shoutlink` は projects.json に未登録**なので、Projects 配下ではなく**グローバルの Pages タブ**に出る。
       **完了条件**(SPEC-OPS §10):
-      ① `/dashboard-publish` で `published/yt-redirect-pin/` に置き、**plan.md R9 から URL でリンクする**
+      ① `/dashboard-publish` で `published/shoutlink/` に置き、**plan.md R9 から URL でリンクする**
       ② 畳んだ行の内容 / 展開の操作子 / 「効かない行」の印 / **未解決の印と再試行の操作子**の 4 点を、**`data-state` 付きのチェック欄で人間が選んで確定させる**
       ③ **確定した値を AC13 と plan.md R9 に落としてコミットする**(モックは正本ではない)。
       **ここまで済んで T9 に進める**

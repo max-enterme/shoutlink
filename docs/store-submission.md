@@ -30,10 +30,10 @@ Chrome ウェブストアのデベロッパーダッシュボードへ**その�
 
 | | 値 | どこから |
 |---|---|---|
-| 名前 | `返礼リンク (yt-redirect-pin)` | `public/manifest.json` の `name` |
+| 名前 | `返礼リンク (shoutlink)` | `public/manifest.json` の `name` |
 | 概要 | 「配信中に受け取ったライブリダイレクトや、登録した人のコメントを検知して、その人のチャンネル URL をライブチャットへ投稿します。」(65 字 / 上限 132 字) | 同 `description` |
 
-**どちらも変えない。** 限定公開なのでストア内検索に出ず、`(yt-redirect-pin)` を外して
+**どちらも変えない。** 限定公開なのでストア内検索に出ず、`(shoutlink)` を外して
 短くする利点が無い。**変えると manifest を触ることになり、版上げが要る。**
 
 ### カテゴリ・言語
@@ -88,7 +88,7 @@ ON にすると投稿の頻度は上がります。コメントはリダイレ�
 控えます (ログイン状態は送りません)。ライブチャットの画面からは通信しません。
 
   プライバシーポリシー:
-  https://github.com/max-enterme/yt-redirect-pin/blob/main/docs/privacy-policy.md
+  https://github.com/max-enterme/shoutlink/blob/main/docs/privacy-policy.md
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ■ 入れる前に必ず読んでください
@@ -123,7 +123,7 @@ YouTube の規約に触れるかどうかは見てくれません。
 判断がつかない場合は、使わないでください。作者は結果について責任を負いません (MIT / 無保証)。
 
   何をどこまで確かめたか、何がグレーなのかは全部ここに書いてあります:
-  https://max-enterme.github.io/yt-redirect-pin/
+  https://max-enterme.github.io/shoutlink/
 ```
 
 > ⚠️ **「ほとんど検証されていません」の段落は、003 T6 / 004 T12 が済んだら現状に合わせて書き換える。**
@@ -158,8 +158,8 @@ YouTube の規約に触れるかどうかは見てくれません。
 
 | | 値 |
 |---|---|
-| ホームページ | `https://max-enterme.github.io/yt-redirect-pin/` |
-| サポート | `https://github.com/max-enterme/yt-redirect-pin/issues` |
+| ホームページ | `https://max-enterme.github.io/shoutlink/` |
+| サポート | `https://github.com/max-enterme/shoutlink/issues` |
 | Official URL | **使わない** (Search Console の所有権確認が要る) |
 
 ---
@@ -244,11 +244,11 @@ YouTube の規約に触れるかどうかは見てくれません。
 ### プライバシーポリシーの URL — **確認済み。blob URL を使う**
 
 ```
-https://github.com/max-enterme/yt-redirect-pin/blob/main/docs/privacy-policy.md
+https://github.com/max-enterme/shoutlink/blob/main/docs/privacy-policy.md
 ```
 
 **GitHub Pages の URL は使えない。**
-`https://max-enterme.github.io/yt-redirect-pin/privacy-policy.md` は
+`https://max-enterme.github.io/shoutlink/privacy-policy.md` は
 **`Content-Type: text/markdown` で配信される**ため (`docs/.nojekyll` があり md → HTML の変換をしない)、
 ブラウザで開くと**表示ではなくダウンロードになる。**審査で読まれる URL としては使えない。
 

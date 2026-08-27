@@ -9,16 +9,16 @@
       content="YouTube のライブ配信で受け取ったライブリダイレクトや、登録した人のコメントを検知して、その人のチャンネル URL をライブチャットへ投稿する Chrome 拡張 (MV3)。"
     />
     <meta property="og:type" content="website" />
-    <meta property="og:title" content="返礼リンク (yt-redirect-pin)" />
+    <meta property="og:title" content="返礼リンク (shoutlink)" />
     <meta
       property="og:description"
       content="来てくれた人のチャンネル URL を、ライブチャットへ代わりに投稿する Chrome 拡張。"
     />
     <!-- OG のクローラは絶対 URL でないと解決しないものが多い -->
-    <meta property="og:url" content="https://max-enterme.github.io/yt-redirect-pin/" />
+    <meta property="og:url" content="https://max-enterme.github.io/shoutlink/" />
     <meta
       property="og:image"
-      content="https://max-enterme.github.io/yt-redirect-pin/assets/ogp-440x280.png"
+      content="https://max-enterme.github.io/shoutlink/assets/ogp-440x280.png"
     />
     <meta name="twitter:card" content="summary" />
     <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
@@ -347,10 +347,10 @@
           ライブリダイレクトを受け取ったとき、登録した人がコメントしたとき。<br />その人のチャンネル URL をチャットに投稿する Chrome 拡張。
         </p>
         <div class="cta">
-          <a class="btn btn-primary" href="https://github.com/max-enterme/yt-redirect-pin/releases/latest"
+          <a class="btn btn-primary" href="https://github.com/max-enterme/shoutlink/releases/latest"
             >最新版をダウンロード</a
           >
-          <a class="btn btn-ghost" href="https://github.com/max-enterme/yt-redirect-pin">GitHub</a>
+          <a class="btn btn-ghost" href="https://github.com/max-enterme/shoutlink">GitHub</a>
           <small>いま Chrome ウェブストアには出ていません (限定公開で出す準備中)。読んでほしいことは下に書きます。</small>
         </div>
       </div>
@@ -406,7 +406,7 @@
         <ul>
           <li>
             <b>YouTube の規約上、グレーな行為を含みます。</b>利用規約は「自動化された手段を使用して本サービスにアクセスすること」を禁じています。本拡張がこれに当たるかは文言からは決まらず、<b>公式見解も、この形での処分の前例も見つかっていません。</b>「安全である証拠」ではなく「証拠が無い」という状態です
-            (<a href="https://github.com/max-enterme/yt-redirect-pin/blob/main/docs/d3-automation-policy.md"
+            (<a href="https://github.com/max-enterme/shoutlink/blob/main/docs/d3-automation-policy.md"
               >調べたことは全部ここに置いてあります</a
             >)。
           </li>
@@ -441,13 +441,13 @@
       <h2 id="install">入れかた</h2>
       <p>
         <b>未署名の拡張です。</b>デベロッパーモードでの読み込みになり、<b>自動更新もされません</b>
-        (新しい版への入れ替え方は<a href="https://github.com/max-enterme/yt-redirect-pin/blob/main/docs/install.md#新しい版に入れ替える">導入手順</a>
+        (新しい版への入れ替え方は<a href="https://github.com/max-enterme/shoutlink/blob/main/docs/install.md#新しい版に入れ替える">導入手順</a>
         / 設定は引き継がれます)。
       </p>
       <ol class="steps">
         <li>
-          <a href="https://github.com/max-enterme/yt-redirect-pin/releases/latest">Releases</a> から
-          <code>yt-redirect-pin-&lt;version&gt;.zip</code> をダウンロードする
+          <a href="https://github.com/max-enterme/shoutlink/releases/latest">Releases</a> から
+          <code>shoutlink-&lt;version&gt;.zip</code> をダウンロードする
         </li>
         <li>展開して、<b>消さない場所に置く</b> (Chrome はこのフォルダを読み続けます)</li>
         <li>Chrome で <code>chrome://extensions</code> を開き、右上の<b>「デベロッパー モード」</b>を ON</li>
@@ -460,7 +460,7 @@
         <b>YouTube の画面構造が変われば、ある日突然動かなくなります</b> (DOM に依存しているため)。直すまで反応しなくなるだけで、誤って投稿する形では壊れません。
       </p>
       <p>
-        詳しい設定と、動かないときの切り分けは<a href="https://github.com/max-enterme/yt-redirect-pin/blob/main/docs/install.md">導入・設定・切り分け</a>にあります。
+        詳しい設定と、動かないときの切り分けは<a href="https://github.com/max-enterme/shoutlink/blob/main/docs/install.md">導入・設定・切り分け</a>にあります。
       </p>
 
       <h3 id="manual">自動投稿を使わない設定</h3>
@@ -582,7 +582,7 @@
         <li>作者があなたのデータを見ることはありません</li>
       </ul>
       <p>
-        <a href="https://github.com/max-enterme/yt-redirect-pin/blob/main/docs/privacy-policy.md">プライバシーポリシー</a>
+        <a href="https://github.com/max-enterme/shoutlink/blob/main/docs/privacy-policy.md">プライバシーポリシー</a>
       </p>
 
       </main>
@@ -590,10 +590,10 @@
 
     <footer class="wrap">
       <div>
-        <a href="https://github.com/max-enterme/yt-redirect-pin">GitHub</a>
-        <a href="https://github.com/max-enterme/yt-redirect-pin/issues">Issues</a>
-        <a href="https://github.com/max-enterme/yt-redirect-pin/releases">Releases</a>
-        <a href="https://github.com/max-enterme/yt-redirect-pin/blob/main/LICENSE">MIT License</a>
+        <a href="https://github.com/max-enterme/shoutlink">GitHub</a>
+        <a href="https://github.com/max-enterme/shoutlink/issues">Issues</a>
+        <a href="https://github.com/max-enterme/shoutlink/releases">Releases</a>
+        <a href="https://github.com/max-enterme/shoutlink/blob/main/LICENSE">MIT License</a>
       </div>
       <p>
         本拡張は YouTube および Google の公式製品ではなく、これらから承認・提携を受けたものでもありません。

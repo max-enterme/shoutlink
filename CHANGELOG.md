@@ -25,6 +25,18 @@
   旧名は機能の半分しか指していなかった。**変えたのは表示名だけ**で、
   リポジトリ名・ZIP 名・ログの `[yt-redirect-pin]` はそのまま。
   `key` があるので**拡張 ID は変わらず、設定は消えない**
+  → **その後、同じ 0.3.0 のうちにプロダクトコードも改名した(次の項)。**
+- **プロダクトコードを `yt-redirect-pin` から `shoutlink` に変えた。**
+  リポジトリ名(`max-enterme/shoutlink`)・パッケージ名・ZIP 名・
+  manifest の表示名の括弧内(`返礼リンク (shoutlink)`)・
+  コンソールログの接頭辞(`[shoutlink]`)・手動トリガーの DOM id(`#shoutlink-manual-trigger`)。
+  **表示名「返礼リンク」は変えていない。**
+  - **`chrome.storage` のキー(`ytRedirectPin.*`)は変えていない。**
+    内部名で利用者に見えず、**変えると既存の設定・辞書・投稿履歴が読めなくなる**ため。
+  - ⚠️ **説明ページの URL が変わった** → <https://max-enterme.github.io/shoutlink/>。
+    **GitHub Pages は旧 URL をリダイレクトしない(404 になる)。**
+    リポジトリの URL は 301 で新しい名前へ追従する(blob URL も含む)。
+  - `docs/t1-findings.md` の旧名は**観測記録なので書き換えていない。**
 - **`host_permissions` に `https://www.youtube.com/*` が増えた。**
   **インストール時の許可表示が変わる。**用途は**設定画面から 1 回チャンネル ID を取りに行く**ことだけで、
   **注入範囲は増えていない**(content script は `studio.youtube.com/live_chat*` のまま)。
