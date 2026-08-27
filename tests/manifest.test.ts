@@ -104,12 +104,20 @@ describe('manifest.json — 拡張 ID の固定 (更新で設定を消さない)
   })
 
   it('**`key` を変えない** — 変えると ID が変わり、既存の利用者の設定が切り離される', () => {
-    // 2026-08-17 に生成した公開鍵。この鍵から決まる拡張 ID は
-    // `bfmfamnekclamfdjbfndmomljgneejgo`
-    // (公開鍵 DER の SHA-256 の先頭 16 バイトを a〜p に写したもの)。
-    // **この値を更新しない** — 更新が要るのは鍵を作り直すと決めたとき = 全員の設定を捨てるときだけ
+    // **Chrome ウェブストアが割り当てた公開鍵** (2026-08-23 に差し替え)。
+    // この鍵から決まる拡張 ID は `kpjfmcppkncdmehdpgcochaanbmodaim`
+    // (公開鍵 DER の SHA-256 の先頭 16 バイトを a〜p に写したもの) で、
+    // **ストアのアイテム ID と一致する。**
+    //
+    // 差し替えた理由: ストア版の ID はストアが決めるので、自前生成の鍵
+    // (`bfmfamnekclamfdjbfndmomljgneejgo`) のままだと**ローカルビルドとストア版が別物**になり、
+    // **同じ相手へ 2 回投稿する事故**が起きうる。鍵を揃えると Chrome の重複防止
+    // (「同じ ID の拡張機能が既にあります」) が効く。
+    // → `docs/setup-and-verify.md` 「ストアへ移すと拡張 ID が変わる」
+    //
+    // **これ以降この値を更新しない** — 更新するとストアと切り離され、上の事故が戻ってくる
     expect(manifest.key).toBe(
-      'MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAlV9451W8agKwrcppxtPhPkRZ7lVl7horDr8tjC96keVPyxTXowsNvchcmIgslT+o8e5ksg90eEQBZRyI66Wz8Pqu9cQ5wKgK/48Zu/thw21lZ8ewnCTRzWzjiglUDShewGMVSF9FKOf9jPWrEjjASSLjWW10jC4h2UxZF/twDANnix1Lh+X3lD3S22HdwSl4L/xckzdD7e0bNCeC/crjETDtNVOM370yAroccQGC8TiIWoftdkvM9kWVBsHKbS3pVIxQpzrJir1BfRM+06e6iaVVFQPWPxkbG285agJld3JsIzGj8buu16Mdh7UM/jAbmx8k+qgXaGZx9aaUYoc5MQIDAQAB',
+      'MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAqjXvcoTj/NaWp5bPOJy3YzkITW1wV/olXdh6ssK1y4mhYlrpWJc72npl0U6O4cApbEiEAXp5vnhZWc7o82CPzZ2WLRuz04ANOHCB2e54CyOklZctVOfZUVr3YWDcfXBy47wds8tZ1ES2gafkx3XXmHxPpbOaFmocK/A5TTQqiFFAwsncRze4Qzjlw1J79rGFFd2k7uT0zlfz841A+hQICxchcsDac4DsyYS+HmP3yVm5hsb1gypIaGsnVe3orH98qO0H7J/kj1zbrZKGz/ryUiZj7iu3V+c0GU0EmW9U2BOKrbC5WR3U4Wr6zRRAw87OqMc/Bo1ftJmIEaaNzFcfsQIDAQAB',
     )
   })
 })
