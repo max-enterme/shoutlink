@@ -46,7 +46,7 @@ describe('mountManualTrigger', () => {
   })
 
   function ui() {
-    const host = document.getElementById('yt-redirect-pin-manual-trigger')!
+    const host = document.getElementById('shoutlink-manual-trigger')!
     const shadow = host.shadowRoot!
     return {
       host,
@@ -91,6 +91,6 @@ describe('mountManualTrigger', () => {
   it('destroy で DOM から消える', () => {
     const handle = mountManualTrigger({ onTrigger: () => {} })
     handle.destroy()
-    expect(document.getElementById('yt-redirect-pin-manual-trigger')).toBeNull()
+    expect(document.getElementById('shoutlink-manual-trigger')).toBeNull()
   })
 })

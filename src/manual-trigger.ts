@@ -108,7 +108,7 @@ export function mountManualTrigger(opts: ManualTriggerOptions): ManualTriggerHan
   const now = opts.now ?? (() => Date.now())
 
   const host = doc.createElement('div')
-  host.id = 'yt-redirect-pin-manual-trigger'
+  host.id = 'shoutlink-manual-trigger'
   const shadow = host.attachShadow({ mode: 'open' })
 
   const style = doc.createElement('style')

@@ -1,4 +1,4 @@
-# 返礼リンク (yt-redirect-pin) テストのお願い
+# 返礼リンク (shoutlink) テストのお願い
 
 テストしてくれてありがとうございます。この文書だけで完結するように書いてあります。
 
@@ -76,7 +76,7 @@ YouTube のライブ配信で**他のチャンネルからライブリダイレ�
 > 試してください。投稿は実際にチャットへ流れます。
 
 何をしているか気になったら、ソースは全部
-[GitHub](https://github.com/max-enterme/yt-redirect-pin) にあります
+[GitHub](https://github.com/max-enterme/shoutlink) にあります
 (`src/` が実体、`public/manifest.json` が権限の宣言)。
 
 ---
@@ -335,14 +335,14 @@ YouTube のライブ配信で**他のチャンネルからライブリダイレ�
 
 1. **ポップアウトしたチャットのウィンドウ**をクリックして選び、**F12** を押す
 2. 「Console」タブを開く
-3. `[yt-redirect-pin]` で始まる行が拡張のログです
+3. `[shoutlink]` で始まる行が拡張のログです
 
 正常な流れだとこう出ます:
 
 ```
-[yt-redirect-pin] 起動した {build: ..., scope: 'Studio のライブ管制室(自分の配信)', enabled: true, ...}
-[yt-redirect-pin] 投稿する (manual): ◯◯さんからリダイレクトありがとうございます! https://...
-[yt-redirect-pin] 固定結果: pinned
+[shoutlink] 起動した {build: ..., scope: 'Studio のライブ管制室(自分の配信)', enabled: true, ...}
+[shoutlink] 投稿する (manual): ◯◯さんからリダイレクトありがとうございます! https://...
+[shoutlink] 固定結果: pinned
 ```
 
 `固定結果` の意味:
@@ -356,8 +356,8 @@ YouTube のライブ配信で**他のチャンネルからライブリダイレ�
 テスト H(コメント返し)では、代わりにこの形で出ます:
 
 ```
-[yt-redirect-pin] コメント返しの対象を検知した: https://www.youtube.com/@...
-[yt-redirect-pin] コメント返しを投稿する: ◯◯さん、来てくれてありがとうございます! https://...
+[shoutlink] コメント返しの対象を検知した: https://www.youtube.com/@...
+[shoutlink] コメント返しを投稿する: ◯◯さん、来てくれてありがとうございます! https://...
 ```
 
 投稿されなかったときは、**理由つきの行が 1 本出ます。2 種類あります。**
@@ -378,7 +378,7 @@ YouTube のライブ配信で**他のチャンネルからライブリダイレ�
 
 ### (a) コンソールのログ
 
-Console タブで右クリック →「Save as...」で保存するか、`[yt-redirect-pin]` の行をコピーして貼ってください。
+Console タブで右クリック →「Save as...」で保存するか、`[shoutlink]` の行をコピーして貼ってください。
 
 ### (b) 画面構造(DOM)— これが一番助かります
 

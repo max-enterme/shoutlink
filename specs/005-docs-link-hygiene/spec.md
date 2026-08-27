@@ -31,10 +31,10 @@ status: 未着手
 ### 説明ページは GitHub Pages のサイトルートで、リンクの形が違う
 
 GitHub Pages は **`main` ブランチの `/docs`** から配信されている(`gh api …/pages` で確認)。
-[docs/index.html](../../docs/index.html) は `https://max-enterme.github.io/yt-redirect-pin/` そのもの。
+[docs/index.html](../../docs/index.html) は `https://max-enterme.github.io/shoutlink/` そのもの。
 
 `docs/index.html` から md へのリンクは**すべて絶対 URL**
-(`https://github.com/max-enterme/yt-redirect-pin/blob/main/docs/…`)で、相対リンクは 0 本。
+(`https://github.com/max-enterme/shoutlink/blob/main/docs/…`)で、相対リンクは 0 本。
 **これは意図的**で、Pages 上で `.md` へ相対リンクすると GitHub は描画せず生ファイルを返す。
 
 つまり**素朴な「相対リンクだけ検査する」実装では、index.html の md 参照を 1 本も検査しない。**
@@ -59,7 +59,7 @@ README・他の md・index.html のいずれからも参照されていない。
 |---|---|
 | `docs/security-review.md` の**コードフェンス内**に HTML アンカー | `href="/@sender"` 等が **4 本**(L87 / L141 / L143 / L145)。HTML 属性を md に当てると初日から誤検出 |
 | Markdown 記法 `](…)` はフェンス内に | **0 本**。md は Markdown 記法だけ見れば誤検出しない |
-| `docs/index.html` の og:url / og:image | **`<meta content="…">` にある**(L18 / L21)。`href` / `src` には Pages URL が **0 本**なので、抽出面に `content` を足さないと還元規則ごと死ぬ。`og:url` は `…/yt-redirect-pin/` = **ディレクトリ**なので還元対象から外す |
+| `docs/index.html` の og:url / og:image | **`<meta content="…">` にある**(L18 / L21)。`href` / `src` には Pages URL が **0 本**なので、抽出面に `content` を足さないと還元規則ごと死ぬ。`og:url` は `…/shoutlink/` = **ディレクトリ**なので還元対象から外す |
 | favicon | `href="data:image/svg+xml,…"`。相対パスとして扱うと誤検出 |
 | md 見出しアンカーは 6 本 | **相対 5 本 + index.html の絶対 URL 1 本**。②の還元を通して初めて 6 本になる |
 
@@ -100,8 +100,8 @@ README・他の md・index.html のいずれからも参照されていない。
       　壊し方: 実在しないファイルへの相対リンクを 1 本置く
 
       ② **自リポジトリの絶対 URL をパスへ還元した実在確認**
-      　対象: `https://github.com/max-enterme/yt-redirect-pin/blob/main/…` と
-      　**`https://max-enterme.github.io/yt-redirect-pin/…`(Pages 絶対 URL → `docs/`)**。
+      　対象: `https://github.com/max-enterme/shoutlink/blob/main/…` と
+      　**`https://max-enterme.github.io/shoutlink/…`(Pages 絶対 URL → `docs/`)**。
       　**末尾が `/` のもの(= `docs/` 自身を指す `og:url`)は還元対象から外す。**
       　**他リポジトリ・`releases`・`issues` への URL は還元しない**(誤検出になる)。
       　壊し方: 実在しないパスを指す `blob/main` URL を 1 本置く

@@ -68,7 +68,7 @@ body:
     attributes:
       label: コンソールのログ
       description: |
-        チャットのウィンドウで F12 → Console。`[yt-redirect-pin]` で始まる行。
+        チャットのウィンドウで F12 → Console。`[shoutlink]` で始まる行。
         設定で「診断ログ」を ON にすると詳しく出ます。
       render: text
 

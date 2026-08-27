@@ -1,4 +1,4 @@
-# プライバシーポリシー — 返礼リンク (yt-redirect-pin)
+# プライバシーポリシー — 返礼リンク (shoutlink)
 
 最終更新: 2026-08-17
 
@@ -103,7 +103,7 @@ YouTube は Google LLC の商標です。
 
 ## お問い合わせ
 
-<https://github.com/max-enterme/yt-redirect-pin/issues>
+<https://github.com/max-enterme/shoutlink/issues>
 
 ## 変更
 

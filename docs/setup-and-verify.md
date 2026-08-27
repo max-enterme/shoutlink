@@ -1,6 +1,6 @@
 # 導入手順と動作確認
 
-対象: 返礼リンク (yt-redirect-pin / Chrome 拡張 / MV3)。実装は T2–T7 まで。
+対象: 返礼リンク (shoutlink / Chrome 拡張 / MV3)。実装は T2–T7 まで。
 
 > ⚠️ **spec.md D3(自動投稿の是非)は決着した** — グレーであることを開示した上で配布する
 > ([d3-automation-policy.md](d3-automation-policy.md))。自動投稿に不安があるなら、
@@ -135,7 +135,7 @@ content script が注入されるのは **Studio のライブ管制室のチャ�
 独立ウィンドウになるので、サブモニタに小さく置いておける
 (URL が `studio.youtube.com/live_chat?is_popout=1&v=...` になっていることを確認する)。
 
-読み込めているかはコンソールの `[yt-redirect-pin] 起動した {...}` で判る。出ていなければ
+読み込めているかはコンソールの `[shoutlink] 起動した {...}` で判る。出ていなければ
 注入されていない(URL が `studio.youtube.com/live_chat` か、拡張が有効か、⟳ を押したかを確認する)。
 
 設定で **「手動トリガーを出す」を ON** にすると、チャット画面の右下に **「↩ 返礼」** が出る
@@ -149,7 +149,7 @@ content script が注入されるのは **Studio のライブ管制室のチャ�
 
 - **本番配信でいきなり試さない。** 自分の限定公開 or 非公開のテスト配信を立てて、そこでやる。
   投稿は実際にチャットへ流れる。
-- ログは DevTools のコンソールに `[yt-redirect-pin]` 付きで出る。
+- ログは DevTools のコンソールに `[shoutlink]` 付きで出る。
   - ポップアウトチャットは**独立ウィンドウ**なので、そのウィンドウで F12 を押す。
   - watch ページ埋め込みで見る場合は、コンソール左上の**フレーム選択**を `live_chat` に切り替える。
 
@@ -336,11 +336,11 @@ copy(document.querySelector('yt-live-chat-item-list-renderer')?.outerHTML)
 npm run package
 ```
 
-`release/yt-redirect-pin-<version>.zip` ができる(ビルドも一緒に走る)。**Releases に添付するものと同じ。**
+`release/shoutlink-<version>.zip` ができる(ビルドも一緒に走る)。**Releases に添付するものと同じ。**
 
 ```
-yt-redirect-pin-0.1.0.zip
-  yt-redirect-pin-0.1.0/
+shoutlink-0.1.0.zip
+  shoutlink-0.1.0/
     INSTALL.txt      … 展開した人がまず読むもの(警告 → 前提 → 手順)
     manifest.json    … chrome://extensions で読み込むのはこのフォルダ
     content.js / options.html / options.js / icons/
@@ -373,18 +373,18 @@ yt-redirect-pin-0.1.0.zip
 npm run package:store
 ```
 
-`release/yt-redirect-pin-<version>-store.zip` ができる(ビルドも一緒に走る)。
+`release/shoutlink-<version>-store.zip` ができる(ビルドも一緒に走る)。
 **`npm run package`(Releases 用)とは別物。**取り違えるとどちらも通らない。
 
 ```
-yt-redirect-pin-0.3.0-store.zip
+shoutlink-0.3.0-store.zip
   manifest.json    ← **ルート直下**。ストアはここに manifest が無いと弾く
   content.js / options.html / options.js / icons/
 ```
 
 | | Releases 用 (`package`) | ストア用 (`package:store`) |
 |---|---|---|
-| 包み | `yt-redirect-pin-<version>/` で 1 枚包む | **包まない**(ルートに `manifest.json`) |
+| 包み | `shoutlink-<version>/` で 1 枚包む | **包まない**(ルートに `manifest.json`) |
 | `INSTALL.txt` | **入れる**(デベロッパーモード読み込みの手順) | **入れない**(手順が食い違う) |
 | `key` | 入れる | **落とす**(→ 上の「ストアへ移すと拡張 ID が変わる」) |
 

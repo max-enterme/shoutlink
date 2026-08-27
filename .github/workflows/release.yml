@@ -45,7 +45,7 @@ jobs:
         run: |
           version=$(node -p "require('./package.json').version")
           gh release create "${GITHUB_REF_NAME}" \
-            "release/yt-redirect-pin-${version}.zip" \
+            "release/shoutlink-${version}.zip" \
             --title "${GITHUB_REF_NAME}" \
             --generate-notes \
             --verify-tag

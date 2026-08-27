@@ -14,8 +14,8 @@
 
 ## 1. 入れる
 
-1. [Releases](https://github.com/max-enterme/yt-redirect-pin/releases/latest) から
-   `yt-redirect-pin-<version>.zip` をダウンロード
+1. [Releases](https://github.com/max-enterme/shoutlink/releases/latest) から
+   `shoutlink-<version>.zip` をダウンロード
 2. **展開する。** 展開せずに読み込むことはできません
 3. 展開したフォルダを、**消さない場所に置く**
    (Chrome は起動のたびにこのフォルダを読みます。消す・移動すると拡張も消えます)
@@ -214,7 +214,7 @@
 1. 自分のテスト配信 (限定公開でよい) を開始する
 2. **YouTube Studio のライブ管制室**を開く (`studio.youtube.com` → 「ライブ配信」)
 3. 設定で「↩ 返礼」を出すようにしていれば、チャット部分の**右下にボタンが出ます**
-   (出していない場合は、コンソールの `[yt-redirect-pin] 起動した {...}` で確認できます)
+   (出していない場合は、コンソールの `[shoutlink] 起動した {...}` で確認できます)
 
 > `www.youtube.com` の watch ページやポップアウトでは**動きません** (意図的です)。
 > ポップアウトを使う場合も Studio 側のものを使ってください。
@@ -228,7 +228,7 @@
 
 ## 4. 動かないとき
 
-ログはブラウザの開発者ツールに出ます。**F12** → Console タブ。`[yt-redirect-pin]` で始まる行が
+ログはブラウザの開発者ツールに出ます。**F12** → Console タブ。`[shoutlink]` で始まる行が
 拡張のログです。
 
 > **管制室に埋め込まれたチャットで見る場合は、Console 左上のコンテキスト選択 (既定 `top`) を
@@ -258,7 +258,7 @@
 
 ### 報告するとき
 
-[Issues](https://github.com/max-enterme/yt-redirect-pin/issues) へ。
+[Issues](https://github.com/max-enterme/shoutlink/issues) へ。
 
 > ⚠️ **コンソールのログや DOM を貼るときは、視聴者のチャンネル名・ハンドル・ID が
 > 混ざっていないか確認してください。** リダイレクトの送信元だけ分かれば十分です。

@@ -1,5 +1,5 @@
 {
-  "name": "yt-redirect-pin",
+  "name": "shoutlink",
   "version": "0.3.0",
   "private": true,
   "description": "返礼リンク — ライブリダイレクトの受信や登録者のコメントを検知して、相手のチャンネル URL をライブチャットへ投稿する Chrome 拡張 (MV3)",
@@ -18,9 +18,9 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/max-enterme/yt-redirect-pin.git"
+    "url": "git+https://github.com/max-enterme/shoutlink.git"
   },
-  "homepage": "https://max-enterme.github.io/yt-redirect-pin/",
+  "homepage": "https://max-enterme.github.io/shoutlink/",
   "license": "MIT",
   "devDependencies": {
     "@types/chrome": "^0.0.268",

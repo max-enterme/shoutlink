@@ -43,7 +43,7 @@ feature: redirect-pin
 - **T1 が全体のゲート。** 結果次第で T3 以降の仕様が変わる(plan.md R1)。完了時にいったん人間に返す。
 - T1 / T8 は自動実装の対象外(実機・実配信が要る)。PR は分けて、人間の動作確認を経てからマージする。
 - 自動実装できるのは T2–T4 と T7。T5 / T6 は DOM 操作の実体で、検証が実機依存になるため分けて扱う。
-- **Feature issue は [#11](https://github.com/max-enterme/yt-redirect-pin/issues/11)**(2026-08-10 に後から採番)。
+- **Feature issue は [#11](https://github.com/max-enterme/shoutlink/issues/11)**(2026-08-10 に後から採番)。
   T1–T8 の sub-issue は**遡って作っていない** — 実装がほぼ完了した後に採番したため、
   「やっていない計画」を事後に作ることになる。経緯はコミット履歴と本ファイルが持つ。
   以降の feature(002 以降)は先に採番してから着手する。

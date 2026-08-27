@@ -17,7 +17,7 @@ feature: docs-link-hygiene
       フェンス内に HTML アンカーが 4 本ある)。**`data:` と `mailto:` は除外**
       (favicon が `data:`)
       ② **自リポジトリ絶対 URL の還元** — `…/blob/main/…` と
-      **Pages 絶対 URL(`https://max-enterme.github.io/yt-redirect-pin/…` → `docs/`)**。
+      **Pages 絶対 URL(`https://max-enterme.github.io/shoutlink/…` → `docs/`)**。
       **Pages URL は `<meta content>` にしか無い**(og:url / og:image)ので①の抽出面に含める。
       **末尾 `/` のもの(`og:url`)はディレクトリなので還元しない**(plan.md R4)。
       **index.html の md リンクは全部①ではなくこちらに当たる**ので、

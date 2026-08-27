@@ -1,13 +1,13 @@
 // Chrome ウェブストアへ提出する ZIP を作る。
 //
-//   release/yt-redirect-pin-<version>-store.zip
+//   release/shoutlink-<version>-store.zip
 //     manifest.json    … **ルート直下**。ストアはここに manifest が無いと弾く
 //     content.js / options.html / options.js / icons/
 //
 // GitHub Releases 用の `package.mjs` とは、意図的に 3 つ違う:
 //
 //   1. **フォルダで包まない。** Releases 用は展開先に散らばらないよう
-//      `yt-redirect-pin-<version>/` で包んでいるが、**ストアは ZIP のルートに
+//      `shoutlink-<version>/` で包んでいるが、**ストアは ZIP のルートに
 //      `manifest.json` を要求する**ので、包んだままだと弾かれる。
 //   2. **`INSTALL.txt` を入れない。** デベロッパーモード読み込みの手順書なので、
 //      ストア経由のインストールには要らないどころか手順が食い違う。
@@ -133,7 +133,7 @@ for (const file of files.sort()) {
 }
 
 const releaseDir = path.join(root, 'release')
-const zipPath = path.join(releaseDir, `yt-redirect-pin-${version}-store.zip`)
+const zipPath = path.join(releaseDir, `shoutlink-${version}-store.zip`)
 await mkdir(releaseDir, { recursive: true })
 await rm(zipPath, { force: true })
 await writeFile(zipPath, makeZip(entries))

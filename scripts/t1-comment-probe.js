@@ -1,5 +1,5 @@
 /*
- * yt-redirect-pin — 004 T1 採取スニペット(ブラウザの DevTools コンソールに貼る)
+ * shoutlink — 004 T1 採取スニペット(ブラウザの DevTools コンソールに貼る)
  *
  * ⚠️ **node スクリプトではない。**`scripts/` の他のファイル (*.mjs) はビルド用で、これだけは
  *    ブラウザのコンソールに貼って使う。手順は docs/004-t1-collect.md。

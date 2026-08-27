@@ -316,7 +316,7 @@ export function startRedirectDetector(opts: DetectorOptions): DetectorHandle {
   const traceFrom = (node: Node): void => {
     if (node.nodeType !== 1) return
     const el = node as Element
-    if (el.closest?.('#yt-redirect-pin-manual-trigger')) return
+    if (el.closest?.('#shoutlink-manual-trigger')) return
     if (isChatTextMessage(el)) return
     if (!NOTICE_HINT.test(textOf(el))) return
     log.info('[debug] 通知候補:', describeNode(el))

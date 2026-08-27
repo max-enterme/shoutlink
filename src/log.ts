@@ -1,4 +1,4 @@
-const PREFIX = '[yt-redirect-pin]'
+const PREFIX = '[shoutlink]'
 
 /**
  * AC6: 検知・投稿・固定のいずれが失敗しても配信そのものに影響させない。
