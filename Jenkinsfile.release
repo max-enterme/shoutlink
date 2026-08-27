@@ -1,0 +1,89 @@
+// yt-redirect-pin — .github/workflows/release.yml の移植。
+// ファイル名: Jenkinsfile.release (タグビルド用の別ジョブ)
+//
+// v* のタグを push すると、ビルドして Release に ZIP を添付する。
+//   npm version 0.2.0 で package.json と manifest を上げてから
+//   git tag v0.2.0 && git push origin v0.2.0
+//
+// 元は gh CLI を使っていたが、Jenkins には ${{ github.token }} に相当する自動発行トークンが
+// 無く、gh も入っていない。Credentials の PAT で GitHub REST API を直接叩く形にした。
+pipeline {
+  agent {
+    docker {
+      image 'node:20-bookworm'
+      args '-e HOME=/tmp -e npm_config_cache=/tmp/.npm'
+    }
+  }
+  options {
+    timestamps()
+    timeout(time: 20, unit: 'MINUTES')
+  }
+  environment {
+    REPO = 'max-enterme/yt-redirect-pin'
+  }
+  stages {
+    stage('バージョンの照合') {
+      // タグと package.json の版が食い違ったまま出さない
+      steps {
+        sh '''
+          set -eu
+          version=$(node -p "require('./package.json').version")
+          if [ "v$version" != "${TAG_NAME}" ]; then
+            echo "タグ ${TAG_NAME} と package.json の $version が食い違っている" >&2
+            exit 1
+          fi
+        '''
+      }
+    }
+    // 壊れたものを配らない
+    stage('install')   { steps { sh 'npm ci' } }
+    stage('typecheck') { steps { sh 'npm run typecheck' } }
+    stage('test')      { steps { sh 'npm test' } }
+    stage('package')   { steps { sh 'npm run package' } }
+
+    stage('Release を作る') {
+      environment {
+        GH = credentials('github-max-enterme')
+      }
+      steps {
+        // GH_PSW に PAT が入る(usernamePassword credential の慣習)。
+        // generate_release_notes は gh の --generate-notes に相当。
+        sh '''
+          set -eu
+          version=$(node -p "require('./package.json').version")
+          asset="release/yt-redirect-pin-${version}.zip"
+          test -f "$asset" || { echo "配布物が無い: $asset" >&2; exit 1; }
+
+          body=$(node -e "console.log(JSON.stringify({
+            tag_name: process.env.TAG_NAME,
+            name: process.env.TAG_NAME,
+            generate_release_notes: true
+          }))")
+
+          upload_url=$(curl -sS -X POST \
+            -H "Authorization: Bearer ${GH_PSW}" \
+            -H "Accept: application/vnd.github+json" \
+            -H "Content-Type: application/json" \
+            -d "$body" \
+            "https://api.github.com/repos/${REPO}/releases" \
+            | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{
+                const j=JSON.parse(s);
+                if(!j.upload_url){console.error('Release 作成に失敗: '+(j.message||s));process.exit(1)}
+                console.log(j.upload_url.replace(/{.*}$/,''));
+              })")
+
+          curl -sS -X POST \
+            -H "Authorization: Bearer ${GH_PSW}" \
+            -H "Accept: application/vnd.github+json" \
+            -H "Content-Type: application/zip" \
+            --data-binary @"$asset" \
+            "${upload_url}?name=yt-redirect-pin-${version}.zip" \
+            -o /tmp/upload.json -w "アセット添付 -> %{http_code}\n"
+
+          node -e "const j=require('/tmp/upload.json'); if(j.state!=='uploaded'){console.error('添付に失敗: '+JSON.stringify(j));process.exit(1)} console.log('OK: '+j.browser_download_url)"
+        '''
+      }
+    }
+  }
+  post { always { cleanWs() } }
+}
