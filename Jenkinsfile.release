@@ -1,4 +1,8 @@
+<<<<<<< Updated upstream
 // yt-redirect-pin — .github/workflows/release.yml の移植。
+=======
+// shoutlink (旧 yt-redirect-pin) — .github/workflows/release.yml の移植。
+>>>>>>> Stashed changes
 // ファイル名: Jenkinsfile.release (タグビルド用の別ジョブ)
 //
 // v* のタグを push すると、ビルドして Release に ZIP を添付する。
@@ -19,7 +23,13 @@ pipeline {
     timeout(time: 20, unit: 'MINUTES')
   }
   environment {
+<<<<<<< Updated upstream
     REPO = 'max-enterme/yt-redirect-pin'
+=======
+    // リポジトリは shoutlink にリネーム済み。package.json の name と成果物名は
+    // yt-redirect-pin のままなので、そちらは変えないこと。
+    REPO = 'max-enterme/shoutlink'
+>>>>>>> Stashed changes
   }
   stages {
     stage('バージョンの照合') {
