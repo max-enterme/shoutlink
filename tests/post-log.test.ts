@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 import {
   POST_LOG_MAX_AGE_MS,
   POST_LOG_MAX_ENTRIES,
@@ -12,6 +12,7 @@ import {
   makePostRecord,
   makePostRecordFor,
   normalizePostLog,
+  onPostLogChanged,
   prunePostLog,
   rememberPost,
   streamIdFromUrl,
@@ -418,6 +419,78 @@ describe('countCommentPostsInStream (AC11)', () => {
       rec({ kind: 'comment', streamId: '', url: FAKE_CHANNEL.url + '/' + i, postedAt: now - i }),
     )
     expect(countCommentPostsInStream(log, '', now)).toBe(25)
+  })
+})
+
+// --- 006: 履歴の購読 (AC14) -------------------------------------------------
+
+const POST_LOG_KEY = 'ytRedirectPin.postLog'
+
+type Store = Record<string, unknown>
+
+function fakePostLogArea(store: Store): chrome.storage.StorageArea {
+  return {
+    async get(keys?: string | string[] | null): Promise<Store> {
+      const names = keys == null ? Object.keys(store) : Array.isArray(keys) ? keys : [keys]
+      const out: Store = {}
+      for (const name of names) if (name in store) out[name] = store[name]
+      return out
+    },
+    async set(items: Store): Promise<void> {
+      Object.assign(store, items)
+    },
+  } as unknown as chrome.storage.StorageArea
+}
+
+function stubChrome(local: Store, sync: Store): { listeners: Array<(...args: unknown[]) => void> } {
+  const listeners: Array<(...args: unknown[]) => void> = []
+  ;(globalThis as { chrome?: unknown }).chrome = {
+    storage: {
+      local: fakePostLogArea(local),
+      sync: fakePostLogArea(sync),
+      onChanged: {
+        addListener(listener: (...args: unknown[]) => void) {
+          listeners.push(listener)
+        },
+        removeListener(listener: (...args: unknown[]) => void) {
+          const index = listeners.indexOf(listener)
+          if (index >= 0) listeners.splice(index, 1)
+        },
+      },
+    },
+  }
+  return { listeners }
+}
+
+afterEach(() => {
+  delete (globalThis as { chrome?: unknown }).chrome
+})
+
+describe('onPostLogChanged (AC14)', () => {
+  it('chrome が無い環境では何もせず、解除関数を返す', () => {
+    const handler = onPostLogChanged(() => {})
+    expect(typeof handler).toBe('function')
+    expect(() => handler()).not.toThrow()
+  })
+
+  it('自分のエリア(local)以外の onChanged では発火しない', () => {
+    const { listeners } = stubChrome({}, {})
+    const received: PostRecord[][] = []
+    onPostLogChanged((next) => received.push(next))
+
+    listeners[0]({ [POST_LOG_KEY]: { newValue: [rec()] } }, 'sync')
+
+    expect(received).toHaveLength(0)
+  })
+
+  it('空配列に変わったとき、ハンドラに [] が渡る', () => {
+    const { listeners } = stubChrome({}, {})
+    const received: PostRecord[][] = []
+    onPostLogChanged((next) => received.push(next))
+
+    listeners[0]({ [POST_LOG_KEY]: { newValue: [] } }, 'local')
+
+    expect(received).toEqual([[]])
   })
 })
 

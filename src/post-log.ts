@@ -4,7 +4,7 @@
  * ⚠️ **2026-08-06 の不具合: チャットを再読み込みすると同じ相手に何度も投稿していた。**
  *    リダイレクトの通知/バナーはチャット文書に残り続けるため、リロード後の初期走査
  *    (`detector.scanExisting`) がそれを「新しい通知」として拾い直す。
- *    抑止の記録 (`dedupe`) がメモリ上にしか無く、文書のライフサイクルと一緒に消えるので、
+ *    抑止の記録がメモリ上にしか無く、文書のライフサイクルと一緒に消えるので、
  *    リロードのたびに抑止が白紙に戻っていた。
  *
  * → **投稿したら「誰に・何を・いつ・どの配信で」を残し、起動時に読み戻して
@@ -15,7 +15,7 @@
  *
  * 純関数と保存を分けてあり、純関数側だけが単体テストの対象(directory.ts と同じ作り)。
  */
-import { getLocalStorageArea } from './config'
+import { getLocalStorageArea, getLocalStorageAreaName } from './config'
 import { handleFromChannelUrl } from './detector'
 import type { RedirectEvent } from './types'
 
@@ -73,7 +73,7 @@ export const POST_LOG_MAX_TEXT_LENGTH = 500
  */
 export const UNKNOWN_STREAM_WINDOW_SEC = 6 * 60 * 60
 
-/** URL の表記ゆれを吸収した鍵(dedupe / directory と同じ考え方) */
+/** URL の表記ゆれを吸収した鍵(directory と同じ考え方) */
 export function postLogKey(url: string): string {
   return url.trim().toLowerCase()
 }
@@ -340,4 +340,28 @@ export async function savePostLog(log: PostLog): Promise<void> {
 export async function clearPostLog(): Promise<void> {
   const area = getLocalStorageArea()
   if (area) await area.set({ [STORAGE_KEY]: [] })
+}
+
+/**
+ * 投稿履歴の変更の購読(`directory.ts` の `onDirectoryChanged` と同型 / AC14)。
+ * 戻り値を呼ぶと解除する。
+ *
+ * **「履歴を消す」を再読み込みなしで届けるための土台。** 抑止の正本を `postLog` の 1 本に
+ * 寄せたので(plan.md「アプローチ」)、これを購読するだけで `main.ts` 側の抑止が解ける。
+ */
+export function onPostLogChanged(handler: (log: PostLog) => void): () => void {
+  if (typeof chrome === 'undefined' || !chrome.storage?.onChanged) return () => {}
+  // 実際に使っているエリアだけを見る(directory.ts と同じ理由)
+  const areaName = getLocalStorageAreaName()
+
+  const listener = (
+    changes: Record<string, chrome.storage.StorageChange>,
+    changedArea: string,
+  ): void => {
+    if (areaName && changedArea !== areaName) return
+    const change = changes[STORAGE_KEY]
+    if (change) handler(normalizePostLog(change.newValue))
+  }
+  chrome.storage.onChanged.addListener(listener)
+  return () => chrome.storage.onChanged.removeListener(listener)
 }

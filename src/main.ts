@@ -31,6 +31,7 @@ import {
   findRedirectReplyBlocker,
   loadPostLog,
   makePostRecord,
+  onPostLogChanged,
   rememberPost,
   savePostLog,
 } from './post-log'
@@ -100,6 +101,14 @@ async function main(): Promise<void> {
 
   onDirectoryChanged((next) => {
     directory = next
+  })
+
+  // **「履歴を消す」を再読み込みなしで届ける** (AC14)。
+  // ⚠ 自分の書き込みでも発火するが、`normalizePostLog` を通した同じ内容が入るだけなので無害。
+  // `selfEcho.reset()` は冪等なので、ここに重くない副作用として足してよい
+  onPostLogChanged((next) => {
+    postLog = next
+    selfEcho.reset()
   })
 
   onConfigChanged((next) => {
@@ -291,7 +300,6 @@ async function main(): Promise<void> {
     enabled: config.enabled,
     debug: config.debug,
     pinMode: config.pinMode,
-    cooldownSec: config.cooldownSec,
     // 「この配信で誰に投稿済みか」の土台。streamId が空だと同一配信の判定ができない
     streamId: streamId || '(不明)',
     postLog: postLog.length,

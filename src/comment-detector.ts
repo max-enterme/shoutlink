@@ -408,7 +408,7 @@ export function startCommentDetector(options: CommentDetectorOptions): CommentDe
     if (!isCommentTextMessage(el)) return
     // AC10 の 1 枚目: 自分が投稿した要素は見ない
     if (options.ignoreElement?.(el)) return
-    // 同じ要素が付け替えられても 2 度出さない(ノード単位の抑止。dedupe とは別)
+    // 同じ要素が付け替えられても 2 度出さない(ノード単位の抑止。post-log.ts の履歴とは別)
     if (seen.has(el)) return
     seen.add(el)
 

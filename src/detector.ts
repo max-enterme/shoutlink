@@ -298,7 +298,7 @@ export function startRedirectDetector(opts: DetectorOptions): DetectorHandle {
 
   const emitFrom = (node: Node): void => {
     for (const notice of collectRedirectNotices(node, now())) {
-      // 同じ通知ノードが付け替えられても 2 度出さない(dedupe とは別の、ノード単位の抑止)
+      // 同じ通知ノードが付け替えられても 2 度出さない(post-log.ts の履歴とは別の、ノード単位の抑止)
       if (seen.has(notice.element)) continue
       seen.add(notice.element)
       opts.onEvent(notice.event)
