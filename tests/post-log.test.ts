@@ -2,20 +2,20 @@ import { describe, expect, it } from 'vitest'
 import {
   POST_LOG_MAX_AGE_MS,
   POST_LOG_MAX_ENTRIES,
+  UNKNOWN_STREAM_WINDOW_SEC,
   countCommentPostsInStream,
   currentStreamId,
   findCommentReplyBlocker,
   findLastPost,
   findPostInStream,
+  findRedirectReplyBlocker,
   makePostRecord,
   makePostRecordFor,
   normalizePostLog,
   prunePostLog,
-  redirectHistory,
   rememberPost,
   streamIdFromUrl,
 } from '../src/post-log'
-import { UNKNOWN_STREAM_MIN_COOLDOWN_SEC } from '../src/dedupe'
 import type { PostRecord } from '../src/post-log'
 import type { RedirectEvent } from '../src/types'
 import { FAKE_CHANNEL, FAKE_OTHER_CHANNEL } from './fixtures/live-chat'
@@ -260,11 +260,60 @@ describe('kind (004 / AC14)', () => {
   })
 })
 
-describe('redirectHistory (AC8)', () => {
-  it('リダイレクト側の抑止に渡す履歴からコメント返しの記録を除く', () => {
-    const log = [rec({ kind: 'redirect' }), rec({ kind: 'comment', postedAt: 2_000 })]
-    expect(redirectHistory(log)).toHaveLength(1)
-    expect(redirectHistory(log)[0].kind).toBe('redirect')
+describe('findRedirectReplyBlocker (AC1 / AC2 / AC3)', () => {
+  const now = 10_000_000
+
+  it('同じ配信・同じ相手にリダイレクト返礼の記録があれば止める', () => {
+    const log = [rec({ kind: 'redirect', streamId: 'stream-1' })]
+    expect(
+      findRedirectReplyBlocker(log, { streamId: 'stream-1', url: FAKE_CHANNEL.url, now }),
+    ).toBeDefined()
+  })
+
+  it('**同じ配信・同じ相手にコメント返しの記録しか無ければ止めない**(AC3 / 004 AC8)', () => {
+    const log = [rec({ kind: 'comment', streamId: 'stream-1' })]
+    expect(
+      findRedirectReplyBlocker(log, { streamId: 'stream-1', url: FAKE_CHANNEL.url, now }),
+    ).toBeUndefined()
+  })
+
+  it('配信が違えば止めない', () => {
+    const log = [rec({ kind: 'redirect', streamId: 'stream-1' })]
+    expect(
+      findRedirectReplyBlocker(log, { streamId: 'stream-2', url: FAKE_CHANNEL.url, now }),
+    ).toBeUndefined()
+  })
+
+  it('記録側の streamId が空なら、違う配信 ID で問い合わせても 6 時間以内は止める (AC2)', () => {
+    const log = [rec({ kind: 'redirect', streamId: '', postedAt: now - 1_000 })]
+    expect(
+      findRedirectReplyBlocker(log, { streamId: 'stream-1', url: FAKE_CHANNEL.url, now }),
+    ).toBeDefined()
+  })
+
+  it('問い合わせ側の streamId が空なら、6 時間以内の記録だけが止める (AC2)', () => {
+    const within = now - UNKNOWN_STREAM_WINDOW_SEC * 1000 + 1
+    const outside = now - UNKNOWN_STREAM_WINDOW_SEC * 1000 - 1
+    expect(
+      findRedirectReplyBlocker([rec({ kind: 'redirect', streamId: 'stream-1', postedAt: within })], {
+        streamId: '',
+        url: FAKE_CHANNEL.url,
+        now,
+      }),
+    ).toBeDefined()
+    expect(
+      findRedirectReplyBlocker([rec({ kind: 'redirect', streamId: 'stream-1', postedAt: outside })], {
+        streamId: '',
+        url: FAKE_CHANNEL.url,
+        now,
+      }),
+    ).toBeUndefined()
+  })
+})
+
+describe('UNKNOWN_STREAM_WINDOW_SEC', () => {
+  it('6 時間', () => {
+    expect(UNKNOWN_STREAM_WINDOW_SEC).toBe(6 * 60 * 60)
   })
 })
 
@@ -306,13 +355,13 @@ describe('findCommentReplyBlocker (AC7 / AC8)', () => {
   })
 
   it('**配信 ID が空なら 6 時間の下限**で止める (AC7)', () => {
-    const postedAt = now - UNKNOWN_STREAM_MIN_COOLDOWN_SEC * 1000 + 1
+    const postedAt = now - UNKNOWN_STREAM_WINDOW_SEC * 1000 + 1
     const log = [rec({ kind: 'comment', streamId: '', postedAt })]
     expect(findCommentReplyBlocker(log, { streamId: '', url: FAKE_CHANNEL.url, now })).toBeDefined()
   })
 
   it('6 時間より古ければ止めない', () => {
-    const postedAt = now - UNKNOWN_STREAM_MIN_COOLDOWN_SEC * 1000 - 1
+    const postedAt = now - UNKNOWN_STREAM_WINDOW_SEC * 1000 - 1
     const log = [rec({ kind: 'comment', streamId: '', postedAt })]
     expect(findCommentReplyBlocker(log, { streamId: '', url: FAKE_CHANNEL.url, now })).toBeUndefined()
   })
@@ -326,7 +375,7 @@ describe('findCommentReplyBlocker (AC7 / AC8)', () => {
   })
 
   it('配信 ID が空の記録でも、6 時間より古ければ止めない', () => {
-    const postedAt = now - UNKNOWN_STREAM_MIN_COOLDOWN_SEC * 1000 - 1
+    const postedAt = now - UNKNOWN_STREAM_WINDOW_SEC * 1000 - 1
     const log = [rec({ kind: 'comment', streamId: '', postedAt })]
     expect(
       findCommentReplyBlocker(log, { streamId: 'stream-1', url: FAKE_CHANNEL.url, now }),
@@ -358,7 +407,7 @@ describe('countCommentPostsInStream (AC11)', () => {
       rec({ kind: 'comment', streamId: '', postedAt: now - 1_000 }),
       rec({ kind: 'comment', streamId: '', postedAt: now - 2_000, url: FAKE_OTHER_CHANNEL.url }),
       // 6 時間より古い / 種別が違うものは数えない
-      rec({ kind: 'comment', streamId: '', postedAt: now - UNKNOWN_STREAM_MIN_COOLDOWN_SEC * 1000 - 1 }),
+      rec({ kind: 'comment', streamId: '', postedAt: now - UNKNOWN_STREAM_WINDOW_SEC * 1000 - 1 }),
       rec({ kind: 'redirect', streamId: '', postedAt: now - 1_000 }),
     ]
     expect(countCommentPostsInStream(log, '', now)).toBe(2)
