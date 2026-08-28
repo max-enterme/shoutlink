@@ -2,7 +2,7 @@
  * 自己反射の抑止 (security-review.md S1)。
  *
  * 投稿 → 固定 → その固定バナーを新しい通知として検知 → 投稿 … の自己ループを、
- * **クールダウンの設定に関係なく**止められることを確かめる。
+ * **投稿履歴に基づく抑止(同じ配信・同じ相手には 1 回)とは独立して**止められることを確かめる。
  */
 import { describe, expect, it } from 'vitest'
 import { SELF_ECHO_WINDOW_MS, createSelfEchoGuard } from '../src/self-echo'
@@ -37,7 +37,7 @@ describe('createSelfEchoGuard', () => {
     expect(guard.isEcho('  https://www.youtube.com/@example  ', 1_000)).toBe(true)
   })
 
-  it('窓の長さは設定から独立している(cooldownSec が無くても歯止めが残る)', () => {
+  it('窓の長さは投稿履歴の抑止とは独立している(履歴の有無に関係なく歯止めが残る)', () => {
     const guard = createSelfEchoGuard()
     guard.remember('https://www.youtube.com/@a', 0)
     expect(guard.isEcho('https://www.youtube.com/@a', 1)).toBe(true)

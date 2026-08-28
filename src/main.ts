@@ -29,6 +29,7 @@ import { postMessage } from './poster'
 import {
   currentStreamId,
   findRedirectReplyBlocker,
+  isPostLogCleared,
   loadPostLog,
   makePostRecord,
   onPostLogChanged,
@@ -105,11 +106,15 @@ async function main(): Promise<void> {
   })
 
   // **「履歴を消す」を再読み込みなしで届ける** (AC14)。
-  // ⚠ 自分の書き込みでも発火するが、`normalizePostLog` を通した同じ内容が入るだけなので無害。
-  // `selfEcho.reset()` は冪等なので、ここに重くない副作用として足してよい
+  // ⚠ `chrome.storage.onChanged` は自分の書き込みでも発火する。投稿の経路は
+  //    `selfEcho.remember(url)` → `postMessage` → `savePostLog` → `pin` の順で、
+  //    `savePostLog` の完了通知が `pin()` の実行中に届く。ここで無条件に `reset()` すると、
+  //    固定バナーが DOM に現れる頃には `selfEcho` が空になり、security-review S1 の
+  //    二重目の歯止めが自分の投稿のたびに消える。**「履歴を消す」= 空配列の書き込みのときだけ**
+  //    リセットする(`isPostLogCleared`)。
   onPostLogChanged((next) => {
     postLog = next
-    selfEcho.reset()
+    if (isPostLogCleared(next)) selfEcho.reset()
   })
 
   onConfigChanged((next) => {
@@ -298,18 +303,34 @@ async function main(): Promise<void> {
   // 設定画面の辞書の行から、履歴を消費せずに試し撃ちする経路 (AC7-AC13)。
   // **`handle()` は通さない** — 固定もするし履歴にも残るため (AC8 / AC12)。
   // 依存を注入で受ける `createTestSendHandler` に、投稿だけを渡す。
+  // 便宜上の鍵。**実際のチャンネル URL である必要は無い** — `inFlight` は
+  // 「入力欄を今使っているか」の枠取りに使っているだけで、テスト送信どうし・
+  // 自動検知/手動トリガーとの間で 1 つの枠を取り合えれば足りる
+  const TEST_SEND_IN_FLIGHT_KEY = 'shoutlink:test-send'
   const testSendHandler = createTestSendHandler({
     getDirectory: () => directory,
     getTemplate: (kind) => (kind === 'redirect' ? config.template : config.commentTemplate),
     streamId,
-    // **固定はしない (AC12)。**投稿だけを渡す(commentRunner の post と同じ形)
+    // **固定はしない (AC12)。**投稿だけを渡す(commentRunner の post と同じ形)。
+    // `isBusy()` の読み取りと `post` の実行の間には隙があるため(行 A のテスト送信が
+    // `postMessage` の要素確認で待っている間に行 B を押せてしまう)、**ここでも枠を取る**
+    // (AC13。`inFlight.isBusy` を読むだけでは、既に取られている枠を確かめるだけで
+    // 自分で取ってはいなかった)
     post: async (text) => {
-      const posted = await postMessage(text)
-      if (posted.status !== 'posted') {
-        log.warn('テスト送信の投稿に失敗した:', posted.reason)
+      if (!inFlight.begin(TEST_SEND_IN_FLIGHT_KEY)) {
+        log.info('テスト送信を見送った(他の投稿が進行中)')
         return { posted: false, element: null }
       }
-      return { posted: true, element: posted.element }
+      try {
+        const posted = await postMessage(text)
+        if (posted.status !== 'posted') {
+          log.warn('テスト送信の投稿に失敗した:', posted.reason)
+          return { posted: false, element: null }
+        }
+        return { posted: true, element: posted.element }
+      } finally {
+        inFlight.end(TEST_SEND_IN_FLIGHT_KEY)
+      }
     },
     // 004 / AC10 の 1・2 枚目にだけ登録する。**postLog にも selfEcho にも触らない** (AC8 / 採らない案)
     rememberOwnPost: (text, element) => commentRunner.rememberOwnPost(text, element),
@@ -327,9 +348,17 @@ async function main(): Promise<void> {
   //    `no-input` を返す(`postMessage` 側の歯止め)。
   chrome.runtime?.onMessage?.addListener((message, _sender, sendResponse) => {
     if (!parseTestSendRequest(message)) return undefined
-    void testSendHandler(message).then((response) => {
-      if (response) sendResponse(response)
-    })
+    testSendHandler(message)
+      .then((response) => {
+        if (response) sendResponse(response)
+      })
+      .catch((err) => {
+        // `post` (postMessage) は DOM 操作なので reject しうる。`.catch` が無いと
+        // `sendResponse` が呼ばれずチャネルが開いたままになり、options 側のボタンが
+        // 押せないまま固まる(設定画面を開き直すまで戻らない)
+        log.error('テスト送信のハンドラで例外が起きた:', err)
+        sendResponse({ status: 'failed', reason: 'no-input' })
+      })
     return true
   })
 

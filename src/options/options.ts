@@ -5,6 +5,7 @@ import { resolveChannelId } from '../channel-id'
 import { compose, composeText } from '../composer'
 import { DEFAULT_CONFIG, loadConfig, saveConfig } from '../config'
 import { normalizeChannelUrl } from '../detector'
+import { log } from '../log'
 import {
   directoryKey,
   displayHandle,
@@ -46,7 +47,7 @@ import {
   retryAllLabel,
   unresolvedChannelIdEntries,
 } from './notices'
-import { testSendAvailability, testSendResultMessage } from './test-send'
+import { orderStudioTabsForTestSend, testSendAvailability, testSendResultMessage } from './test-send'
 
 /** プレビュー用のダミー。実在するチャンネルは使わない */
 const SAMPLE_EVENT: RedirectEvent = {
@@ -355,20 +356,19 @@ const testSendStates = new Map<string, { busy: boolean; message: string | null }
  * `studio.youtube.com/video/<id>/livestreaming` なので、候補は `studio.youtube.com/*` で広く取る
  * (チャットは `all_frames: true` で入った iframe 側にいる)。
  *
- * **`active: true` かつ最後にフォーカスされたウィンドウのタブを先頭に**する。Studio のタブを
- * 複数開いていると、並び順まかせでは別の配信へテスト投稿が出るため。
+ * **並べ替え自体は `orderStudioTabsForTestSend`(純関数)に切り出してある。**
+ * `manifest.json` は `options_ui.open_in_tab: true` なので、ボタンを押した時点で
+ * 「最後にフォーカスされたウィンドウのアクティブなタブ」は設定画面そのもの — `active` は
+ * 当てにできない。
+ *
+ * ⚠️ `@types/chrome@0.0.268` に `lastAccessed` の型は無い(Chrome 121+ で追加された
+ * プロパティ)。ここでだけ局所的に型を足す
  */
 async function orderedStudioTabs(): Promise<chrome.tabs.Tab[]> {
-  const tabs = await chrome.tabs.query({ url: 'https://studio.youtube.com/*' })
-  let focusedWindowId: number | undefined
-  try {
-    focusedWindowId = (await chrome.windows.getLastFocused()).id
-  } catch {
-    focusedWindowId = undefined
-  }
-  const isPreferred = (tab: chrome.tabs.Tab): boolean =>
-    tab.active === true && tab.windowId === focusedWindowId
-  return [...tabs.filter(isPreferred), ...tabs.filter((tab) => !isPreferred(tab))]
+  const tabs = (await chrome.tabs.query({ url: 'https://studio.youtube.com/*' })) as (chrome.tabs.Tab & {
+    lastAccessed?: number
+  })[]
+  return orderStudioTabsForTestSend(tabs)
 }
 
 /**
@@ -514,6 +514,11 @@ function renderDirectory(): void {
     restoreFocusTarget(focusTarget)
     return
   }
+
+  // **どれか 1 行でも応答待ちなら、全行のテスト送信ボタンを無効にする** (AC13 / 006 レビュー #4)。
+  // 二度押し防止が行ごとだと、行 A が `postMessage` の要素確認で待っている間に行 B を押せてしまい、
+  // 1 つしかない入力欄を奪い合う(`inFlight` は main.ts 側の枠取りで、options 側でも押させない)
+  const anyTestSendBusy = [...testSendStates.values()].some((state) => state.busy)
 
   for (const entry of sortForDisplay(directory)) {
     const key = directoryKey(entry.url)
@@ -788,10 +793,24 @@ function renderDirectory(): void {
       if (testSendStates.get(key)?.busy) return
       testSendStates.set(key, { busy: true, message: testSendState.message })
       renderDirectory()
-      void sendTestSend(kind, entry.url).then((result) => {
-        testSendStates.set(key, { busy: false, message: testSendResultMessage(result) })
+      const finish = (message: string): void => {
+        // **応答が返る前にこの行が削除されていたら書き戻さない** — `captureRowDrafts` が
+        // 既に掃除した後に書き戻すと、以後 `liveRows` に無いので二度と掃除されず、
+        // 同じ URL を登録し直すと前の行の結果がそのまま出る(006 レビュー #9)
+        if (!findEntry(directory, entry.url)) return
+        testSendStates.set(key, { busy: false, message })
         renderDirectory()
-      })
+      }
+      void sendTestSend(kind, entry.url).then(
+        (result) => finish(testSendResultMessage(result)),
+        (err) => {
+          // `chrome.tabs.query` 等が reject すること自体は `sendTestSend` 側で握っているが、
+          // 想定外の例外まで無防備だと `.then` が走らず、この行のボタンが `busy: true` の
+          // まま固まる(006 レビュー #3)。**必ず busy を戻す**
+          log.error('テスト送信で例外が起きた:', err)
+          finish('テスト送信に失敗しました')
+        },
+      )
     }
 
     const testSendRow = document.createElement('div')
@@ -803,7 +822,7 @@ function renderDirectory(): void {
     // ⚠️ 押し間違いの実害があるので、**実際に投稿される**ことが分かる文言にする(配信中は視聴者に見える)
     testSendRedirect.title =
       '保存済みの返礼文を、開いているライブチャットへ実際に投稿します(履歴には残りません)'
-    testSendRedirect.disabled = testSendState.busy
+    testSendRedirect.disabled = anyTestSendBusy
     testSendRedirect.addEventListener('click', () => runTestSend('redirect'))
     testSendRow.appendChild(testSendRedirect)
 
@@ -811,7 +830,7 @@ function renderDirectory(): void {
     const testSendComment = document.createElement('button')
     testSendComment.type = 'button'
     testSendComment.textContent = 'コメント返しをテスト送信'
-    testSendComment.disabled = testSendState.busy || !commentAvailability.enabled
+    testSendComment.disabled = anyTestSendBusy || !commentAvailability.enabled
     testSendComment.title = commentAvailability.enabled
       ? '保存済みのコメント返しを、開いているライブチャットへ実際に投稿します(履歴には残りません)'
       : commentAvailability.reason

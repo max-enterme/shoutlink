@@ -23,8 +23,20 @@ const readmeFiles = (import.meta as any).glob('../README.md', { eager: true, que
   string,
   string
 >
+const testFiles = (import.meta as any).glob('../tests/**/*.ts', { eager: true, query: '?raw', import: 'default' }) as Record<
+  string,
+  string
+>
+const scriptFiles = (import.meta as any).glob('../scripts/**/*.mjs', {
+  eager: true,
+  query: '?raw',
+  import: 'default',
+}) as Record<string, string>
 
 function key(path: string): string {
+  // `tests/**` はこのファイル自身と同じディレクトリなので、glob のキーが `./config.test.ts` の
+  // ように相対で来る(他の glob は `../docs/...` のように 1 つ上から書いている)。
+  if (path.startsWith('./')) return `tests/${path.slice(2)}`
   return path.replace(/^\.\.\//, '')
 }
 
@@ -59,6 +71,30 @@ describe('docs / cooldownSec の残存', () => {
   it('README.md と docs/* に「クールダウン」の出現が無い(docs/t1-findings.md は除外)', () => {
     const files = Object.fromEntries(
       Object.entries({ ...readmeFiles, ...docFiles }).filter(([path]) => key(path) !== 'docs/t1-findings.md'),
+    )
+    const hits = findMatches(files, /クールダウン/)
+    expect(hits).toEqual([])
+  })
+
+  // tests/ と scripts/ にも残骸が残ることがある(例: 版下生成スクリプトの見本データ、
+  // 撤去済みの設定を前提にしたテストの説明文)。
+  // ⚠️ tests/config.test.ts (AC5: 保存済みの cooldownSec を読み捨てることを確かめる) と
+  //    tests/post-log.test.ts (cooldownSec が dedupe と無関係であることを確かめる) は
+  //    cooldownSec への正当な言及なので除外する。tests/docs.test.ts 自身も検査パターンの
+  //    文字列を持つので除外する。
+  const COOLDOWN_SEC_ALLOWED = new Set(['tests/config.test.ts', 'tests/post-log.test.ts', 'tests/docs.test.ts'])
+
+  it('tests/ と scripts/ に cooldownSec の残骸が無い(正当な言及を除く)', () => {
+    const files = Object.fromEntries(
+      Object.entries({ ...testFiles, ...scriptFiles }).filter(([path]) => !COOLDOWN_SEC_ALLOWED.has(key(path))),
+    )
+    const hits = findMatches(files, /cooldownSec/)
+    expect(hits).toEqual([])
+  })
+
+  it('tests/ と scripts/ に「クールダウン」の出現が無い(tests/docs.test.ts 自身は除外)', () => {
+    const files = Object.fromEntries(
+      Object.entries({ ...testFiles, ...scriptFiles }).filter(([path]) => key(path) !== 'tests/docs.test.ts'),
     )
     const hits = findMatches(files, /クールダウン/)
     expect(hits).toEqual([])
