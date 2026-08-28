@@ -70,7 +70,6 @@ function el<T extends HTMLElement>(id: string): T {
 const enabled = el<HTMLInputElement>('enabled')
 const template = el<HTMLTextAreaElement>('template')
 const pinMode = el<HTMLSelectElement>('pinMode')
-const cooldownSec = el<HTMLInputElement>('cooldownSec')
 const showManualTrigger = el<HTMLInputElement>('showManualTrigger')
 const debug = el<HTMLInputElement>('debug')
 const commentReplyEnabled = el<HTMLInputElement>('commentReplyEnabled')
@@ -846,7 +845,6 @@ function apply(config: Config): void {
   enabled.checked = config.enabled
   template.value = config.template
   pinMode.value = config.pinMode
-  cooldownSec.value = String(config.cooldownSec)
   showManualTrigger.checked = config.showManualTrigger
   debug.checked = config.debug
   commentReplyEnabled.checked = config.commentReplyEnabled
@@ -879,7 +877,6 @@ save.addEventListener('click', () => {
       enabled: enabled.checked,
       template: template.value,
       pinMode: pinMode.value as PinMode,
-      cooldownSec: Number(cooldownSec.value),
       showManualTrigger: showManualTrigger.checked,
       debug: debug.checked,
       commentReplyEnabled: commentReplyEnabled.checked,

@@ -37,10 +37,16 @@ describe('createSelfEchoGuard', () => {
     expect(guard.isEcho('  https://www.youtube.com/@example  ', 1_000)).toBe(true)
   })
 
-  it('窓の長さは設定から独立している(クールダウン 0 でも歯止めが残る)', () => {
+  it('窓の長さは設定から独立している(cooldownSec が無くても歯止めが残る)', () => {
     const guard = createSelfEchoGuard()
     guard.remember('https://www.youtube.com/@a', 0)
-    // dedupe の cooldownSec = 0 に相当する状況でも、ここは止まる
     expect(guard.isEcho('https://www.youtube.com/@a', 1)).toBe(true)
+  })
+
+  it('reset で覚えていた相手をすべて忘れる(AC14: 履歴クリア時に呼ぶ)', () => {
+    const guard = createSelfEchoGuard()
+    guard.remember('https://www.youtube.com/@a', 0)
+    guard.reset()
+    expect(guard.isEcho('https://www.youtube.com/@a', 1_000)).toBe(false)
   })
 })
