@@ -37,6 +37,7 @@ import {
 } from './post-log'
 import type { PostLog } from './post-log'
 import { createSelfEchoGuard } from './self-echo'
+import { createTestSendHandler, parseTestSendRequest } from './test-send'
 import type { Config, RedirectEvent } from './types'
 
 /** ビルド時刻。esbuild の define で埋める(どのビルドが読み込まれているかの判別用) */
@@ -291,6 +292,46 @@ async function main(): Promise<void> {
     }
   }
   syncManualTrigger(config.showManualTrigger)
+
+  // --- テスト送信 (006) ------------------------------------------------------
+  //
+  // 設定画面の辞書の行から、履歴を消費せずに試し撃ちする経路 (AC7-AC13)。
+  // **`handle()` は通さない** — 固定もするし履歴にも残るため (AC8 / AC12)。
+  // 依存を注入で受ける `createTestSendHandler` に、投稿だけを渡す。
+  const testSendHandler = createTestSendHandler({
+    getDirectory: () => directory,
+    getTemplate: (kind) => (kind === 'redirect' ? config.template : config.commentTemplate),
+    streamId,
+    // **固定はしない (AC12)。**投稿だけを渡す(commentRunner の post と同じ形)
+    post: async (text) => {
+      const posted = await postMessage(text)
+      if (posted.status !== 'posted') {
+        log.warn('テスト送信の投稿に失敗した:', posted.reason)
+        return { posted: false, element: null }
+      }
+      return { posted: true, element: posted.element }
+    },
+    // 004 / AC10 の 1・2 枚目にだけ登録する。**postLog にも selfEcho にも触らない** (AC8 / 採らない案)
+    rememberOwnPost: (text, element) => commentRunner.rememberOwnPost(text, element),
+    isBusy: () => inFlight.isBusy(),
+    onLog: (message, detail) => {
+      if (detail === undefined) log.info(message)
+      else log.info(message, detail)
+    },
+  })
+
+  // ⚠️ `chrome.runtime.onMessage` は、応答を `await` の後に返すなら**同期的に `true` を返す**必要がある
+  //    (返さないとチャネルが閉じて options 側に応答が届かない)。
+  //    **ただし未知のメッセージ (null) のときは `true` を返さない** — `sendResponse` を呼ばずに終える (AC16)。
+  //    `manifest.json` は `all_frames: true` なので、入力欄が無いフレームは `testSendHandler` の中で
+  //    `no-input` を返す(`postMessage` 側の歯止め)。
+  chrome.runtime?.onMessage?.addListener((message, _sender, sendResponse) => {
+    if (!parseTestSendRequest(message)) return undefined
+    void testSendHandler(message).then((response) => {
+      if (response) sendResponse(response)
+    })
+    return true
+  })
 
   // 「どのビルドが・どの設定で動いているか」を 1 行で分かるようにする。
   // 拡張の ↻ 忘れ / ページのリロード忘れ / 診断ログの入れ忘れを、ログだけで切り分けるため。
