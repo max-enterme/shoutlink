@@ -4,7 +4,7 @@ import type { DecideParams } from '../src/comment-reply'
 import type { CommentAuthor } from '../src/comment-detector'
 import type { Directory, DirectoryEntry } from '../src/directory'
 import type { PostLog, PostRecord } from '../src/post-log'
-import { UNKNOWN_STREAM_MIN_COOLDOWN_SEC } from '../src/dedupe'
+import { UNKNOWN_STREAM_WINDOW_SEC } from '../src/post-log'
 import { DEFAULT_CONFIG } from '../src/config'
 import { FAKE_CHANNEL, FAKE_OTHER_CHANNEL } from './fixtures/live-chat'
 
@@ -241,7 +241,7 @@ describe('decideCommentReply — 抑止 (AC7 / AC8)', () => {
       params({
         streamId: '',
         postLog: [
-          record({ streamId: '', postedAt: NOW - UNKNOWN_STREAM_MIN_COOLDOWN_SEC * 1000 - 1 }),
+          record({ streamId: '', postedAt: NOW - UNKNOWN_STREAM_WINDOW_SEC * 1000 - 1 }),
         ],
       }),
     )
