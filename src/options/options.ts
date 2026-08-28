@@ -344,7 +344,8 @@ let bulkResolving = false
 // ライブチャットのタブへ直接送る(`handle()` を通らない別経路。判断は `../test-send.ts`)。
 
 /**
- * 行ごとの応答待ち状態(鍵は `directoryKey`)。**応答が返るまでその行の 2 ボタンとも無効**(AC13)。
+ * 行ごとの応答待ち状態(鍵は `directoryKey`)。**どれか 1 行でも応答待ちなら、全行の
+ * テスト送信ボタンを無効にする**(AC13 / 006 レビュー #4。1 つしかない入力欄の奪い合いを防ぐ)。
  * 前回の結果メッセージも保つ(応答が来るまでの間は最後の結果を出したままにする)。
  */
 const testSendStates = new Map<string, { busy: boolean; message: string | null }>()
@@ -804,8 +805,9 @@ function renderDirectory(): void {
       void sendTestSend(kind, entry.url).then(
         (result) => finish(testSendResultMessage(result)),
         (err) => {
-          // `chrome.tabs.query` 等が reject すること自体は `sendTestSend` 側で握っているが、
-          // 想定外の例外まで無防備だと `.then` が走らず、この行のボタンが `busy: true` の
+          // `sendTestSend` 内で握っているのは `chrome.tabs.sendMessage` の reject(応答フレームが
+          // 無いタブを飛ばすため)だけで、`chrome.tabs.query` など他の失敗はここまで抜けてくる。
+          // 無防備だと `.then` の成功側が走らず、この行のボタンが `busy: true` の
           // まま固まる(006 レビュー #3)。**必ず busy を戻す**
           log.error('テスト送信で例外が起きた:', err)
           finish('テスト送信に失敗しました')
