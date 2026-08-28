@@ -23,6 +23,8 @@ import {
 import type { Directory } from '../directory'
 import { clearPostLog, loadPostLog } from '../post-log'
 import type { PostLog } from '../post-log'
+import { TEST_SEND_TYPE } from '../test-send'
+import type { TestSendKind, TestSendRequest, TestSendResponse } from '../test-send'
 import type { Config, PinMode, RedirectEvent } from '../types'
 import {
   captureRowDraft,
@@ -44,6 +46,7 @@ import {
   retryAllLabel,
   unresolvedChannelIdEntries,
 } from './notices'
+import { testSendAvailability, testSendResultMessage } from './test-send'
 
 /** プレビュー用のダミー。実在するチャンネルは使わない */
 const SAMPLE_EVENT: RedirectEvent = {
@@ -221,6 +224,8 @@ function captureRowDrafts(): void {
     //    ② T17 で足した `channelIdErrors` を掃除から漏らした。
     //      解決に失敗した行を削除して同じハンドルを登録し直すと、**1 度も取りに行っていないのに**
     //      「チャンネル ID を取得できませんでした: …」が出る(AC17 の「理由を画面に出す」の誤表示)
+    //    ③ T9 で足した `testSendStates` も同じ穴を踏む。消さずに残すと、削除して登録し直した
+    //      行に前の行のテスト送信結果がそのまま出る
     //
     // ⚠️ **`resolvingKeys` はここで消さない。**あれは「いま fetch が飛んでいる」という
     //    実行中の事実で、持ち主は `resolveEntryChannelId` の `finally`(必ず消える)。
@@ -232,6 +237,7 @@ function captureRowDrafts(): void {
       commentDrafts.delete(row.key)
       expandedRows.delete(row.key)
       channelIdErrors.delete(row.key)
+      testSendStates.delete(row.key)
       continue
     }
     const draft = captureRowDraft(saved, row.shown, row.read(), row.shownFromDraft)
@@ -330,6 +336,71 @@ const channelIdErrors = new Map<string, string>()
 
 /** 「まとめて再試行」が走っているか。**重ねて押させない** */
 let bulkResolving = false
+
+// --- テスト送信 (006 / T9) ---------------------------------------------------
+//
+// 展開した行にだけ出す 2 ボタン(確定値 A / C)。履歴を消費せず、`chrome.tabs.sendMessage` で
+// ライブチャットのタブへ直接送る(`handle()` を通らない別経路。判断は `../test-send.ts`)。
+
+/**
+ * 行ごとの応答待ち状態(鍵は `directoryKey`)。**応答が返るまでその行の 2 ボタンとも無効**(AC13)。
+ * 前回の結果メッセージも保つ(応答が来るまでの間は最後の結果を出したままにする)。
+ */
+const testSendStates = new Map<string, { busy: boolean; message: string | null }>()
+
+/**
+ * ライブチャットのタブを、宛先として先に試す順に並べる(plan.md「宛先タブの決め方」)。
+ *
+ * `content_scripts.matches` は `live_chat*` だけだが、管制室の埋め込みチャットはタブの URL が
+ * `studio.youtube.com/video/<id>/livestreaming` なので、候補は `studio.youtube.com/*` で広く取る
+ * (チャットは `all_frames: true` で入った iframe 側にいる)。
+ *
+ * **`active: true` かつ最後にフォーカスされたウィンドウのタブを先頭に**する。Studio のタブを
+ * 複数開いていると、並び順まかせでは別の配信へテスト投稿が出るため。
+ */
+async function orderedStudioTabs(): Promise<chrome.tabs.Tab[]> {
+  const tabs = await chrome.tabs.query({ url: 'https://studio.youtube.com/*' })
+  let focusedWindowId: number | undefined
+  try {
+    focusedWindowId = (await chrome.windows.getLastFocused()).id
+  } catch {
+    focusedWindowId = undefined
+  }
+  const isPreferred = (tab: chrome.tabs.Tab): boolean =>
+    tab.active === true && tab.windowId === focusedWindowId
+  return [...tabs.filter(isPreferred), ...tabs.filter((tab) => !isPreferred(tab))]
+}
+
+/**
+ * テスト送信を実際に送る。**`main.ts` の `handle()` は通らない**(履歴を消費しない / AC8)。
+ *
+ * 候補タブへ**先頭から順に**送り、**最初に応答したところで打ち切る**
+ * (打ち切らないと複数タブへ二重投稿する)。コンテントスクリプトが入っていないタブ・
+ * 応答するフレームが無いタブは接続エラーで落ちるだけで、投稿の副作用は起きない。
+ * どれも応答しなければ `no-tab`(options 側だけで起きる理由 / plan.md)。
+ */
+async function sendTestSend(
+  kind: TestSendKind,
+  url: string,
+): Promise<TestSendResponse | { status: 'failed'; reason: 'no-tab' }> {
+  if (typeof chrome === 'undefined' || !chrome.tabs?.query || !chrome.tabs.sendMessage) {
+    return { status: 'failed', reason: 'no-tab' }
+  }
+  const request: TestSendRequest = { type: TEST_SEND_TYPE, kind, url }
+  for (const tab of await orderedStudioTabs()) {
+    if (tab.id === undefined) continue
+    try {
+      const response = (await chrome.tabs.sendMessage(tab.id, request)) as
+        | TestSendResponse
+        | undefined
+      if (response) return response
+    } catch {
+      // ⚠️ コンテントスクリプトが入っていない(= ライブチャットではない) Studio タブ。
+      //    `sendMessage` は接続エラーで落ちるだけで、次のタブへ進めばよい
+    }
+  }
+  return { status: 'failed', reason: 'no-tab' }
+}
 
 /** 「まとめて再試行」ボタンの表示。件数が変わるたびに描き直す */
 function renderChannelIdRetryAll(): void {
@@ -707,6 +778,54 @@ function renderDirectory(): void {
         commentInvalidReason = reason
       },
     )
+
+    // --- テスト送信 (T9 / AC7 / AC9 / AC10 / AC13) ---------------------------
+    // **展開したときだけ出す**(確定値 A)。保存済みの内容で、履歴を残さず実際に投稿する。
+    const testSendState = testSendStates.get(key) ?? { busy: false, message: null }
+    const availability = testSendAvailability(entry)
+
+    const runTestSend = (kind: TestSendKind): void => {
+      if (testSendStates.get(key)?.busy) return
+      testSendStates.set(key, { busy: true, message: testSendState.message })
+      renderDirectory()
+      void sendTestSend(kind, entry.url).then((result) => {
+        testSendStates.set(key, { busy: false, message: testSendResultMessage(result) })
+        renderDirectory()
+      })
+    }
+
+    const testSendRow = document.createElement('div')
+    testSendRow.className = 'row test-send'
+
+    const testSendRedirect = document.createElement('button')
+    testSendRedirect.type = 'button'
+    testSendRedirect.textContent = '返礼文をテスト送信'
+    // ⚠️ 押し間違いの実害があるので、**実際に投稿される**ことが分かる文言にする(配信中は視聴者に見える)
+    testSendRedirect.title =
+      '保存済みの返礼文を、開いているライブチャットへ実際に投稿します(履歴には残りません)'
+    testSendRedirect.disabled = testSendState.busy
+    testSendRedirect.addEventListener('click', () => runTestSend('redirect'))
+    testSendRow.appendChild(testSendRedirect)
+
+    const commentAvailability = availability.comment
+    const testSendComment = document.createElement('button')
+    testSendComment.type = 'button'
+    testSendComment.textContent = 'コメント返しをテスト送信'
+    testSendComment.disabled = testSendState.busy || !commentAvailability.enabled
+    testSendComment.title = commentAvailability.enabled
+      ? '保存済みのコメント返しを、開いているライブチャットへ実際に投稿します(履歴には残りません)'
+      : commentAvailability.reason
+    testSendComment.addEventListener('click', () => runTestSend('comment'))
+    testSendRow.appendChild(testSendComment)
+
+    detailCell.appendChild(testSendRow)
+
+    if (testSendState.message) {
+      const testSendResult = document.createElement('p')
+      testSendResult.className = 'test-send-result'
+      testSendResult.textContent = testSendState.message
+      detailCell.appendChild(testSendResult)
+    }
 
     detailRow.appendChild(detailCell)
     directoryRows.appendChild(detailRow)

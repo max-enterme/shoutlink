@@ -12,6 +12,7 @@ import {
   parseTestSendRequest,
 } from '../src/test-send'
 import type { TestSendDeps } from '../src/test-send'
+import { testSendAvailability, testSendResultMessage } from '../src/options/test-send'
 import type { Directory, DirectoryEntry } from '../src/directory'
 import { DEFAULT_CONFIG } from '../src/config'
 import { FAKE_CHANNEL } from './fixtures/live-chat'
@@ -224,5 +225,39 @@ describe('createTestSendHandler の歯止め (AC8 / AC11 / AC12 / AC13 / AC16)',
     // TestSendDeps に pin 系の依存を渡す口が無いこと自体が担保。ここでは応答が固定結果を含まないことだけ見る
     const response = await handler({ type: TEST_SEND_TYPE, kind: 'redirect', url: FAKE_CHANNEL.url })
     expect(response).not.toHaveProperty('pinResult')
+  })
+})
+
+describe('testSendAvailability (確定値 B4)', () => {
+  it('channelId が空の行はコメント側だけ enabled: false、返礼文側は true', () => {
+    const result = testSendAvailability(entry({ channelId: '' }))
+    expect(result.redirect).toEqual({ enabled: true })
+    expect(result.comment).toEqual({ enabled: false, reason: expect.any(String) })
+  })
+
+  it('channelId がある行はどちらも enabled: true', () => {
+    const result = testSendAvailability(entry({ channelId: CHANNEL_ID }))
+    expect(result.redirect).toEqual({ enabled: true })
+    expect(result.comment).toEqual({ enabled: true })
+  })
+})
+
+describe('testSendResultMessage (AC9: 6 通りが互いに違う文言)', () => {
+  it('6 通りが互いに違う文言を返す', () => {
+    const messages = [
+      testSendResultMessage({ status: 'posted', text: 'テストの文面', streamId: 'stream-1' }),
+      testSendResultMessage({ status: 'failed', reason: 'no-input' }),
+      testSendResultMessage({ status: 'failed', reason: 'no-tab' }),
+      testSendResultMessage({ status: 'failed', reason: 'unresolved-channel-id' }),
+      testSendResultMessage({ status: 'failed', reason: 'no-entry' }),
+      testSendResultMessage({ status: 'failed', reason: 'busy' }),
+    ]
+    expect(new Set(messages).size).toBe(messages.length)
+  })
+
+  it('posted は投稿した文面とどの配信へ出したかを含む', () => {
+    const message = testSendResultMessage({ status: 'posted', text: 'テストの文面', streamId: 'stream-1' })
+    expect(message).toContain('テストの文面')
+    expect(message).toContain('stream-1')
   })
 })
