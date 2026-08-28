@@ -57,7 +57,11 @@ const STORAGE_KEY = 'ytRedirectPin.postLog'
 
 /** 保存件数の上限。古いものから捨てる */
 export const POST_LOG_MAX_ENTRIES = 200
-/** これより古い記録は捨てる。配信は長くても数時間で終わり、配信 ID が空のときの窓も 6 時間なので 7 日あれば十分 */
+/**
+ * これより古い記録は捨てる。配信は長くても数時間で終わり、配信 ID が空のときの窓も 6 時間なので 7 日あれば十分。
+ * ⚠️ **配信 ID が取れている間の抑止には時間の上限が無い**ので、7 日を超えて同じ配信 ID が
+ *    生き続ける常設配信では、この上限で記録が刈られて 2 回目の投稿が出る。
+ */
 export const POST_LOG_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000
 /** 保存する文面の長さの上限(storage を無駄に食わないため) */
 export const POST_LOG_MAX_TEXT_LENGTH = 500
@@ -203,10 +207,11 @@ export function findPostInStream(
 /**
  * 配信を問わず、この送信元への**その種別での**最後の投稿。
  *
- * ⚠️ **種別を必須の引数にしてある。**ここは「投稿されない」の切り分け専用の窓
- *    ([main.ts](./main.ts))で、種別をまたいで拾うと**コメント返しの記録を
- *    「前回のリダイレクト返礼」として**ログに出す。実害はログの文言だけだが、
- *    誤読させると実機の往復を消費する。
+ * ⚠️ **種別を必須の引数にしてある。**種別をまたいで拾うと、コメント返しの記録を
+ *    「前回のリダイレクト返礼」として扱ってしまう。
+ *
+ * `src` 側からは呼ばれていない(`main.ts` の切り分けログはもう投稿履歴を直接読んでいる)。
+ * `tests/post-log.test.ts` が種別をまたがないことの固定として使っている。
  */
 export function findLastPost(log: PostLog, url: string, kind: PostKind): PostRecord | undefined {
   const key = postLogKey(url)
@@ -340,6 +345,17 @@ export async function savePostLog(log: PostLog): Promise<void> {
 export async function clearPostLog(): Promise<void> {
   const area = getLocalStorageArea()
   if (area) await area.set({ [STORAGE_KEY]: [] })
+}
+
+/**
+ * 「履歴を消す」の書き込みか (AC14)。**空配列に変わったときだけ true**。
+ *
+ * `chrome.storage.onChanged` は自分の書き込みでも発火する。投稿するたびに `next.length` は
+ * 増える一方なので、「空になった」ときだけを「消された」と判定すれば、自分の投稿での発火と
+ * 区別できる(`main.ts` が `selfEcho.reset()` を呼ぶかどうかの判定に使う)。
+ */
+export function isPostLogCleared(next: PostLog): boolean {
+  return next.length === 0
 }
 
 /**

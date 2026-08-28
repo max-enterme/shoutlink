@@ -9,6 +9,7 @@ import {
   findLastPost,
   findPostInStream,
   findRedirectReplyBlocker,
+  isPostLogCleared,
   makePostRecord,
   makePostRecordFor,
   normalizePostLog,
@@ -310,6 +311,20 @@ describe('findRedirectReplyBlocker (AC1 / AC2 / AC3)', () => {
       }),
     ).toBeUndefined()
   })
+
+  it('問い合わせ側の streamId が空でも、コメント返しの記録は取り込まない (AC3)', () => {
+    const log = [rec({ kind: 'comment', streamId: '', postedAt: now - 1_000 })]
+    expect(
+      findRedirectReplyBlocker(log, { streamId: '', url: FAKE_CHANNEL.url, now }),
+    ).toBeUndefined()
+  })
+
+  it('履歴に無い送信元は通す', () => {
+    const log = [rec({ kind: 'redirect', streamId: 'stream-1' })]
+    expect(
+      findRedirectReplyBlocker(log, { streamId: 'stream-1', url: FAKE_OTHER_CHANNEL.url, now }),
+    ).toBeUndefined()
+  })
 })
 
 describe('UNKNOWN_STREAM_WINDOW_SEC', () => {
@@ -491,6 +506,16 @@ describe('onPostLogChanged (AC14)', () => {
     listeners[0]({ [POST_LOG_KEY]: { newValue: [] } }, 'local')
 
     expect(received).toEqual([[]])
+  })
+})
+
+describe('isPostLogCleared (selfEcho.reset() を「履歴を消す」のときだけ呼ぶための判定 / AC14)', () => {
+  it('空配列に変わったときだけ true', () => {
+    expect(isPostLogCleared([])).toBe(true)
+  })
+
+  it('1 件でも残っていれば false(自分の投稿での発火と区別する)', () => {
+    expect(isPostLogCleared([rec()])).toBe(false)
   })
 })
 
