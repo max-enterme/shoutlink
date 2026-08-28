@@ -8,7 +8,7 @@
  *    リロードのたびに抑止が白紙に戻っていた。
  *
  * → **投稿したら「誰に・何を・いつ・どの配信で」を残し、起動時に読み戻して
- *    クールダウン判定の初期値にする。**
+ *    抑止(同じ配信・同じ相手には 1 回)の初期値にする。**
  *
  * 記録するのは**実際に投稿できたとき**だけ。投稿に失敗した回は残さない
  * (残すと、投稿できていないのに抑止だけ効いてしまう)。
@@ -57,7 +57,7 @@ const STORAGE_KEY = 'ytRedirectPin.postLog'
 
 /** 保存件数の上限。古いものから捨てる */
 export const POST_LOG_MAX_ENTRIES = 200
-/** これより古い記録は捨てる。クールダウンは秒〜分単位なので 7 日あれば十分 */
+/** これより古い記録は捨てる。配信は長くても数時間で終わり、配信 ID が空のときの窓も 6 時間なので 7 日あれば十分 */
 export const POST_LOG_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000
 /** 保存する文面の長さの上限(storage を無駄に食わないため) */
 export const POST_LOG_MAX_TEXT_LENGTH = 500
@@ -105,7 +105,7 @@ export function streamIdFromStudioPath(href: string): string {
  * 1. **自分の URL の `v=`** — ポップアウトはこれで取れる
  * 2. **親フレームの URL** — 管制室の埋め込みチャットは iframe で、`v=` を持たないことがある。
  *    親は同じ `studio.youtube.com`(同一オリジン)なので読める
- * 3. **取れなければ空文字** — 「同一配信」の判定を諦め、時間のクールダウンだけで抑止する
+ * 3. **取れなければ空文字** — 「同一配信」の判定を諦め、`UNKNOWN_STREAM_WINDOW_SEC` の窓だけで抑止する
  *    (この状態は起動ログに `streamId: '(不明)'` として出る)
  */
 export function currentStreamId(win: Window = window): string {
@@ -221,7 +221,7 @@ export function findLastPost(log: PostLog, url: string, kind: PostKind): PostRec
 /**
  * **返礼を止める記録**を探す (001 / 004 / AC1 / AC2 / AC3 / AC7 / AC8)。
  *
- * 「同じ配信・同じ相手に 1 回」だけで判定する。**秒数のクールダウンは見ない** —
+ * 「同じ配信・同じ相手に 1 回」だけで判定する。**秒数は見ない** —
  * 設定値を抑止の逃げ道にする運用を持ち込まない。
  *
  * **どの種別の記録を抑止に数えるかは `blockedBy` で渡す**(004 / AC8 の非対称)。
