@@ -1,5 +1,5 @@
 /**
- * 設定 UI (T7)。テンプレート編集 / ON・OFF / クールダウン / 固定モード。
+ * 設定 UI (T7)。テンプレート編集 / ON・OFF / 固定モード / 辞書の行ごとのテスト送信。
  */
 import { resolveChannelId } from '../channel-id'
 import { compose, composeText } from '../composer'
