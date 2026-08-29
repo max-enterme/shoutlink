@@ -270,7 +270,7 @@ export function onPostLogChanged(handler: (log: PostLog) => void): () => void
 ## 確定値
 
 モック → http://localhost:19052/published/yt-redirect-pin/006-test-send-mock.html
-(実体 `F:\home\dashboard\published\yt-redirect-pin\006-test-send-mock.html`)
+(実体はダッシュボードの `published/yt-redirect-pin/006-test-send-mock.html`)
 
 | 決定 | 確定 | 実装への落とし方 |
 |---|---|---|
