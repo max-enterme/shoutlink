@@ -17,11 +17,11 @@
 // (`npm run package:store` がまとめてやる)。
 import { access, mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises'
 import path from 'node:path'
-import { fileURLToPath } from 'node:url'
 import { makeZip } from './zip.mjs'
+import { distDir, repoRoot as root } from './paths.mjs'
 
-const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
-const dist = path.join(root, 'dist')
+// ⚠ dist/ は本体に固定されている (paths.mjs)。ZIP の出力先 release/ はこのチェックアウトの下。
+const dist = distDir
 
 try {
   await access(path.join(dist, 'manifest.json'))
