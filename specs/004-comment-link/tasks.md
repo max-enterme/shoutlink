@@ -94,7 +94,7 @@ feature: comment-link
       **解決に失敗した理由の出し方** / **再試行の操作子** / **同じ `channelId` の行が 2 件以上ある**ときの警告。
       **畳んだ状態は現状の 3 列(ハンドル / 呼び名 / 削除ボタン)を出発点にする** — 新しい列を増やさない。
       **モックは配置済み** — <http://localhost:19052/published/shoutlink/004-directory-collapse-mock.html>
-      (`F:\home\dashboard\published\shoutlink-directory-collapse-mock.html`)。
+      (実体はダッシュボードの `published/shoutlink-directory-collapse-mock.html`)。
       **`shoutlink` は projects.json に未登録**なので、Projects 配下ではなく**グローバルの Pages タブ**に出る。
       **完了条件**(SPEC-OPS §10):
       ① `/dashboard-publish` で `published/shoutlink/` に置き、**plan.md R9 から URL でリンクする**
