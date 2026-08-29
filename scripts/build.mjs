@@ -5,13 +5,14 @@
 //
 // --release を付けると配布用のビルドになる (sourcemap を出さない)。
 // 難読化はしない — 何をしている拡張かを読んで確かめられる状態で配る。
+//
+// **出力先は worktree ではなく本体の dist/ に固定してある** (理由は paths.mjs)。
 import { build } from 'esbuild'
 import { cp, mkdir, rm } from 'node:fs/promises'
 import path from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { distDir, distIsElsewhere, repoRoot as root } from './paths.mjs'
 
-const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
-const outdir = path.join(root, 'dist')
+const outdir = distDir
 const forRelease = process.argv.includes('--release')
 
 await rm(outdir, { recursive: true, force: true })
@@ -35,3 +36,8 @@ await build({
 
 await cp(path.join(root, 'public'), outdir, { recursive: true })
 console.log(`built -> ${outdir}${forRelease ? ' (release)' : ''}`)
+if (distIsElsewhere) {
+  // worktree からビルドした。Chrome が読んでいるのはこの 1 か所なので、
+  // 別の worktree のビルドを上書きしている可能性がある
+  console.log(`  (${root} のコードを、本体の dist/ へ出した)`)
+}
