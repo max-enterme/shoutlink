@@ -377,7 +377,7 @@ export type PostRecord = {
   AC13 の常時表示ごと読み飛ばされる)。**削除ボタンは畳んだ状態でも押せること。**
   **これで「既存パターンへの列追加」から外れるため、SPEC-OPS §10 に従い GUI モックを併置する**
   — **T14(人手)でレイアウトを確定させてから T9 を実装する。**
-  **モック(T14 / #41)**: <http://localhost:19052/published/shoutlink/004-directory-collapse-mock.html>
+  **モック(T14 / #41)**: ダッシュボードの `published/shoutlink/004-directory-collapse-mock.html`
 
   > **T14 で確定した値(2026-08-16 / 人間がモックで選択)。T9 / T17 はこれを実装する。**
   >
