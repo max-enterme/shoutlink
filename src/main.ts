@@ -8,7 +8,6 @@ import { createCommentRunner } from './comment-runner'
 import type { CommentDetectorHandle } from './comment-detector'
 import { REDIRECT_TEXT_PATTERNS, getChatMessages, getMessageText } from './selectors'
 import { DEFAULT_CONFIG, isActionAllowed, loadConfig, onConfigChanged } from './config'
-import { createDedupe } from './dedupe'
 import {
   findEntry,
   loadDirectory,
@@ -22,22 +21,24 @@ import type { Directory } from './directory'
 import { startRedirectDetector } from './detector'
 import { decideScope } from './scope'
 import { guard, guardAsync, log } from './log'
+import { createInFlightGuard } from './in-flight'
 import { mountManualTrigger } from './manual-trigger'
 import type { ManualTriggerHandle } from './manual-trigger'
 import { pin } from './pinner'
 import { postMessage } from './poster'
 import {
   currentStreamId,
-  findLastPost,
-  findPostInStream,
+  findRedirectReplyBlocker,
+  isPostLogCleared,
   loadPostLog,
   makePostRecord,
-  redirectHistory,
+  onPostLogChanged,
   rememberPost,
   savePostLog,
 } from './post-log'
 import type { PostLog } from './post-log'
 import { createSelfEchoGuard } from './self-echo'
+import { createTestSendHandler, parseTestSendRequest } from './test-send'
 import type { Config, RedirectEvent } from './types'
 
 /** ビルド時刻。esbuild の define で埋める(どのビルドが読み込まれているかの判別用) */
@@ -63,10 +64,10 @@ async function main(): Promise<void> {
   // 抑止の記録をメモリだけに持っていると、そのたびに白紙に戻って再投稿していた (2026-08-06)。
   const streamId = guard('配信 ID の取得', () => currentStreamId(), '')
   let postLog: PostLog = await guardAsync('投稿履歴の読み込み', loadPostLog, [])
-  // **リダイレクト側の抑止にはリダイレクト返礼の記録だけを渡す** (004 / AC8)。
-  // コメント返しの記録まで渡すと、それが起動時からクールダウンを埋め、
-  // 「コメント返し済みでもリダイレクト返礼はする」が壊れる(`absorb` 側でも弾いている)
-  const dedupe = createDedupe(config.cooldownSec, { streamId, history: redirectHistory(postLog) })
+  // **同じ URL への投稿が重なって走らないための歯止め** (AC1 / AC13)。
+  // `postLog` は投稿できたときだけ記録するので、`await postMessage(...)` の間に同じ通知が
+  // もう一度来ると 2 件目が素通りしてしまう。ここで同期的に枠を取る
+  const inFlight = createInFlightGuard()
   // 設定と独立した自己ループの歯止め (security-review.md S1)
   const selfEcho = createSelfEchoGuard()
 
@@ -104,9 +105,20 @@ async function main(): Promise<void> {
     directory = next
   })
 
+  // **「履歴を消す」を再読み込みなしで届ける** (AC14)。
+  // ⚠ `chrome.storage.onChanged` は自分の書き込みでも発火する。投稿の経路は
+  //    `selfEcho.remember(url)` → `postMessage` → `savePostLog` → `pin` の順で、
+  //    `savePostLog` の完了通知が `pin()` の実行中に届く。ここで無条件に `reset()` すると、
+  //    固定バナーが DOM に現れる頃には `selfEcho` が空になり、security-review S1 の
+  //    二重目の歯止めが自分の投稿のたびに消える。**「履歴を消す」= 空配列の書き込みのときだけ**
+  //    リセットする(`isPostLogCleared`)。
+  onPostLogChanged((next) => {
+    postLog = next
+    if (isPostLogCleared(next)) selfEcho.reset()
+  })
+
   onConfigChanged((next) => {
     config = next
-    dedupe.setCooldownSec(next.cooldownSec)
     // 手動トリガーの表示切り替えに、ページの再読み込みを要らなくする
     guard('手動トリガーの切り替え', () => syncManualTrigger(next.showManualTrigger), undefined)
     // コメント返しの ON / OFF も再読み込みなしで効かせる (AC1 / AC11)
@@ -139,55 +151,65 @@ async function main(): Promise<void> {
       log.info('自動検知が無効化されているためスキップ', event.sourceChannelUrl)
       return
     }
-    // AC4: 同じ配信の中での、同一送信元・クールダウン内の多重発火を抑止
-    if (!dedupe.tryAcquire(event)) {
-      // なぜ止めたかを保存済みの履歴から説明する(「投稿されない」の切り分け用)
-      // **種別を指定する** (004)。指定しないとコメント返しの記録を
-      // 「前回のリダイレクト返礼」として出し、切り分けの窓が嘘をつく
-      const prior =
-        findPostInStream(postLog, streamId, event.sourceChannelUrl, 'redirect') ??
-        findLastPost(postLog, event.sourceChannelUrl, 'redirect')
-      log.info(
-        'クールダウン中のためスキップ',
-        event.sourceChannelUrl,
-        prior
-          ? { 前回: new Date(prior.postedAt).toLocaleString(), 文面: prior.text }
-          : '(この画面で投稿済み)',
-      )
-      return
+    // AC1 / AC6: 同じ配信・同じ相手への抑止。**手動トリガーは対象外** — 人が押した時点で意思表示
+    if (event.origin !== 'manual') {
+      const blocker = findRedirectReplyBlocker(postLog, {
+        streamId,
+        url: event.sourceChannelUrl,
+        now: Date.now(),
+      })
+      if (blocker) {
+        log.info('この配信では投稿済みのためスキップ', event.sourceChannelUrl, {
+          前回: new Date(blocker.postedAt).toLocaleString(),
+          文面: blocker.text,
+        })
+        return
+      }
     }
 
-    // 辞書に呼び名があればそれを使う。無ければ検知した表示名のまま。
-    // 自由文も同じく**ここで辞書から解決してから**純関数の `compose` へ渡す
-    // (`composer.ts` は辞書を知らないままでいる)
-    const named = { ...event, sourceChannelName: resolveDisplayName(directory, event) }
-    const text = compose(config.template, named, { message: resolveMessage(directory, event) })
-    log.info(`投稿する (${event.origin ?? 'auto'}):`, text)
-
-    // 投稿する**前に**覚える。投稿・固定の途中で observer が発火しても取りこぼさないため。
-    // **コメント経路の自己ループ遮断 (AC10) も同じ理由で投稿前に本文を覚える** —
-    // MutationObserver は自分の投稿を**マイクロタスク**で配送するのに対し、
-    // `postMessage` の要素確認はポーリング(マクロタスク)なので、後だと間に合わない
-    selfEcho.remember(event.sourceChannelUrl)
-    commentRunner.rememberOwnPost(text, null)
-    const posted = await postMessage(text)
-    if (posted.status !== 'posted') {
-      log.warn('投稿に失敗した:', posted.reason)
+    // AC13 / AC6: チャットの入力欄は 1 つしかないので、手動トリガーでも見る。
+    // ここで枠を取っておかないと `begin` していないのに `finally` の `end` が走り、
+    // 他の経路が持っている枠を解放して `isBusy()` が嘘になる
+    if (!inFlight.begin(event.sourceChannelUrl)) {
+      log.info('他の投稿が進行中のためスキップ', event.sourceChannelUrl)
       return
     }
+    try {
+      // 辞書に呼び名があればそれを使う。無ければ検知した表示名のまま。
+      // 自由文も同じく**ここで辞書から解決してから**純関数の `compose` へ渡す
+      // (`composer.ts` は辞書を知らないままでいる)
+      const named = { ...event, sourceChannelName: resolveDisplayName(directory, event) }
+      const text = compose(config.template, named, { message: resolveMessage(directory, event) })
+      log.info(`投稿する (${event.origin ?? 'auto'}):`, text)
 
-    // 要素は投稿できて初めて分かる (AC10 の 1 枚目)
-    commentRunner.rememberOwnPost(text, posted.element)
+      // 投稿する**前に**覚える。投稿・固定の途中で observer が発火しても取りこぼさないため。
+      // **コメント経路の自己ループ遮断 (AC10) も同じ理由で投稿前に本文を覚える** —
+      // MutationObserver は自分の投稿を**マイクロタスク**で配送するのに対し、
+      // `postMessage` の要素確認はポーリング(マクロタスク)なので、後だと間に合わない
+      selfEcho.remember(event.sourceChannelUrl)
+      commentRunner.rememberOwnPost(text, null)
+      const posted = await postMessage(text)
+      if (posted.status !== 'posted') {
+        log.warn('投稿に失敗した:', posted.reason)
+        return
+      }
 
-    // **投稿できたときだけ**履歴に残す。次回の起動はここから抑止を組み立てる。
-    // 失敗した回まで残すと、投稿できていないのに抑止だけ効いてしまう。
-    postLog = rememberPost(postLog, makePostRecord(event, text, { streamId, postedAt: Date.now() }))
-    void guardAsync('投稿履歴の保存', () => savePostLog(postLog), undefined)
+      // 要素は投稿できて初めて分かる (AC10 の 1 枚目)
+      commentRunner.rememberOwnPost(text, posted.element)
 
-    if (!posted.element) return
+      // **投稿できたときだけ**履歴に残す。次回の起動はここから抑止を組み立てる。
+      // 失敗した回まで残すと、投稿できていないのに抑止だけ効いてしまう。
+      postLog = rememberPost(postLog, makePostRecord(event, text, { streamId, postedAt: Date.now() }))
+      void guardAsync('投稿履歴の保存', () => savePostLog(postLog), undefined)
 
-    const result = await pin(posted.element, config.pinMode)
-    log.info('固定結果:', result)
+      if (!posted.element) return
+
+      const result = await pin(posted.element, config.pinMode)
+      log.info('固定結果:', result)
+    } finally {
+      // 投稿に失敗しても解放する (AC1)。次に検知したときにもう一度試せるように
+      inFlight.end(event.sourceChannelUrl)
+    }
   }
 
   const safeHandle = (event: RedirectEvent): void => {
@@ -276,6 +298,70 @@ async function main(): Promise<void> {
   }
   syncManualTrigger(config.showManualTrigger)
 
+  // --- テスト送信 (006) ------------------------------------------------------
+  //
+  // 設定画面の辞書の行から、履歴を消費せずに試し撃ちする経路 (AC7-AC13)。
+  // **`handle()` は通さない** — 固定もするし履歴にも残るため (AC8 / AC12)。
+  // 依存を注入で受ける `createTestSendHandler` に、投稿だけを渡す。
+  // 便宜上の鍵。**実際のチャンネル URL である必要は無い** — `inFlight` は
+  // 「入力欄を今使っているか」の枠取りに使っているだけで、テスト送信どうし・
+  // 自動検知/手動トリガーとの間で 1 つの枠を取り合えれば足りる
+  const TEST_SEND_IN_FLIGHT_KEY = 'shoutlink:test-send'
+  const testSendHandler = createTestSendHandler({
+    getDirectory: () => directory,
+    getTemplate: (kind) => (kind === 'redirect' ? config.template : config.commentTemplate),
+    streamId,
+    // **固定はしない (AC12)。**投稿だけを渡す(commentRunner の post と同じ形)。
+    // `isBusy()` の読み取りと `post` の実行の間には隙があるため(行 A のテスト送信が
+    // `postMessage` の要素確認で待っている間に行 B を押せてしまう)、**ここでも枠を取る**
+    // (AC13。`inFlight.isBusy` を読むだけでは、既に取られている枠を確かめるだけで
+    // 自分で取ってはいなかった)
+    post: async (text) => {
+      if (!inFlight.begin(TEST_SEND_IN_FLIGHT_KEY)) {
+        log.info('テスト送信を見送った(他の投稿が進行中)')
+        return { posted: false, element: null }
+      }
+      try {
+        const posted = await postMessage(text)
+        if (posted.status !== 'posted') {
+          log.warn('テスト送信の投稿に失敗した:', posted.reason)
+          return { posted: false, element: null }
+        }
+        return { posted: true, element: posted.element }
+      } finally {
+        inFlight.end(TEST_SEND_IN_FLIGHT_KEY)
+      }
+    },
+    // 004 / AC10 の 1・2 枚目にだけ登録する。**postLog にも selfEcho にも触らない** (AC8 / 採らない案)
+    rememberOwnPost: (text, element) => commentRunner.rememberOwnPost(text, element),
+    isBusy: () => inFlight.isBusy(),
+    onLog: (message, detail) => {
+      if (detail === undefined) log.info(message)
+      else log.info(message, detail)
+    },
+  })
+
+  // ⚠️ `chrome.runtime.onMessage` は、応答を `await` の後に返すなら**同期的に `true` を返す**必要がある
+  //    (返さないとチャネルが閉じて options 側に応答が届かない)。
+  //    **ただし未知のメッセージ (null) のときは `true` を返さない** — `sendResponse` を呼ばずに終える (AC16)。
+  //    `manifest.json` は `all_frames: true` なので、入力欄が無いフレームは `testSendHandler` の中で
+  //    `no-input` を返す(`postMessage` 側の歯止め)。
+  chrome.runtime?.onMessage?.addListener((message, _sender, sendResponse) => {
+    if (!parseTestSendRequest(message)) return undefined
+    testSendHandler(message)
+      .then((response) => {
+        if (response) sendResponse(response)
+      })
+      .catch((err) => {
+        // `post` (postMessage) は DOM 操作なので reject しうる。`.catch` が無いと
+        // `sendResponse` が呼ばれずチャネルが開いたままになり、options 側のボタンが
+        // 押せないまま固まる(設定画面を開き直すまで戻らない)
+        log.error('テスト送信のハンドラで例外が起きた:', err)
+        sendResponse({ status: 'failed', reason: 'no-input' })
+      })
+    return true
+  })
+
   // 「どのビルドが・どの設定で動いているか」を 1 行で分かるようにする。
   // 拡張の ↻ 忘れ / ページのリロード忘れ / 診断ログの入れ忘れを、ログだけで切り分けるため。
   log.info('起動した', {
@@ -284,7 +370,6 @@ async function main(): Promise<void> {
     enabled: config.enabled,
     debug: config.debug,
     pinMode: config.pinMode,
-    cooldownSec: config.cooldownSec,
     // 「この配信で誰に投稿済みか」の土台。streamId が空だと同一配信の判定ができない
     streamId: streamId || '(不明)',
     postLog: postLog.length,

@@ -4,19 +4,18 @@
  * ⚠️ **2026-08-06 の不具合: チャットを再読み込みすると同じ相手に何度も投稿していた。**
  *    リダイレクトの通知/バナーはチャット文書に残り続けるため、リロード後の初期走査
  *    (`detector.scanExisting`) がそれを「新しい通知」として拾い直す。
- *    抑止の記録 (`dedupe`) がメモリ上にしか無く、文書のライフサイクルと一緒に消えるので、
+ *    抑止の記録がメモリ上にしか無く、文書のライフサイクルと一緒に消えるので、
  *    リロードのたびに抑止が白紙に戻っていた。
  *
  * → **投稿したら「誰に・何を・いつ・どの配信で」を残し、起動時に読み戻して
- *    クールダウン判定の初期値にする。**
+ *    抑止(同じ配信・同じ相手には 1 回)の初期値にする。**
  *
  * 記録するのは**実際に投稿できたとき**だけ。投稿に失敗した回は残さない
  * (残すと、投稿できていないのに抑止だけ効いてしまう)。
  *
  * 純関数と保存を分けてあり、純関数側だけが単体テストの対象(directory.ts と同じ作り)。
  */
-import { getLocalStorageArea } from './config'
-import { UNKNOWN_STREAM_MIN_COOLDOWN_SEC } from './dedupe'
+import { getLocalStorageArea, getLocalStorageAreaName } from './config'
 import { handleFromChannelUrl } from './detector'
 import type { RedirectEvent } from './types'
 
@@ -58,12 +57,27 @@ const STORAGE_KEY = 'ytRedirectPin.postLog'
 
 /** 保存件数の上限。古いものから捨てる */
 export const POST_LOG_MAX_ENTRIES = 200
-/** これより古い記録は捨てる。クールダウンは秒〜分単位なので 7 日あれば十分 */
+/**
+ * これより古い記録は捨てる。配信は長くても数時間で終わり、配信 ID が空のときの窓も 6 時間なので 7 日あれば十分。
+ * ⚠️ **配信 ID が取れている間の抑止には時間の上限が無い**ので、7 日を超えて同じ配信 ID が
+ *    生き続ける常設配信では、この上限で記録が刈られて 2 回目の投稿が出る。
+ */
 export const POST_LOG_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000
 /** 保存する文面の長さの上限(storage を無駄に食わないため) */
 export const POST_LOG_MAX_TEXT_LENGTH = 500
 
-/** URL の表記ゆれを吸収した鍵(dedupe / directory と同じ考え方) */
+/**
+ * **配信 ID が取れないときだけ使う窓(6 時間)。**
+ *
+ * 配信を特定できないと「同じ配信か」が判断できず、履歴を捨てることも信じることもできない。
+ * リダイレクトの通知は配信が終わるまで消えないので、時間で区切らないと
+ * **チャットを開き直すたびに再投稿する**(2026-08-06 の不具合)。
+ * 「返礼を 1 回取りこぼす」より「同じ相手に何度も投稿する」方が実害が大きいので、
+ * 判定材料が無いときは長い方に倒す。
+ */
+export const UNKNOWN_STREAM_WINDOW_SEC = 6 * 60 * 60
+
+/** URL の表記ゆれを吸収した鍵(directory と同じ考え方) */
 export function postLogKey(url: string): string {
   return url.trim().toLowerCase()
 }
@@ -95,7 +109,7 @@ export function streamIdFromStudioPath(href: string): string {
  * 1. **自分の URL の `v=`** — ポップアウトはこれで取れる
  * 2. **親フレームの URL** — 管制室の埋め込みチャットは iframe で、`v=` を持たないことがある。
  *    親は同じ `studio.youtube.com`(同一オリジン)なので読める
- * 3. **取れなければ空文字** — 「同一配信」の判定を諦め、時間のクールダウンだけで抑止する
+ * 3. **取れなければ空文字** — 「同一配信」の判定を諦め、`UNKNOWN_STREAM_WINDOW_SEC` の窓だけで抑止する
  *    (この状態は起動ログに `streamId: '(不明)'` として出る)
  */
 export function currentStreamId(win: Window = window): string {
@@ -193,10 +207,11 @@ export function findPostInStream(
 /**
  * 配信を問わず、この送信元への**その種別での**最後の投稿。
  *
- * ⚠️ **種別を必須の引数にしてある。**ここは「投稿されない」の切り分け専用の窓
- *    ([main.ts](./main.ts))で、種別をまたいで拾うと**コメント返しの記録を
- *    「前回のリダイレクト返礼」として**ログに出す。実害はログの文言だけだが、
- *    誤読させると実機の往復を消費する。
+ * ⚠️ **種別を必須の引数にしてある。**種別をまたいで拾うと、コメント返しの記録を
+ *    「前回のリダイレクト返礼」として扱ってしまう。
+ *
+ * `src` 側からは呼ばれていない(`main.ts` の切り分けログはもう投稿履歴を直接読んでいる)。
+ * `tests/post-log.test.ts` が種別をまたがないことの固定として使っている。
  */
 export function findLastPost(log: PostLog, url: string, kind: PostKind): PostRecord | undefined {
   const key = postLogKey(url)
@@ -209,23 +224,29 @@ export function findLastPost(log: PostLog, url: string, kind: PostKind): PostRec
 }
 
 /**
- * **コメント返しを止める記録**を探す (004 / AC7 / AC8)。
+ * **返礼を止める記録**を探す (001 / 004 / AC1 / AC2 / AC3 / AC7 / AC8)。
  *
- * リダイレクト側 (`dedupe.ts`) と規則が違うので別の関数にしてある:
- *   - **種別を問わない** — 同じ配信でリダイレクト返礼済みでもコメント返しはしない (AC8)
- *   - **`cooldownSec` を見ない** — 「同じ配信で 1 回」だけで判定する。
- *     `cooldownSec = 0`(テスターに指示している値)を抑止の逃げ道にする運用を持ち込まない
- *   - **配信 ID が取れないときは 6 時間の下限**(`UNKNOWN_STREAM_MIN_COOLDOWN_SEC` / AC7)。
- *     `findPostInStream` は `streamId` が空だと必ず `undefined` を返すため、
- *     これが無いとコメント側の抑止が丸ごと外れる
+ * 「同じ配信・同じ相手に 1 回」だけで判定する。**秒数は見ない** —
+ * 設定値を抑止の逃げ道にする運用を持ち込まない。
+ *
+ * **どの種別の記録を抑止に数えるかは `blockedBy` で渡す**(004 / AC8 の非対称)。
+ * リダイレクト側とコメント側で規則そのものは同じだが、数える記録が違う:
+ *   - リダイレクト返礼 → `blockedBy: ['redirect']`(コメント返し済みでも投稿する。こちらが本命)
+ *   - コメント返し → `blockedBy: ['redirect', 'comment']`(種別を問わず、同じ配信で 1 回)
+ *
+ * **配信 ID が取れないときは 6 時間の窓**(`UNKNOWN_STREAM_WINDOW_SEC` / AC2 / AC7)。
+ * `findPostInStream` は `streamId` が空だと必ず `undefined` を返すため、
+ * これが無いと配信 ID が取れない側の抑止が丸ごと外れる。
  */
-export function findCommentReplyBlocker(
+export function findReplyBlocker(
   log: PostLog,
-  params: { streamId: string; url: string; now: number },
+  params: { streamId: string; url: string; now: number; blockedBy: readonly PostKind[] },
 ): PostRecord | undefined {
   const key = postLogKey(params.url)
-  const sameChannel = log.filter((entry) => postLogKey(entry.url) === key)
-  const floorMs = UNKNOWN_STREAM_MIN_COOLDOWN_SEC * 1000
+  const sameChannel = log.filter(
+    (entry) => postLogKey(entry.url) === key && params.blockedBy.includes(entry.kind),
+  )
+  const floorMs = UNKNOWN_STREAM_WINDOW_SEC * 1000
   const withinFloor = (entry: PostRecord): boolean => params.now - entry.postedAt < floorMs
 
   if (params.streamId) {
@@ -235,11 +256,27 @@ export function findCommentReplyBlocker(
         // **配信 ID が空のまま残った記録も 6 時間は見る。**
         // 管制室の埋め込みチャット(ID が取れない)で投稿 → ポップアウトを開き直す
         // (ID が取れる)と、**同じ配信・同じ相手に 2 回目が出る。**
-        // コメント側は「同一配信 1 回」が唯一の歯止めなので、取りこぼすより二重投稿を避ける
+        // 取りこぼすより二重投稿を避ける(AC2)
         (entry.streamId === '' && withinFloor(entry)),
     )
   }
   return sameChannel.find(withinFloor)
+}
+
+/** リダイレクト返礼の抑止 (AC1)。数えるのはリダイレクト返礼の記録だけ(AC3: 非対称の後半) */
+export function findRedirectReplyBlocker(
+  log: PostLog,
+  params: { streamId: string; url: string; now: number },
+): PostRecord | undefined {
+  return findReplyBlocker(log, { ...params, blockedBy: ['redirect'] })
+}
+
+/** コメント返しの抑止 (004 / AC7 / AC8)。種別を問わず数える(非対称の前半) */
+export function findCommentReplyBlocker(
+  log: PostLog,
+  params: { streamId: string; url: string; now: number },
+): PostRecord | undefined {
+  return findReplyBlocker(log, { ...params, blockedBy: ['redirect', 'comment'] })
 }
 
 /**
@@ -257,19 +294,8 @@ export function findCommentReplyBlocker(
 export function countCommentPostsInStream(log: PostLog, streamId: string, now: number): number {
   const comments = log.filter((entry) => entry.kind === 'comment')
   if (streamId) return comments.filter((entry) => entry.streamId === streamId).length
-  const floorMs = UNKNOWN_STREAM_MIN_COOLDOWN_SEC * 1000
+  const floorMs = UNKNOWN_STREAM_WINDOW_SEC * 1000
   return comments.filter((entry) => now - entry.postedAt < floorMs).length
-}
-
-/**
- * **リダイレクト側の抑止に渡してよい履歴だけ**を残す (AC8)。
- *
- * `createDedupe` の `absorb` 側でも `comment` を弾いているが、**渡す側でも絞る。**
- * ここを絞らないと、コメント返しの記録がリダイレクト側のクールダウンを起動時から埋め、
- * 「コメント返し済みでもリダイレクト返礼はする」が壊れる。
- */
-export function redirectHistory(log: PostLog): PostLog {
-  return log.filter((entry) => entry.kind === 'redirect')
 }
 
 /** 壊れた保存内容で拡張ごと死なせない (AC6) */
@@ -319,4 +345,39 @@ export async function savePostLog(log: PostLog): Promise<void> {
 export async function clearPostLog(): Promise<void> {
   const area = getLocalStorageArea()
   if (area) await area.set({ [STORAGE_KEY]: [] })
+}
+
+/**
+ * 「履歴を消す」の書き込みか (AC14)。**空配列に変わったときだけ true**。
+ *
+ * `chrome.storage.onChanged` は自分の書き込みでも発火する。投稿するたびに `next.length` は
+ * 増える一方なので、「空になった」ときだけを「消された」と判定すれば、自分の投稿での発火と
+ * 区別できる(`main.ts` が `selfEcho.reset()` を呼ぶかどうかの判定に使う)。
+ */
+export function isPostLogCleared(next: PostLog): boolean {
+  return next.length === 0
+}
+
+/**
+ * 投稿履歴の変更の購読(`directory.ts` の `onDirectoryChanged` と同型 / AC14)。
+ * 戻り値を呼ぶと解除する。
+ *
+ * **「履歴を消す」を再読み込みなしで届けるための土台。** 抑止の正本を `postLog` の 1 本に
+ * 寄せたので(plan.md「アプローチ」)、これを購読するだけで `main.ts` 側の抑止が解ける。
+ */
+export function onPostLogChanged(handler: (log: PostLog) => void): () => void {
+  if (typeof chrome === 'undefined' || !chrome.storage?.onChanged) return () => {}
+  // 実際に使っているエリアだけを見る(directory.ts と同じ理由)
+  const areaName = getLocalStorageAreaName()
+
+  const listener = (
+    changes: Record<string, chrome.storage.StorageChange>,
+    changedArea: string,
+  ): void => {
+    if (areaName && changedArea !== areaName) return
+    const change = changes[STORAGE_KEY]
+    if (change) handler(normalizePostLog(change.newValue))
+  }
+  chrome.storage.onChanged.addListener(listener)
+  return () => chrome.storage.onChanged.removeListener(listener)
 }

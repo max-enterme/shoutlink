@@ -42,7 +42,6 @@ describe('normalizeConfig', () => {
         enabled: false,
         template: '{url}',
         pinMode: 'always',
-        cooldownSec: 30,
         showManualTrigger: true,
         debug: true,
         commentReplyEnabled: true,
@@ -52,7 +51,6 @@ describe('normalizeConfig', () => {
       enabled: false,
       template: '{url}',
       pinMode: 'always',
-      cooldownSec: 30,
       showManualTrigger: true,
       debug: true,
       commentReplyEnabled: true,
@@ -81,10 +79,14 @@ describe('normalizeConfig', () => {
     expect(normalizeConfig({ template: '   ' }).template).toBe(DEFAULT_CONFIG.template)
   })
 
-  it('不正なクールダウンは既定に落とし、0 は許す', () => {
-    expect(normalizeConfig({ cooldownSec: -1 }).cooldownSec).toBe(DEFAULT_CONFIG.cooldownSec)
-    expect(normalizeConfig({ cooldownSec: 'abc' }).cooldownSec).toBe(DEFAULT_CONFIG.cooldownSec)
-    expect(normalizeConfig({ cooldownSec: 0 }).cooldownSec).toBe(0)
+  it('DEFAULT_CONFIG に cooldownSec が無い', () => {
+    expect(DEFAULT_CONFIG).not.toHaveProperty('cooldownSec')
+  })
+
+  it('保存済みの設定に cooldownSec が残っていても落ちず、返り値に含めない (AC5)', () => {
+    const result = normalizeConfig({ cooldownSec: 30 })
+    expect(result).not.toHaveProperty('cooldownSec')
+    expect(result).toEqual(DEFAULT_CONFIG)
   })
   // --- 004: コメント返し ---------------------------------------------------
 
@@ -124,6 +126,5 @@ describe('normalizeConfig', () => {
     expect(DEFAULT_CONFIG.enabled).toBe(true)
     expect(DEFAULT_CONFIG.pinMode).toBe('ifEmpty')
     expect(DEFAULT_CONFIG.showManualTrigger).toBe(false)
-    expect(DEFAULT_CONFIG.cooldownSec).toBe(6 * 60 * 60)
   })
 })

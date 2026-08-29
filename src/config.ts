@@ -14,10 +14,6 @@ export const DEFAULT_CONFIG: Config = {
   // 既定は ifEmpty (spec.md AC8)。ただし成立は「固定中かどうか」を DOM から
   // 判定できることが前提で、T1 未確認 (plan.md R4)。
   pinMode: 'ifEmpty',
-  // **配信の長さを見込んだ値にする (6 時間)。**
-  // クールダウンは同一配信内でのみ効く一方、リダイレクトの通知はチャットに残り続けるため、
-  // 秒数が短いと「明けた後にチャットを開き直す → 再投稿」が起きる (2026-08-07)。
-  cooldownSec: 6 * 60 * 60,
   // 既定で出さない。配信画面にチャット窓を載せていると映り込むため (security-review.md S8)
   showManualTrigger: false,
   debug: false,
@@ -44,16 +40,10 @@ export function normalizeConfig(raw: unknown): Config {
     ? (source.pinMode as PinMode)
     : DEFAULT_CONFIG.pinMode
 
-  const cooldownRaw = Number(source.cooldownSec)
-  const cooldownSec = Number.isFinite(cooldownRaw) && cooldownRaw >= 0
-    ? Math.floor(cooldownRaw)
-    : DEFAULT_CONFIG.cooldownSec
-
   return {
     enabled: typeof source.enabled === 'boolean' ? source.enabled : DEFAULT_CONFIG.enabled,
     template,
     pinMode,
-    cooldownSec,
     showManualTrigger:
       typeof source.showManualTrigger === 'boolean'
         ? source.showManualTrigger

@@ -1,21 +1,23 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 import {
   POST_LOG_MAX_AGE_MS,
   POST_LOG_MAX_ENTRIES,
+  UNKNOWN_STREAM_WINDOW_SEC,
   countCommentPostsInStream,
   currentStreamId,
   findCommentReplyBlocker,
   findLastPost,
   findPostInStream,
+  findRedirectReplyBlocker,
+  isPostLogCleared,
   makePostRecord,
   makePostRecordFor,
   normalizePostLog,
+  onPostLogChanged,
   prunePostLog,
-  redirectHistory,
   rememberPost,
   streamIdFromUrl,
 } from '../src/post-log'
-import { UNKNOWN_STREAM_MIN_COOLDOWN_SEC } from '../src/dedupe'
 import type { PostRecord } from '../src/post-log'
 import type { RedirectEvent } from '../src/types'
 import { FAKE_CHANNEL, FAKE_OTHER_CHANNEL } from './fixtures/live-chat'
@@ -260,11 +262,74 @@ describe('kind (004 / AC14)', () => {
   })
 })
 
-describe('redirectHistory (AC8)', () => {
-  it('リダイレクト側の抑止に渡す履歴からコメント返しの記録を除く', () => {
-    const log = [rec({ kind: 'redirect' }), rec({ kind: 'comment', postedAt: 2_000 })]
-    expect(redirectHistory(log)).toHaveLength(1)
-    expect(redirectHistory(log)[0].kind).toBe('redirect')
+describe('findRedirectReplyBlocker (AC1 / AC2 / AC3)', () => {
+  const now = 10_000_000
+
+  it('同じ配信・同じ相手にリダイレクト返礼の記録があれば止める', () => {
+    const log = [rec({ kind: 'redirect', streamId: 'stream-1' })]
+    expect(
+      findRedirectReplyBlocker(log, { streamId: 'stream-1', url: FAKE_CHANNEL.url, now }),
+    ).toBeDefined()
+  })
+
+  it('**同じ配信・同じ相手にコメント返しの記録しか無ければ止めない**(AC3 / 004 AC8)', () => {
+    const log = [rec({ kind: 'comment', streamId: 'stream-1' })]
+    expect(
+      findRedirectReplyBlocker(log, { streamId: 'stream-1', url: FAKE_CHANNEL.url, now }),
+    ).toBeUndefined()
+  })
+
+  it('配信が違えば止めない', () => {
+    const log = [rec({ kind: 'redirect', streamId: 'stream-1' })]
+    expect(
+      findRedirectReplyBlocker(log, { streamId: 'stream-2', url: FAKE_CHANNEL.url, now }),
+    ).toBeUndefined()
+  })
+
+  it('記録側の streamId が空なら、違う配信 ID で問い合わせても 6 時間以内は止める (AC2)', () => {
+    const log = [rec({ kind: 'redirect', streamId: '', postedAt: now - 1_000 })]
+    expect(
+      findRedirectReplyBlocker(log, { streamId: 'stream-1', url: FAKE_CHANNEL.url, now }),
+    ).toBeDefined()
+  })
+
+  it('問い合わせ側の streamId が空なら、6 時間以内の記録だけが止める (AC2)', () => {
+    const within = now - UNKNOWN_STREAM_WINDOW_SEC * 1000 + 1
+    const outside = now - UNKNOWN_STREAM_WINDOW_SEC * 1000 - 1
+    expect(
+      findRedirectReplyBlocker([rec({ kind: 'redirect', streamId: 'stream-1', postedAt: within })], {
+        streamId: '',
+        url: FAKE_CHANNEL.url,
+        now,
+      }),
+    ).toBeDefined()
+    expect(
+      findRedirectReplyBlocker([rec({ kind: 'redirect', streamId: 'stream-1', postedAt: outside })], {
+        streamId: '',
+        url: FAKE_CHANNEL.url,
+        now,
+      }),
+    ).toBeUndefined()
+  })
+
+  it('問い合わせ側の streamId が空でも、コメント返しの記録は取り込まない (AC3)', () => {
+    const log = [rec({ kind: 'comment', streamId: '', postedAt: now - 1_000 })]
+    expect(
+      findRedirectReplyBlocker(log, { streamId: '', url: FAKE_CHANNEL.url, now }),
+    ).toBeUndefined()
+  })
+
+  it('履歴に無い送信元は通す', () => {
+    const log = [rec({ kind: 'redirect', streamId: 'stream-1' })]
+    expect(
+      findRedirectReplyBlocker(log, { streamId: 'stream-1', url: FAKE_OTHER_CHANNEL.url, now }),
+    ).toBeUndefined()
+  })
+})
+
+describe('UNKNOWN_STREAM_WINDOW_SEC', () => {
+  it('6 時間', () => {
+    expect(UNKNOWN_STREAM_WINDOW_SEC).toBe(6 * 60 * 60)
   })
 })
 
@@ -306,13 +371,13 @@ describe('findCommentReplyBlocker (AC7 / AC8)', () => {
   })
 
   it('**配信 ID が空なら 6 時間の下限**で止める (AC7)', () => {
-    const postedAt = now - UNKNOWN_STREAM_MIN_COOLDOWN_SEC * 1000 + 1
+    const postedAt = now - UNKNOWN_STREAM_WINDOW_SEC * 1000 + 1
     const log = [rec({ kind: 'comment', streamId: '', postedAt })]
     expect(findCommentReplyBlocker(log, { streamId: '', url: FAKE_CHANNEL.url, now })).toBeDefined()
   })
 
   it('6 時間より古ければ止めない', () => {
-    const postedAt = now - UNKNOWN_STREAM_MIN_COOLDOWN_SEC * 1000 - 1
+    const postedAt = now - UNKNOWN_STREAM_WINDOW_SEC * 1000 - 1
     const log = [rec({ kind: 'comment', streamId: '', postedAt })]
     expect(findCommentReplyBlocker(log, { streamId: '', url: FAKE_CHANNEL.url, now })).toBeUndefined()
   })
@@ -326,7 +391,7 @@ describe('findCommentReplyBlocker (AC7 / AC8)', () => {
   })
 
   it('配信 ID が空の記録でも、6 時間より古ければ止めない', () => {
-    const postedAt = now - UNKNOWN_STREAM_MIN_COOLDOWN_SEC * 1000 - 1
+    const postedAt = now - UNKNOWN_STREAM_WINDOW_SEC * 1000 - 1
     const log = [rec({ kind: 'comment', streamId: '', postedAt })]
     expect(
       findCommentReplyBlocker(log, { streamId: 'stream-1', url: FAKE_CHANNEL.url, now }),
@@ -358,7 +423,7 @@ describe('countCommentPostsInStream (AC11)', () => {
       rec({ kind: 'comment', streamId: '', postedAt: now - 1_000 }),
       rec({ kind: 'comment', streamId: '', postedAt: now - 2_000, url: FAKE_OTHER_CHANNEL.url }),
       // 6 時間より古い / 種別が違うものは数えない
-      rec({ kind: 'comment', streamId: '', postedAt: now - UNKNOWN_STREAM_MIN_COOLDOWN_SEC * 1000 - 1 }),
+      rec({ kind: 'comment', streamId: '', postedAt: now - UNKNOWN_STREAM_WINDOW_SEC * 1000 - 1 }),
       rec({ kind: 'redirect', streamId: '', postedAt: now - 1_000 }),
     ]
     expect(countCommentPostsInStream(log, '', now)).toBe(2)
@@ -369,6 +434,88 @@ describe('countCommentPostsInStream (AC11)', () => {
       rec({ kind: 'comment', streamId: '', url: FAKE_CHANNEL.url + '/' + i, postedAt: now - i }),
     )
     expect(countCommentPostsInStream(log, '', now)).toBe(25)
+  })
+})
+
+// --- 006: 履歴の購読 (AC14) -------------------------------------------------
+
+const POST_LOG_KEY = 'ytRedirectPin.postLog'
+
+type Store = Record<string, unknown>
+
+function fakePostLogArea(store: Store): chrome.storage.StorageArea {
+  return {
+    async get(keys?: string | string[] | null): Promise<Store> {
+      const names = keys == null ? Object.keys(store) : Array.isArray(keys) ? keys : [keys]
+      const out: Store = {}
+      for (const name of names) if (name in store) out[name] = store[name]
+      return out
+    },
+    async set(items: Store): Promise<void> {
+      Object.assign(store, items)
+    },
+  } as unknown as chrome.storage.StorageArea
+}
+
+function stubChrome(local: Store, sync: Store): { listeners: Array<(...args: unknown[]) => void> } {
+  const listeners: Array<(...args: unknown[]) => void> = []
+  ;(globalThis as { chrome?: unknown }).chrome = {
+    storage: {
+      local: fakePostLogArea(local),
+      sync: fakePostLogArea(sync),
+      onChanged: {
+        addListener(listener: (...args: unknown[]) => void) {
+          listeners.push(listener)
+        },
+        removeListener(listener: (...args: unknown[]) => void) {
+          const index = listeners.indexOf(listener)
+          if (index >= 0) listeners.splice(index, 1)
+        },
+      },
+    },
+  }
+  return { listeners }
+}
+
+afterEach(() => {
+  delete (globalThis as { chrome?: unknown }).chrome
+})
+
+describe('onPostLogChanged (AC14)', () => {
+  it('chrome が無い環境では何もせず、解除関数を返す', () => {
+    const handler = onPostLogChanged(() => {})
+    expect(typeof handler).toBe('function')
+    expect(() => handler()).not.toThrow()
+  })
+
+  it('自分のエリア(local)以外の onChanged では発火しない', () => {
+    const { listeners } = stubChrome({}, {})
+    const received: PostRecord[][] = []
+    onPostLogChanged((next) => received.push(next))
+
+    listeners[0]({ [POST_LOG_KEY]: { newValue: [rec()] } }, 'sync')
+
+    expect(received).toHaveLength(0)
+  })
+
+  it('空配列に変わったとき、ハンドラに [] が渡る', () => {
+    const { listeners } = stubChrome({}, {})
+    const received: PostRecord[][] = []
+    onPostLogChanged((next) => received.push(next))
+
+    listeners[0]({ [POST_LOG_KEY]: { newValue: [] } }, 'local')
+
+    expect(received).toEqual([[]])
+  })
+})
+
+describe('isPostLogCleared (selfEcho.reset() を「履歴を消す」のときだけ呼ぶための判定 / AC14)', () => {
+  it('空配列に変わったときだけ true', () => {
+    expect(isPostLogCleared([])).toBe(true)
+  })
+
+  it('1 件でも残っていれば false(自分の投稿での発火と区別する)', () => {
+    expect(isPostLogCleared([rec()])).toBe(false)
   })
 })
 

@@ -86,8 +86,12 @@ test: npm run typecheck && npx vitest run
 決め方:
 
 1. `chrome.tabs.query({ url: 'https://studio.youtube.com/*' })` で候補を集める
-2. **`active: true` かつ最後にフォーカスされたウィンドウのタブを先頭に並べ替える。**
-   Studio のタブを複数開いていると、並び順まかせでは**別の配信へテスト投稿が出る**
+2. **`lastAccessed` の降順で先頭に並べ替える**(`src/options/test-send.ts` の `orderStudioTabsForTestSend`)。
+   `lastAccessed` が無いタブは最後へ回し、同値・未定義どうしは元の並び順を保つ(安定ソート)。
+   Studio のタブを複数開いていると、並び順まかせでは**別の配信へテスト投稿が出る**。
+   ⚠ **`active: true` は当てにしない** — `manifest.json` は `options_ui.open_in_tab: true` なので、
+   ボタンを押した時点で「最後にフォーカスされたウィンドウのアクティブなタブ」は設定画面そのものであり、
+   Studio タブがこの条件を満たすことはほぼ無い(並べ替えが一度も効かない)。
 3. 先頭から `sendMessage` し、**最初に応答したところで打ち切る。**打ち切りを忘れると複数タブへ二重投稿する。
    コンテントスクリプトが入っていないタブは接続エラーで即座に落ちる(投稿の副作用は起きない)
 4. どれも応答しなければ `no-tab`

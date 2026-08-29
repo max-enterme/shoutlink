@@ -3,7 +3,7 @@ feature: reply-guard-and-test-send
 issue: 89
 release: r2
 priority: must
-status: 未着手
+status: レビュー
 ---
 
 # 006 返礼の抑止を配信単位に統一し、テスト送信の導線を作る

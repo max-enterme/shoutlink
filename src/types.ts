@@ -22,7 +22,6 @@ export type Config = {
   /** 例: '{name}さんからリダイレクトありがとうございます! {url}' */
   template: string
   pinMode: PinMode
-  cooldownSec: number
   /**
    * ライブチャット画面の右下に手動トリガー (`↩ 返礼`) を出すか。
    *
