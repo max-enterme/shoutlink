@@ -1,9 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  COMMENT_REPLY_INTERVAL_MS,
-  COMMENT_REPLY_MAX_PER_STREAM,
-  createPostQueue,
-} from '../src/post-queue'
+import { COMMENT_REPLY_INTERVAL_MS, createPostQueue } from '../src/post-queue'
 import type { SkipReason } from '../src/post-queue'
 
 /**
@@ -42,7 +38,6 @@ describe('createPostQueue (AC11)', () => {
     const queue = createPostQueue<string>({
       now: clock.now,
       wait: clock.wait,
-      countPosted: () => h.posted.length,
       post: async (item) => {
         h.posted.push(item)
         return true
@@ -63,7 +58,6 @@ describe('createPostQueue (AC11)', () => {
     const queue = createPostQueue<string>({
       now: clock.now,
       wait: clock.wait,
-      countPosted: () => h.posted.length,
       post: async (item) => {
         times.push(clock.now())
         h.posted.push(item)
@@ -86,7 +80,6 @@ describe('createPostQueue (AC11)', () => {
     const queue = createPostQueue<string>({
       now: clock.now,
       wait: clock.wait,
-      countPosted: () => h.posted.length,
       post: async (item) => {
         h.posted.push(item)
         return true
@@ -108,7 +101,6 @@ describe('createPostQueue (AC11)', () => {
     const queue = createPostQueue<string>({
       now: clock.now,
       wait: clock.wait,
-      countPosted: () => h.posted.length,
       post: async (item) => {
         if (item === 'a') return false
         h.posted.push(item)
@@ -124,77 +116,26 @@ describe('createPostQueue (AC11)', () => {
     expect(clock.waited).toEqual([])
   })
 
-  it('**1 配信 20 件の上限**を超えたら投稿せずログに残す', async () => {
+  it('**件数の上限は無い** (2026-09-05 に撤廃 / AC11 改訂)', async () => {
     const clock = fakeClock()
     const h = harness()
-    // 既に上限ぶん投稿済みの状態(投稿履歴から数える / AC11)
-    let already = COMMENT_REPLY_MAX_PER_STREAM
     const queue = createPostQueue<string>({
       now: clock.now,
       wait: clock.wait,
-      countPosted: () => already,
       post: async (item) => {
         h.posted.push(item)
-        already += 1
         return true
       },
       onSkip: (item, reason) => h.skipped.push({ item, reason }),
     })
 
-    queue.enqueue('a')
+    // かつての上限 (20) を大きく超える数を積んでも、1 件も落とさない
+    const items = Array.from({ length: 50 }, (_, i) => `i${i}`)
+    for (const item of items) queue.enqueue(item)
     await queue.idle()
 
-    expect(h.posted).toEqual([])
-    expect(h.skipped).toEqual([{ item: 'a', reason: 'limit' }])
-  })
-
-  it('上限に達するまでは投稿し、そこから先を落とす', async () => {
-    const clock = fakeClock()
-    const h = harness()
-    let already = COMMENT_REPLY_MAX_PER_STREAM - 2
-    const queue = createPostQueue<string>({
-      now: clock.now,
-      wait: clock.wait,
-      countPosted: () => already,
-      post: async (item) => {
-        h.posted.push(item)
-        already += 1
-        return true
-      },
-      onSkip: (item, reason) => h.skipped.push({ item, reason }),
-    })
-
-    for (const item of ['a', 'b', 'c', 'd']) queue.enqueue(item)
-    await queue.idle()
-
-    expect(h.posted).toEqual(['a', 'b'])
-    expect(h.skipped.map((s) => s.item)).toEqual(['c', 'd'])
-    expect(h.skipped.every((s) => s.reason === 'limit')).toBe(true)
-  })
-
-  it('**上限は投稿の直前に数える**(待っている間に増えた分を数え落とさない)', async () => {
-    const clock = fakeClock()
-    const h = harness()
-    // 外(リダイレクト経路ではなく別のタブ等)で増えた想定
-    let already = 0
-    const queue = createPostQueue<string>({
-      now: clock.now,
-      wait: clock.wait,
-      countPosted: () => already,
-      post: async (item) => {
-        h.posted.push(item)
-        already = COMMENT_REPLY_MAX_PER_STREAM
-        return true
-      },
-      onSkip: (item, reason) => h.skipped.push({ item, reason }),
-    })
-
-    queue.enqueue('a')
-    queue.enqueue('b')
-    await queue.idle()
-
-    expect(h.posted).toEqual(['a'])
-    expect(h.skipped).toEqual([{ item: 'b', reason: 'limit' }])
+    expect(h.posted).toEqual(items)
+    expect(h.skipped).toEqual([])
   })
 
   it('**clear() で未処理を捨てる**(スイッチが OFF になったとき)', async () => {
@@ -203,7 +144,6 @@ describe('createPostQueue (AC11)', () => {
     const queue = createPostQueue<string>({
       now: clock.now,
       wait: clock.wait,
-      countPosted: () => h.posted.length,
       post: async (item) => {
         h.posted.push(item)
         return true
@@ -235,7 +175,6 @@ describe('createPostQueue (AC11)', () => {
         clock.advance(ms)
         queueRef?.clear()
       },
-      countPosted: () => h.posted.length,
       post: async (item) => {
         h.posted.push(item)
         return true
@@ -258,7 +197,6 @@ describe('createPostQueue (AC11)', () => {
     const queue = createPostQueue<string>({
       now: clock.now,
       wait: clock.wait,
-      countPosted: () => h.posted.length,
       post: async (item) => {
         h.posted.push(item)
         return true
@@ -280,7 +218,6 @@ describe('createPostQueue (AC11)', () => {
     const queue = createPostQueue<string>({
       now: clock.now,
       wait: clock.wait,
-      countPosted: () => h.posted.length,
       post: async (item) => {
         h.posted.push(item)
         if (item === 'a') queue.enqueue('b')
@@ -301,7 +238,6 @@ describe('createPostQueue (AC11)', () => {
     const queue = createPostQueue<string>({
       now: clock.now,
       wait: clock.wait,
-      countPosted: () => h.posted.length,
       post: async (item) => {
         if (item === 'a') throw new Error('投稿でこけた')
         h.posted.push(item)
@@ -329,7 +265,6 @@ describe('createPostQueue (AC11)', () => {
     const queue = createPostQueue<string>({
       now: clock.now,
       wait: clock.wait,
-      countPosted: () => h.posted.length,
       post: async (item) => {
         if (item === 'a') throw new Error('投稿でこけた')
         h.posted.push(item)
@@ -345,8 +280,7 @@ describe('createPostQueue (AC11)', () => {
     expect(clock.waited).toEqual([])
   })
 
-  it('定数は spec のとおり(5 秒 / 20 件)', () => {
+  it('定数は spec のとおり(5 秒)', () => {
     expect(COMMENT_REPLY_INTERVAL_MS).toBe(5_000)
-    expect(COMMENT_REPLY_MAX_PER_STREAM).toBe(20)
   })
 })

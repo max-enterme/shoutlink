@@ -4,7 +4,7 @@ import type { CommentRunnerDeps } from '../src/comment-runner'
 import type { CommentAuthor } from '../src/comment-detector'
 import type { Directory, DirectoryEntry } from '../src/directory'
 import type { PostLog } from '../src/post-log'
-import { COMMENT_REPLY_INTERVAL_MS, COMMENT_REPLY_MAX_PER_STREAM } from '../src/post-queue'
+import { COMMENT_REPLY_INTERVAL_MS } from '../src/post-queue'
 import { DEFAULT_CONFIG } from '../src/config'
 import { FAKE_CHANNEL, FAKE_OTHER_CHANNEL } from './fixtures/live-chat'
 
@@ -259,11 +259,11 @@ describe('createCommentRunner — 連投の抑制 (AC11)', () => {
     expect(h.clock).toBeGreaterThanOrEqual(COMMENT_REPLY_INTERVAL_MS)
   })
 
-  it('**1 配信の上限を超えたら投稿しない**(分母は投稿履歴 / AC11)', async () => {
+  it('**件数の上限は無い**(2026-09-05 に撤廃 / AC11 改訂)', async () => {
     const h = harness()
-    // 既に上限ぶんコメント返し済みの履歴を作る
+    // かつての上限 (20) を超えるコメント返しの履歴があっても、次の 1 件は投稿される
     h.setPostLogValue(
-      Array.from({ length: COMMENT_REPLY_MAX_PER_STREAM }, (_, i) => ({
+      Array.from({ length: 25 }, (_, i) => ({
         url: `https://www.youtube.com/@already-${i}`,
         handle: `@already-${i}`,
         text: 'まえの投稿',
@@ -276,8 +276,8 @@ describe('createCommentRunner — 連投の抑制 (AC11)', () => {
     h.runner.handle(author(), 'こんばんは')
     await h.runner.idle()
 
-    expect(h.posted).toEqual([])
-    expect(h.logs.some((l) => l.includes('limit'))).toBe(true)
+    expect(h.posted).toHaveLength(1)
+    expect(h.logs.some((l) => l.includes('limit'))).toBe(false)
   })
 })
 
