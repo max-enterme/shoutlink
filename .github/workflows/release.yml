@@ -1,12 +1,16 @@
 name: release
 
-# v* のタグを push すると、ビルドして Release に ZIP を添付する。
-#   npm version 0.2.0 で package.json と manifest を上げてから
-#   git tag v0.2.0 && git push origin v0.2.0
+# ⚠️ **ふだんは使わない。** 2026-08-29 にウェブストアの限定公開へ掲載してから、
+# 利用者への配布はストア一本にした (docs/setup-and-verify.md「9. 新しい版をストアへ出す」)。
+# **タグを push しても Release は作られない** — 打っても出ない形にしてある。
+# 手順書に「打つな」と書くより機構を外すほうが確実で、Release が復活すると
+# 「ストアより古い版が最新に見える」状態に戻るため。
+#
+# それでも ZIP を Release へ出す事情ができたときだけ、Actions タブから手で起動する
+# (対象のタグを選ぶ。タグと package.json の版が食い違っていれば下の照合で止まる)。
 
 on:
-  push:
-    tags: ['v*']
+  workflow_dispatch:
 
 permissions:
   contents: write
