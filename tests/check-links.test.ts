@@ -74,8 +74,10 @@ describe('check-links.mjs — ② 自リポジトリ絶対 URL の還元', () =>
 
     expect(status).not.toBe(0)
     expect(stderr).toContain('[実在確認]')
-    // 還元 (blob/main URL → repo 内パス) が正しく効いていることまで、還元結果そのもので固定する
-    expect(stderr).toContain(path.join('docs', 'ghost.md'))
+    // 還元 (blob/main URL → repo 内パス) が正しく効いていることまで、矢印より後ろ (還元結果)
+    // だけを見て固定する。矢印より前 (元 URL) にも同じ部分文字列が含まれるため、
+    // 矢印を含めないと「還元先を誤る」壊れ方を CI (パス区切りが `/` の環境) で検出できない。
+    expect(stderr).toContain(`→ ${path.join('docs', 'ghost.md')}`)
   })
 })
 
@@ -165,10 +167,13 @@ describe('check-links.mjs — docs/index.html (B3)', () => {
   })
 
   it('正例: 末尾 / の Pages URL (og:url 相当) は還元されず、それだけなら exit 0', () => {
+    // 還元されれば `docs/nonexistent` となり実在しないため違反になるはずのパスを使うことで、
+    // 「末尾 `/` を還元しない」除外が実際に効いていることを区別できるようにする。
+    // (`docs/` 自体が実在するパスだと、除外が無くても偶然 exit 0 になり検証にならない)
     const root = createFixtureRoot({
       'README.md': '# Test\n',
       'docs/index.html':
-        '<!doctype html><html><head><meta property="og:url" content="https://max-enterme.github.io/shoutlink/"></head><body></body></html>\n',
+        '<!doctype html><html><head><meta property="og:url" content="https://max-enterme.github.io/shoutlink/nonexistent/"></head><body></body></html>\n',
     })
 
     const { status } = runCheckLinks(root)
