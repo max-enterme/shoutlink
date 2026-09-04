@@ -2,11 +2,40 @@
 feature: i18n
 issue: 3
 release: r2
-priority: could
+priority: won't
 status: 未着手
 ---
 
 # 002 ローカライズ対応
+
+> ## ⚠️ 2026-09-05: `won't` に倒した (打ち切り)
+>
+> **需要が確かめられなかったため。**`status` は打ち切り時点の実状態(`未着手`)のまま凍結する
+> (SPEC-OPS §02「廃止・打ち切りは `priority: won't` で表す」)。
+>
+> **調べたこと（2026-09-05）:**
+>
+> - 英語圏に **YouTube のライブリダイレクト自体はある**。"YouTube raid" と呼ばれ、
+>   「YouTube にも raid がある / 名前が Live Redirect」という周知の投稿が繰り返し流れている。
+>   ただし**認知は低く**、送る側の**登録者 1,000 人**の要件が最大の障壁として頻出する。
+>   受け取る側の母数はさらに小さい。
+> - **英語圏の返礼は、ライブチャットではなく X のツイートで行われている。**
+>   「リダイレクトを受け取った側が、送り主のチャンネル URL を自分のライブチャットへ貼って固定する」
+>   という、本拡張がやっている運用の実例は**見つからなかった**。
+> - 英語圏の in-chat 返礼文化は **Twitch の `!so` コマンド**として存在する
+>   (Streamer.bot / Fossabot / Streamlabs / Nightbot にレイド → 自動 shoutout がある)。
+>   **引き金が Twitch のレイド**で、YouTube のリダイレクト受信を引き金にできるものは無い
+>   (Streamer.bot の YouTube トリガーは broadcast / chat / general / membership のみ)。
+> - **市場のサイズ(Chrome ウェブストアの実測)**: `Youtube comments responder` 239 ユーザー /
+>   `YouTube AI Reply` 73 ユーザー / **`Auto Shoutout for Twitch`(レイド検出 → 自動 shoutout。
+>   最も近い類似物) 34 ユーザー・日本語のみ**。
+>   **shoutout 文化が最も強い Twitch ですら、Chrome 拡張の形にすると 34 ユーザーしかいない。**
+>
+> **戻すときの条件:** 「リダイレクトを受け取ってライブチャットで返礼する」英語話者が実際に見つかること。
+> そのときは T5 / T6 (英語 UI での実採取) から再開する。
+> **T5 は Google アカウントの言語設定を英語にすれば実機なしでできる。T6 は実配信が 1 回要る**
+> (→ rail #711 の手順に入れてある)。
+
 
 > spec.md — フィーチャーの「何を・なぜ」。正本はこのテキストと GitHub(Feature issue)。
 
