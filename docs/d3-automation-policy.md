@@ -350,3 +350,21 @@ Studio が日本語であること・動く場所が限られること。
 - **配布経路そのものの差し替え(README の入れかた / install.md / index.html / for-testers.md /
   配布 ZIP の `INSTALL.txt` / CHANGELOG)は掲載が通ってから。**掲載前に書き換えると、
   存在しない URL を案内することになる。
+
+#### 掲載された (2026-08-29)
+
+**限定公開で掲載された。**アイテム `kpjfmcppkncdmehdpgcochaanbmodaim` / 0.3.0。
+→ <https://chromewebstore.google.com/detail/kpjfmcppkncdmehdpgcochaanbmodaim>
+
+**差し戻しは無かった** — §5 で重く見た「単一用途」も `www.youtube.com` の
+`host_permissions` も、掲載文の説明のまま通っている。
+**ただし審査が YouTube の規約を見ないことは変わらない**(§5)。
+上の「⚠️ この判断は『限定公開である』ことに完全に依存している」もそのまま生きている。
+
+**上で保留していた「拡張 ID と設定の引き継ぎ」は決着している** —
+`key` をストアの公開鍵へ差し替えたので**ローカルビルドの ID はストアと同じ**になったが、
+**既に入っている旧版 (`bfmf…`) は別 ID のままで、引き継ぎは起きない。**
+移行は「書き出す → 旧版を削除 → ストア版を入れる → 書き戻す」の手作業
+(→ [setup-and-verify.md](setup-and-verify.md) の「ストアへ移すと拡張 ID が変わる」/
+利用者向けは [install.md](install.md#デベロッパーモード版から入れ替える))。
+**断定して書かない、という保留はここで解除した。**

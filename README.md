@@ -4,19 +4,20 @@
 URL をライブチャットへ投稿して固定する Chrome 拡張 (MV3)。**
 **辞書で「コメントに反応する」を付けた人のコメントにも反応できます (既定 OFF / 固定はしません)。**
 
-[![release](https://img.shields.io/github/v/release/max-enterme/shoutlink?label=release&sort=semver)](https://github.com/max-enterme/shoutlink/releases/latest)
 [![license](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-説明ページ → **<https://max-enterme.github.io/shoutlink/>**
+インストール → **Chrome ウェブストア (限定公開)**
+<https://chromewebstore.google.com/detail/kpjfmcppkncdmehdpgcochaanbmodaim>
+／ 説明ページ → **<https://max-enterme.github.io/shoutlink/>**
 
 ---
 
 ## ⚠️ 使う前に読んでください
 
-**この拡張は Chrome ウェブストアの「限定公開」で出す予定です** (2026-08-23 に決めました。**まだ出ていません** →
+**この拡張は Chrome ウェブストアの「限定公開」で出しています** (2026-08-23 に決め、2026-08-29 に掲載されました →
 [docs/d3-automation-policy.md](docs/d3-automation-policy.md) の「判断の履歴」)。
 限定公開はストアの検索・一覧に出ないので、**たどり着く経路はこの README と説明ページのリンクだけ**です。
-切り替えるのは**署名され、自動更新が効くようになる**ためで、**下に書いたリスクは何も変わりません。**
+署名され、自動更新が効くようになりましたが、**下に書いたリスクは何も変わりません。**
 
 そして、**ストアの審査は「規約上セーフ」の裏付けになりません。**
 審査が見るのは**単一用途・権限・データの扱い**で、**YouTube の規約に触れるかは見てくれません** (公開でも限定公開でも同じです)。
@@ -86,16 +87,19 @@ URL をライブチャットへ投稿して固定する Chrome 拡張 (MV3)。**
 
 ## 入れかた
 
-**未署名の拡張です。** デベロッパーモードでの読み込みになり、**自動更新もされません**
-(新しい版への入れ替え方は [docs/install.md](docs/install.md#新しい版に入れ替える) / 設定は引き継がれます)。
+**Chrome ウェブストア (限定公開) から入れてください。**
 
-1. [Releases](https://github.com/max-enterme/shoutlink/releases/latest) から
-   `shoutlink-<version>.zip` を落とす
-2. 展開する。**消さない場所に置く** (Chrome はこのフォルダを読み続けます)
-3. Chrome で `chrome://extensions` を開き、右上の **「デベロッパー モード」** を ON
-4. **「パッケージ化されていない拡張機能を読み込む」** → 展開したフォルダを選ぶ
+→ **<https://chromewebstore.google.com/detail/kpjfmcppkncdmehdpgcochaanbmodaim>**
 
-読み込むと、拡張のカードに **`studio.youtube.com` と `www.youtube.com` の許可**が表示されます。
+「Chrome に追加」を押すだけです。署名されているので**起動のたびの警告は出ず、新しい版は自動で届きます。**
+限定公開なので、ストアの検索・カテゴリ一覧には出ません。
+
+> ⚠️ **デベロッパーモードで前の版を入れている人は、先にそれを削除してください。**
+> **設定・呼び名の辞書・投稿履歴は引き継がれません。**書き出してから入れ替える手順は
+> [docs/install.md](docs/install.md#デベロッパーモード版から入れ替える)。
+> 消さずに並べると、**2 つとも動いて同じ相手へ 2 回投稿することがあります。**
+
+入れると、拡張のカードに **`studio.youtube.com` と `www.youtube.com` の許可**が表示されます。
 **拡張が読み込まれて動くのは `studio.youtube.com` のライブ管制室のチャットだけ**で、
 `www.youtube.com` のほうは**設定画面がチャンネル ID を控えに行く**ためだけの許可です
 (→ [保存されるもの](#保存されるもの))。
@@ -207,6 +211,9 @@ npm run package    # release/shoutlink-<version>.zip
 | [docs/security-review.md](docs/security-review.md) | セキュリティ点検。**`www.youtube.com` の許可が事故 1 と別物である理由は S10** |
 
 `v*` のタグを push すると GitHub Actions がビルドして Release に ZIP を添付します。
+**掲載後の配布はストアへ一本化する**と決めてあるので、新しい版を Release へ出すことは想定していません
+(過去の Release は消しません → [docs/d3-automation-policy.md](docs/d3-automation-policy.md) の「あわせて決めたこと」)。
+ストア提出用の ZIP は `npm run package:store`。
 
 ## ライセンス
 
