@@ -14,7 +14,8 @@
     "icons": "node scripts/make-icons.mjs",
     "site-assets": "node scripts/build.mjs && node scripts/make-site-assets.mjs",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "check-links": "node scripts/check-links.mjs"
   },
   "repository": {
     "type": "git",
