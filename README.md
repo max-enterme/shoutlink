@@ -209,6 +209,9 @@ npm run package    # release/shoutlink-<version>.zip
 | [docs/for-testers.md](docs/for-testers.md) | 他人にテストを頼むときの手順書 |
 | [docs/privacy-policy.md](docs/privacy-policy.md) | データの扱いと、**どこへ何のために通信するか** |
 | [docs/security-review.md](docs/security-review.md) | セキュリティ点検。**`www.youtube.com` の許可が事故 1 と別物である理由は S10** |
+| [docs/install.md](docs/install.md) | 導入・設定・切り分け |
+| [docs/stability-research.md](docs/stability-research.md) | 挙動の安定化に使える資料の調査メモ |
+| [docs/004-t1-collect.md](docs/004-t1-collect.md) | コメントの投稿者を実 DOM で採取した記録 |
 
 **新しい版はウェブストアへ出します。GitHub Releases へは出しません**
 (過去の Release は消しません)。**`v*` タグを push しても Release は作られません** —
