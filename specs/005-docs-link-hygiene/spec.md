@@ -3,7 +3,7 @@ feature: docs-link-hygiene
 issue: 70
 release: r2
 priority: should
-status: 進行中
+status: レビュー
 ---
 
 # 005 ドキュメントの参照が壊れたら落ちるようにする
