@@ -32,7 +32,14 @@ function createFixtureRoot(files: Record<string, string>): string {
 }
 
 function runCheckLinks(root: string) {
-  const result = spawnSync('node', [scriptPath, root], { encoding: 'utf8' })
+  // `spawnSync('node', …)` は PATH 解決に依存し環境で失敗しうるので、この Node 自身の実行ファイルを使う。
+  const result = spawnSync(process.execPath, [scriptPath, root], { encoding: 'utf8' })
+  if (result.error) {
+    throw new Error(`check-links.mjs の起動に失敗した (spawn error): ${result.error.message}`)
+  }
+  if (result.status === null) {
+    throw new Error(`check-links.mjs がシグナルで終了した (原因不明の異常終了): signal=${result.signal}`)
+  }
   return { status: result.status, stdout: result.stdout, stderr: result.stderr }
 }
 
@@ -52,12 +59,13 @@ describe('check-links.mjs — ① 相対リンクの実在', () => {
     const { status, stderr } = runCheckLinks(root)
 
     expect(status).not.toBe(0)
+    expect(stderr).toContain('[実在確認]')
     expect(stderr).toContain('docs/nope.md')
   })
 })
 
 describe('check-links.mjs — ② 自リポジトリ絶対 URL の還元', () => {
-  it('実在しないパスを指す blob/main URL で非 0 になり、そのパスが出力に出る', () => {
+  it('実在しないパスを指す blob/main URL で非 0 になり、還元後のパスが実在確認の違反として出る', () => {
     const root = createFixtureRoot({
       'README.md': '# Test\n\n[ghost](https://github.com/max-enterme/shoutlink/blob/main/docs/ghost.md)\n',
     })
@@ -65,7 +73,9 @@ describe('check-links.mjs — ② 自リポジトリ絶対 URL の還元', () =>
     const { status, stderr } = runCheckLinks(root)
 
     expect(status).not.toBe(0)
-    expect(stderr).toContain('docs/ghost.md')
+    expect(stderr).toContain('[実在確認]')
+    // 還元 (blob/main URL → repo 内パス) が正しく効いていることまで、還元結果そのもので固定する
+    expect(stderr).toContain(path.join('docs', 'ghost.md'))
   })
 })
 
@@ -79,6 +89,7 @@ describe('check-links.mjs — ③ md の見出しアンカー', () => {
     const { status, stderr } = runCheckLinks(root)
 
     expect(status).not.toBe(0)
+    expect(stderr).toContain('[見出しアンカー]')
     expect(stderr).toContain('存在しない見出し')
   })
 
@@ -104,17 +115,77 @@ describe('check-links.mjs — ④ 孤立検出', () => {
     const { status, stderr } = runCheckLinks(root)
 
     expect(status).not.toBe(0)
+    expect(stderr).toContain('[孤立]')
     expect(stderr).toContain(path.join('docs', 'orphan.md'))
+  })
+
+  it('正例: README → A → B と間接的に辿れる B は孤立にならない (推移的到達可能性)', () => {
+    const root = createFixtureRoot({
+      'README.md': '# Test\n\n[a](docs/a.md)\n',
+      'docs/a.md': '# A\n\n[b](b.md)\n',
+      'docs/b.md': '# B\n\n本文\n',
+    })
+
+    const { status, stdout } = runCheckLinks(root)
+
+    expect(status).toBe(0)
+    // B5: 正例のうち最低 1 本は stdout も見て、検査本数まで出ていることを確かめる
+    // (早期 return で何も検査せず 0 で抜けた、という壊れ方を塞ぐ)
+    expect(stdout).toContain('check-links: OK')
+    expect(stdout).toContain('2 本')
+  })
+})
+
+describe('check-links.mjs — docs/index.html (B3)', () => {
+  it('相対 href の実在しない参照で非 0 になり [実在確認] が出る', () => {
+    const root = createFixtureRoot({
+      'README.md': '# Test\n',
+      'docs/index.html': '<!doctype html><html><body><a href="missing.html">x</a></body></html>\n',
+    })
+
+    const { status, stderr } = runCheckLinks(root)
+
+    expect(status).not.toBe(0)
+    expect(stderr).toContain('[実在確認]')
+    expect(stderr).toContain(path.join('docs', 'missing.html'))
+  })
+
+  it('Pages 絶対 URL の <meta content> が実在しない先を指すと非 0 になり、還元後のパスが出る', () => {
+    const root = createFixtureRoot({
+      'README.md': '# Test\n',
+      'docs/index.html':
+        '<!doctype html><html><head><meta property="og:image" content="https://max-enterme.github.io/shoutlink/img/missing.png"></head><body></body></html>\n',
+    })
+
+    const { status, stderr } = runCheckLinks(root)
+
+    expect(status).not.toBe(0)
+    expect(stderr).toContain('[実在確認]')
+    expect(stderr).toContain(path.join('docs', 'img', 'missing.png'))
+  })
+
+  it('正例: 末尾 / の Pages URL (og:url 相当) は還元されず、それだけなら exit 0', () => {
+    const root = createFixtureRoot({
+      'README.md': '# Test\n',
+      'docs/index.html':
+        '<!doctype html><html><head><meta property="og:url" content="https://max-enterme.github.io/shoutlink/"></head><body></body></html>\n',
+    })
+
+    const { status } = runCheckLinks(root)
+
+    expect(status).toBe(0)
   })
 })
 
 describe('check-links.mjs — ci.yml への登録 (AC4)', () => {
   it('.github/workflows/ci.yml が check-links を回している', () => {
     // ci.yml は YAML なので tests/manifest.test.ts (resolveJsonModule での import) は真似ず、
-    // readFileSync で読んで文字列一致を見る
+    // readFileSync で読んで文字列一致を見る。
+    // `toContain('check-links')` は `# - run: npm run check-links` のコメントアウトや
+    // `- run: npm run check-links || true` でも緑になってしまうため、行そのものを固定する。
     const ciYmlPath = path.resolve(fileURLToPath(import.meta.url), '../../.github/workflows/ci.yml')
     const content = readFileSync(ciYmlPath, 'utf8')
 
-    expect(content).toContain('check-links')
+    expect(content).toMatch(/^\s*- run: npm run check-links\s*$/m)
   })
 })

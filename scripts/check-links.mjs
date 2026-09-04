@@ -12,7 +12,7 @@
 //   ④ 孤立検出               — docs/**/*.md のうち README.md から (他の md 経由も含め) 辿れないもの
 //
 // いずれもコードフェンス内は対象外。`data:` と `mailto:` は除外。新規依存は足さない (node: 組み込みのみ)。
-import { existsSync, readdirSync, readFileSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -23,6 +23,18 @@ const root = path.resolve(process.argv[2] ?? defaultRoot)
 const readmePath = path.join(root, 'README.md')
 const docsDir = path.join(root, 'docs')
 const indexHtmlPath = path.join(docsDir, 'index.html')
+
+// 走査ルートが不正だと孤立検出の根 (README.md) すら無く、検査そのものが成立しない。
+// 黙って「検査対象 0 本」で OK を返すと、フィクスチャのパスを間違えたテストまで
+// 素通りしてしまう (正例テストの取り違え防止)。
+if (!existsSync(root) || !statSync(root).isDirectory()) {
+  console.error(`check-links: 走査ルートが存在しないかディレクトリではありません — ${root}`)
+  process.exit(1)
+}
+if (!existsSync(readmePath)) {
+  console.error(`check-links: README.md が無く、孤立検出の根が無いため検査を実行できません — ${readmePath}`)
+  process.exit(1)
+}
 
 // 自リポジトリを指す絶対 URL のプレフィックス (②)。他リポジトリ・releases・issues は還元しない
 const BLOB_PREFIX = 'https://github.com/max-enterme/shoutlink/blob/main/'
@@ -57,6 +69,29 @@ function reduceAbsoluteUrl(url) {
   return null
 }
 
+/**
+ * `absPath` (root 配下であることが前提) が、大小文字を区別してディスク上に実在するかを見る。
+ * `existsSync` は Windows では大小文字を区別しないため、`docs/CaseTest.md` のようなリンクが
+ * 実体 `docs/casetest.md` に対して Linux (CI) では違反、Windows (ローカル) では通過という
+ * 食い違いを生む。親ディレクトリを readdirSync してエントリ名の完全一致を見ることで揃える。
+ */
+function existsCaseSensitive(absPath) {
+  const rel = path.relative(root, absPath)
+  const segments = rel.split(path.sep).filter(Boolean)
+  let current = root
+  for (const seg of segments) {
+    let entries
+    try {
+      entries = readdirSync(current)
+    } catch {
+      return false
+    }
+    if (!entries.includes(seg)) return false
+    current = path.join(current, seg)
+  }
+  return true
+}
+
 function splitAnchor(p) {
   const idx = p.indexOf('#')
   if (idx === -1) return { pathPart: p, anchor: null }
@@ -85,9 +120,18 @@ function slugify(text) {
 }
 
 // コードフェンスの開始・終了行を見分ける。
-// 素の ``` / インデントされた ``` に加え、`4. ```bash` のように
-// リスト項目の先頭に直接フェンスが続く形 (docs/setup-and-verify.md に実例あり) も拾う。
-const FENCE_RE = /^\s*(?:[-*+]\s+|\d+[.)]\s+)?```/
+// 開始行は「フェンスだけの行」に限定する: 省略可能なリストマーカー (`4. ```bash` のように
+// リスト項目の先頭に直接フェンスが続く形。docs/setup-and-verify.md に実例あり) + ``` + 言語名など。
+// 同じ行に 2 個目の ``` が出てはいけない — でないと `` `npm run build` `` のようなインライン
+// コードをフェンス開始と誤爆し、以降のリンクを黙って見逃す (レビュー指摘 A1)。
+// 終了行は ``` + 空白のみの単独行に限定する。
+const FENCE_OPEN_RE = /^\s*(?:[-*+]\s+|\d+[.)]\s+)?```[^`]*$/
+const FENCE_CLOSE_RE = /^\s*```\s*$/
+
+/** フェンス状態 (inFence) に応じて、この行がフェンスの開始/終了かを判定する */
+function isFenceLine(line, inFence) {
+  return inFence ? FENCE_CLOSE_RE.test(line) : FENCE_OPEN_RE.test(line)
+}
 
 const headingSlugCache = new Map()
 
@@ -98,7 +142,7 @@ function headingSlugsOf(mdAbsPath) {
   if (existsSync(mdAbsPath)) {
     let inFence = false
     for (const line of readFileSync(mdAbsPath, 'utf8').split('\n')) {
-      if (FENCE_RE.test(line)) {
+      if (isFenceLine(line, inFence)) {
         inFence = !inFence
         continue
       }
@@ -160,7 +204,7 @@ function checkLink(rawUrl, ctx) {
     return
   }
 
-  if (!existsSync(absPath)) {
+  if (!existsCaseSensitive(absPath)) {
     violations.push(`[実在確認] ${where}: リンク先が無い — ${rawUrl} → ${path.relative(root, absPath)}`)
     return
   }
@@ -181,7 +225,7 @@ function extractMdLinks(absPath) {
   readFileSync(absPath, 'utf8')
     .split('\n')
     .forEach((line, i) => {
-      if (FENCE_RE.test(line)) {
+      if (isFenceLine(line, inFence)) {
         inFence = !inFence
         return
       }
@@ -236,7 +280,7 @@ function listDocsMdRecursive(dir) {
 
 const docsMdFiles = listDocsMdRecursive(docsDir)
 
-if (existsSync(readmePath)) checkMdFile(readmePath)
+checkMdFile(readmePath) // 存在は冒頭で検証済み
 for (const f of docsMdFiles) checkMdFile(f)
 checkIndexHtml()
 
