@@ -4,7 +4,8 @@ import { describe, expect, it } from 'vitest'
  * 006 / AC17: `cooldownSec` / `dedupe` / 「クールダウン」の残存を機械で見る。
  *
  * `node:fs` を使わず、Vite の `import.meta.glob` (raw) でソースを読む
- * (このリポジトリに `@types/node` が入っておらず、依存を増やさないため)。
+ * (Vitest はブラウザ相当の環境で動くため、テストのソース読み込みは Vite のビルド機構に
+ * 寄せておくほうが自然。`@types/node` 自体は 005-docs-link-hygiene で導入済み)。
  */
 const srcFiles = (import.meta as any).glob('../src/**/*.ts', { eager: true, query: '?raw', import: 'default' }) as Record<
   string,
