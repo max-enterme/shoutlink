@@ -168,7 +168,8 @@ function entryKey(streamId: string, kind: PostKind, url: string): string {
  * 古い記録・多すぎる記録を捨てる。
  *
  * ⚠️ **件数の上限は種別ごとに数える** (plan.md R4)。まとめて 200 件にすると、
- *    コメント返し(1 配信 20 件まで出る)が**古いリダイレクト返礼の記録を押し出し**、
+ *    コメント返し(**2026-09-05 に件数の上限を撤廃したので、辞書でフラグを付けた人数ぶん出うる**)が
+ *    **古いリダイレクト返礼の記録を押し出し**、
  *    001 の「リロードで再投稿しない」が戻る。枠を分ければ、コメント側がいくら増えても
  *    リダイレクト側の記録は残る。
  */
@@ -277,25 +278,6 @@ export function findCommentReplyBlocker(
   params: { streamId: string; url: string; now: number },
 ): PostRecord | undefined {
   return findReplyBlocker(log, { ...params, blockedBy: ['redirect', 'comment'] })
-}
-
-/**
- * この配信で既に出したコメント返しの件数 (AC11 の 20 件上限の分母)。
- *
- * ⚠️ **メモリのカウンタで数えない。**開き直しのたびに枠がリセットされ、上限が事実上効かなくなる
- *    (2026-08-06 ④ で一度踏んだ形)。
- *
- * ⚠️ **配信 ID が取れないときは「直近 6 時間のコメント返し」を数える。**`0` を返すと
- *    `countPosted() >= 上限` が永久に成立せず、**20 件の上限が丸ごと無効になる。**
- *    そのとき残る歯止めは「1 人 6 時間 1 回」だけなので、ON にした人が 21 人以上
- *    コメントすれば上限を超えて投稿する。AC7 が同じ穴(配信 ID が無い)に対して
- *    6 時間の下限を当てているので、**同じ形に揃える**(判定材料が無いときは長い方に倒す)。
- */
-export function countCommentPostsInStream(log: PostLog, streamId: string, now: number): number {
-  const comments = log.filter((entry) => entry.kind === 'comment')
-  if (streamId) return comments.filter((entry) => entry.streamId === streamId).length
-  const floorMs = UNKNOWN_STREAM_WINDOW_SEC * 1000
-  return comments.filter((entry) => now - entry.postedAt < floorMs).length
 }
 
 /** 壊れた保存内容で拡張ごと死なせない (AC6) */

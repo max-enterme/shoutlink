@@ -14,7 +14,7 @@
 import { decideCommentReply } from './comment-reply'
 import type { CommentAuthor } from './comment-detector'
 import type { Directory } from './directory'
-import { makePostRecordFor, rememberPost, countCommentPostsInStream } from './post-log'
+import { makePostRecordFor, rememberPost } from './post-log'
 import type { PostLog } from './post-log'
 import { createPostQueue } from './post-queue'
 import type { PostQueue, SkipReason } from './post-queue'
@@ -52,8 +52,14 @@ export type CommentRunner = {
   idle(): Promise<void>
 }
 
-/** 覚えておく本文の件数。1 配信 20 件(AC11)+ リダイレクト返礼ぶんで足りる */
-export const OWN_TEXT_MEMORY = 50
+/**
+ * 覚えておく本文の件数(自己ループの抑止に使う)。
+ *
+ * ⚠️ **2026-09-05 に 50 → 200 へ上げた。**もとは「1 配信 20 件(AC11)+ リダイレクト返礼ぶん」で
+ *    足りるという見積もりだったが、**その 20 件の上限を撤廃した**ので、1 配信に出る件数は
+ *    **辞書で「コメントに反応する」を付けた人数**まで伸びる。溢れると古い本文から忘れる。
+ */
+export const OWN_TEXT_MEMORY = 200
 
 export function createCommentRunner(deps: CommentRunnerDeps): CommentRunner {
   const now = deps.now ?? (() => Date.now())
@@ -128,8 +134,6 @@ export function createCommentRunner(deps: CommentRunnerDeps): CommentRunner {
   const queue: PostQueue<{ author: CommentAuthor; messageText: string }> = createPostQueue({
     now,
     wait: deps.wait,
-    // **上限の分母は投稿履歴から数える** (AC11)。メモリのカウンタにすると開き直しで枠が戻る
-    countPosted: () => countCommentPostsInStream(deps.getPostLog(), deps.streamId, now()),
     post: runOne,
     onSkip: (item, reason: SkipReason, error) => {
       if (reason === 'failed') log('コメント返しで例外:', error)
