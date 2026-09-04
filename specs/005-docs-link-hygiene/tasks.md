@@ -8,7 +8,7 @@ feature: docs-link-hygiene
 > `- [ ]` 未完 / `- [x]` 完了。
 > **人手が要るタスクは無い**(SPEC-OPS §08 に該当するものが無い)。
 
-- [ ] T1: **`scripts/check-links.mjs` を作る**(AC1 / AC2 / AC5)。  <!-- #71 -->
+- [x] T1: **`scripts/check-links.mjs` を作る**(AC1 / AC2 / AC5)。  <!-- #71 -->
       **第 1 引数で走査ルートを受ける**(既定は repo ルート)。テストが一時フィクスチャを
       指せるようにするため。**Node 標準のみ**(新規依存なし)。検査は 4 種。
 
@@ -28,7 +28,7 @@ feature: docs-link-hygiene
       ④ **孤立検出** — `docs/**/*.md` で **`README.md` から参照されていないもの**。
       被参照元は README のみ(index.html は含めない / spec.md AC3)
 
-- [ ] T2: **既にある違反を解消する**(AC3)。  <!-- #72 -->
+- [x] T2: **既にある違反を解消する**(AC3)。  <!-- #72 -->
       **AC3 に効くのは `stability-research.md` の 1 本だけ** — `install.md` と
       `004-t1-collect.md` は**既に README の地の文から張られており AC3 は満たしている**。
       一覧表に 3 本とも足すのは体裁を揃えるためで、**AC が要求しているのは孤立の解消のみ**。
@@ -52,7 +52,7 @@ feature: docs-link-hygiene
         `import … from '../public/manifest.json'`(`resolveJsonModule`)であって
         fs での直読みではない**ので、前例としてそのまま真似ない
 
-- [ ] T4: **`package.json` と `ci.yml` に登録する**(AC4)。  <!-- #74 -->
+- [x] T4: **`package.json` と `ci.yml` に登録する**(AC4)。  <!-- #74 -->
       `"check-links": "node scripts/check-links.mjs"` を足し、
       `.github/workflows/ci.yml` に**独立したステップ**として 1 行加える。
       **`package.json` の `test` script は `vitest run` のまま触らない** —
