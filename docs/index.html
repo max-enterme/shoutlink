@@ -347,11 +347,11 @@
           ライブリダイレクトを受け取ったとき、登録した人がコメントしたとき。<br />その人のチャンネル URL をチャットに投稿する Chrome 拡張。
         </p>
         <div class="cta">
-          <a class="btn btn-primary" href="https://github.com/max-enterme/shoutlink/releases/latest"
-            >最新版をダウンロード</a
+          <a class="btn btn-primary" href="https://chromewebstore.google.com/detail/kpjfmcppkncdmehdpgcochaanbmodaim"
+            >Chrome ウェブストアから入れる</a
           >
           <a class="btn btn-ghost" href="https://github.com/max-enterme/shoutlink">GitHub</a>
-          <small>いま Chrome ウェブストアには出ていません (限定公開で出す準備中)。読んでほしいことは下に書きます。</small>
+          <small>ストアの「限定公開」で出しています (検索・一覧には出ません)。読んでほしいことは下に書きます。</small>
         </div>
       </div>
     </header>
@@ -439,21 +439,21 @@
 
       <h2 id="install">入れかた</h2>
       <p>
-        <b>未署名の拡張です。</b>デベロッパーモードでの読み込みになり、<b>自動更新もされません</b>
-        (新しい版への入れ替え方は<a href="https://github.com/max-enterme/shoutlink/blob/main/docs/install.md#新しい版に入れ替える">導入手順</a>
-        / 設定は引き継がれます)。
+        <b>Chrome ウェブストアの「限定公開」から入れます。</b>署名されているので、<b>起動のたびの警告は出ず、新しい版は自動で届きます</b>。限定公開なので<b>ストアの検索・カテゴリ一覧には出ません</b> — 入口はこのページと GitHub のリンクだけです。
       </p>
       <ol class="steps">
         <li>
-          <a href="https://github.com/max-enterme/shoutlink/releases/latest">Releases</a> から
-          <code>shoutlink-&lt;version&gt;.zip</code> をダウンロードする
+          <a href="https://chromewebstore.google.com/detail/kpjfmcppkncdmehdpgcochaanbmodaim">ストアのページ</a>を開く
         </li>
-        <li>展開して、<b>消さない場所に置く</b> (Chrome はこのフォルダを読み続けます)</li>
-        <li>Chrome で <code>chrome://extensions</code> を開き、右上の<b>「デベロッパー モード」</b>を ON</li>
-        <li><b>「パッケージ化されていない拡張機能を読み込む」</b>→ 展開したフォルダを選ぶ</li>
+        <li><b>「Chrome に追加」</b>を押す</li>
+        <li>許可の確認を読んで<b>「拡張機能を追加」</b></li>
       </ol>
       <p>
-        読み込むと、拡張のカードに <code>studio.youtube.com</code> と <code>www.youtube.com</code> の許可が表示されます。<b>拡張が読み込まれて動くのは <code>studio.youtube.com</code> のライブ管制室のチャットだけ</b>で、<code>www.youtube.com</code> のほうは<b>設定画面がチャンネル ID を控えに行く</b>ためだけの許可です (下の「データの扱い」)。過去に起こした「<code>www.youtube.com</code> でも拡張が動いていた」不具合とは別物です。
+        ⚠️ <b>デベロッパーモードで前の版を入れている人は、先にそれを削除してください。</b>
+        <b>設定・呼び名の辞書・投稿履歴は引き継がれません。</b>書き出してから入れ替える手順は<a href="https://github.com/max-enterme/shoutlink/blob/main/docs/install.md#デベロッパーモード版から入れ替える">導入手順</a>にあります。消さずに並べると、<b>2 つとも動いて同じ相手へ 2 回投稿することがあります。</b>
+      </p>
+      <p>
+        入れると、拡張のカードに <code>studio.youtube.com</code> と <code>www.youtube.com</code> の許可が表示されます。<b>拡張が読み込まれて動くのは <code>studio.youtube.com</code> のライブ管制室のチャットだけ</b>で、<code>www.youtube.com</code> のほうは<b>設定画面がチャンネル ID を控えに行く</b>ためだけの許可です (下の「データの扱い」)。過去に起こした「<code>www.youtube.com</code> でも拡張が動いていた」不具合とは別物です。
       </p>
       <p>
         <b>YouTube の画面構造が変われば、ある日突然動かなくなります</b> (DOM に依存しているため)。直すまで反応しなくなるだけで、誤って投稿する形では壊れません。
@@ -565,10 +565,10 @@
         そしてストアに出すというのは、自分がリスクを取ることではなく、<b>事情を知らない人にリスクを負わせること</b>でもあります。失われるのは開発者のアカウントではなく、入れた人のチャンネルです。
       </p>
       <p>
-        なので、出す先は<b>ストアの「限定公開」</b>にします (2026-08-23 に決めました。<b>まだ出ていません</b>)。限定公開はストアの検索・一覧に出ないので、<b>たどり着けるのはこのページと GitHub のリンクからだけ</b>です。知らない人が検索でふらっと入れてしまう形にはなりません。
+        なので、出す先は<b>ストアの「限定公開」</b>にしました (2026-08-23 に決め、<b>2026-08-29 に掲載されました</b>)。限定公開はストアの検索・一覧に出ないので、<b>たどり着けるのはこのページと GitHub のリンクからだけ</b>です。知らない人が検索でふらっと入れてしまう形にはなりません。
       </p>
       <p>
-        切り替えるのは、<b>署名されて自動更新が効くようになる</b>ためです。いまの未署名 ZIP は自動更新されないので、<b>取り違えのような不具合を直しても、古い版を使い続ける人には届きません</b>。そこが直ります。
+        切り替えたのは、<b>署名されて自動更新が効くようになる</b>ためです。未署名 ZIP は自動更新されないので、<b>取り違えのような不具合を直しても、古い版を使い続ける人には届きませんでした</b>。そこが直っています。
       </p>
       <p>
         <b>グレーな点は今までどおり全部ここに書きます。</b>読んで自分で判断できる人だけが使えばいい、という形は変えません。
