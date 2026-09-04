@@ -35,7 +35,7 @@ feature: docs-link-hygiene
       **一覧表への追記以外で地の文を触らない**
       → **T1 と同じ PR に入れる**(plan.md アプローチ。分けると `test` と CI が赤で残る)
 
-- [ ] T3: **回帰テストを置く**(AC2 / AC4)。`tests/check-links.test.ts` を新規に作る。  <!-- #73 -->
+- [x] T3: **回帰テストを置く**(AC2 / AC4)。`tests/check-links.test.ts` を新規に作る。  <!-- #73 -->
       **冒頭に `/// <reference types="node" />` を書き、`@types/node` を devDependency に足す**
       (これが無いと `node:fs` / `node:child_process` が TS2307 で落ちる / spec.md D3)。
       **一時ディレクトリにフィクスチャを作り、子プロセスで
