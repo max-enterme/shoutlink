@@ -211,10 +211,12 @@ npm run package    # release/shoutlink-<version>.zip
 | [docs/privacy-policy.md](docs/privacy-policy.md) | データの扱いと、**どこへ何のために通信するか** |
 | [docs/security-review.md](docs/security-review.md) | セキュリティ点検。**`www.youtube.com` の許可が事故 1 と別物である理由は S10** |
 
-`v*` のタグを push すると GitHub Actions がビルドして Release に ZIP を添付します。
-**掲載後の配布はストアへ一本化する**と決めてあるので、新しい版を Release へ出すことは想定していません
-(過去の Release は消しません → [docs/d3-automation-policy.md](docs/d3-automation-policy.md) の「あわせて決めたこと」)。
-ストア提出用の ZIP は `npm run package:store`。
+**新しい版はウェブストアへ出します。GitHub Releases へは出しません**
+(過去の Release は消しません)。**`v*` タグを push しても Release は作られません** —
+`release.yml` は手動起動だけにしてあります。
+ストア提出用の ZIP は `npm run package:store`、出しかたは
+[docs/setup-and-verify.md](docs/setup-and-verify.md#9-新しい版をストアへ出す) の「9. 新しい版をストアへ出す」。
+`npm run package` のほうは**手渡しでテストしてもらうとき**に使う ZIP です。
 
 ## ライセンス
 
