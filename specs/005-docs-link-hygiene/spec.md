@@ -123,9 +123,10 @@ README・他の md・index.html のいずれからも参照されていない。
       ① 一覧表という曖昧な範囲を機械的に切らずに済む
       ② `docs/index.html` は Pages の公開ページで、そこからの到達性は 006 の管掌
 - [ ] AC4: `package.json` の `scripts` に `check-links` があり、
-      `.github/workflows/ci.yml` がそれを回す。
-      **`ci.yml` の内容を固定する回帰テストを置く**(`tests/manifest.test.ts` が
-      `public/manifest.json` を直読みしている前例と同じ形)
+      **Jenkins の `max/shoutlink` パイプライン**がそれを回す
+      (`max-enterme/jenkins-pipelines` の `pipelines/shoutlink.Jenkinsfile` の `check-links` stage)。
+      **CI 側の内容を固定する回帰テストは置かない** — パイプライン定義が別リポジトリにあり、
+      このリポジトリのテストからは読めないため(2026-09-09、Actions `ci.yml` の削除にあわせて変更)
 - [ ] AC5: `scripts/check-links.mjs` が**走査ルートを引数で受ける**。
       テストが一時フィクスチャを指せること(AC2 の前提)
 

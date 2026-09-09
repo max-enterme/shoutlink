@@ -1,13 +1,13 @@
 /// <reference types="node" />
 import { spawnSync } from 'node:child_process'
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterEach, describe, expect, it } from 'vitest'
 
 /**
- * `scripts/check-links.mjs` の回帰テスト (005-docs-link-hygiene AC2 / AC4)。
+ * `scripts/check-links.mjs` の回帰テスト (005-docs-link-hygiene AC2)。
  *
  * `.mjs` を import すると TS7016 で typecheck が落ちるため import しない
  * (spec.md D3 / plan.md)。代わりに**子プロセスで起動して exit code と出力を見る**。
@@ -179,18 +179,5 @@ describe('check-links.mjs — docs/index.html (B3)', () => {
     const { status } = runCheckLinks(root)
 
     expect(status).toBe(0)
-  })
-})
-
-describe('check-links.mjs — ci.yml への登録 (AC4)', () => {
-  it('.github/workflows/ci.yml が check-links を回している', () => {
-    // ci.yml は YAML なので tests/manifest.test.ts (resolveJsonModule での import) は真似ず、
-    // readFileSync で読んで文字列一致を見る。
-    // `toContain('check-links')` は `# - run: npm run check-links` のコメントアウトや
-    // `- run: npm run check-links || true` でも緑になってしまうため、行そのものを固定する。
-    const ciYmlPath = path.resolve(fileURLToPath(import.meta.url), '../../.github/workflows/ci.yml')
-    const content = readFileSync(ciYmlPath, 'utf8')
-
-    expect(content).toMatch(/^\s*- run: npm run check-links\s*$/m)
   })
 })
