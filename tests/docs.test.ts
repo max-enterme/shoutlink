@@ -164,4 +164,10 @@ describe('007: 辞書の左右分割 / 20 件上限の取りこぼし', () => {
     expect(toolbar?.[0]).toMatch(/flex-direction:\s*column/)
     expect(dirNew?.[0]).toMatch(/flex-direction:\s*column/)
   })
+
+  it('基本設定のスイッチは全体スイッチの文言になっている', () => {
+    const html = publicFiles['../public/options.html']
+    expect(html).not.toContain('リダイレクトを自動検知して投稿する')
+    expect(html).not.toContain('コメントに反応して投稿する')
+  })
 })
