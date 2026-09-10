@@ -118,6 +118,9 @@
       .dir-row .mark { flex-shrink: 0; color: #b3261e; cursor: help; margin-left: 4px; }
       /* 効かない行は背景色でも分かるようにする (004 T14: アイコン + 行の背景色の両方) */
       .dir-row.ineffective { background: #fff6f6; }
+      /* 選択中の色は「効かない行」の色より優先する — ⚠ の行こそ人が選んで直しに行くので、
+         選択が見えないと直せない。同じ詳細度だと後勝ちで ineffective が勝ってしまう */
+      .dir-row.ineffective.selected { background: #e6f0ff; }
 
       /* --- 右の詳細 (AC9) --- */
       .dir-detail-reason { color: #b3261e; font-size: 13px; margin: 0 0 8px; }
