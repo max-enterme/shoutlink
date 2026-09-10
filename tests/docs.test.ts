@@ -124,8 +124,8 @@ describe('007: 辞書の左右分割 / 20 件上限の取りこぼし', () => {
       if (!['README.md', 'docs/privacy-policy.md'].includes(key(path))) continue
       visited += 1
       expect(content, `${key(path)} に yt3.googleusercontent.com が無い`).toContain('yt3.googleusercontent.com')
-      expect(content, `${key(path)} に「アイコンと表記名をまとめて取得」が無い`).toContain(
-        'アイコンと表記名をまとめて取得',
+      expect(content, `${key(path)} に「アイコンと表記名を取得」が無い`).toContain(
+        'アイコンと表記名を取得',
       )
     }
     expect(visited).toBe(2)
@@ -169,5 +169,8 @@ describe('007: 辞書の左右分割 / 20 件上限の取りこぼし', () => {
     const html = publicFiles['../public/options.html']
     expect(html).not.toContain('リダイレクトを自動検知して投稿する')
     expect(html).not.toContain('コメントに反応して投稿する')
+    // ⚠ 否定形だけだとラベルを消しても緑になる。新ラベルが実在することも見る
+    expect(html).toContain('リダイレクト返礼を使う')
+    expect(html).toContain('コメント返しを使う')
   })
 })
