@@ -3,7 +3,9 @@ import { MAX_ENTRY_MESSAGE_LENGTH } from '../src/composer'
 import {
   findEntryByChannelId,
   displayHandle,
+  initialForAvatar,
   loadDirectory,
+  MAX_ICON_DATA_URL_LENGTH,
   migrateDirectoryToLocal,
   normalizeDirectory,
   rememberSource,
@@ -15,6 +17,7 @@ import {
   saveDirectory,
   setReplyToComment,
   sortForDisplay,
+  upsertChannelIcon,
   upsertChannelId,
   upsertCommentMessage,
   upsertMessage,
@@ -37,6 +40,7 @@ function entry(patch: Partial<DirectoryEntry> & { url: string }): DirectoryEntry
     commentMessage: '',
     channelId: '',
     lastSeenAt: 0,
+    iconDataUrl: '',
     ...patch,
   }
 }
@@ -658,5 +662,43 @@ describe('findEntryByChannelId (AC4 / AC17)', () => {
 
   it('該当が無ければ undefined', () => {
     expect(findEntryByChannelId([], CHANNEL_ID)).toBeUndefined()
+  })
+})
+
+// --- 007: iconDataUrl(チャンネルアイコン / AC14 / AC18) -----------------------
+
+describe('iconDataUrl の正規化 (AC14)', () => {
+  it('壊れた iconDataUrl は空になる', () => {
+    const [row] = normalizeDirectory([{ url: FAKE_CHANNEL.url, iconDataUrl: 'http://x/a.png' }])
+    expect(row.iconDataUrl).toBe('')
+  })
+
+  it('大きすぎる iconDataUrl は空になる', () => {
+    const tooLong = 'data:image/jpeg;base64,' + 'A'.repeat(MAX_ICON_DATA_URL_LENGTH)
+    const [row] = normalizeDirectory([{ url: FAKE_CHANNEL.url, iconDataUrl: tooLong }])
+    expect(row.iconDataUrl).toBe('')
+  })
+})
+
+describe('upsertChannelIcon', () => {
+  it('upsertChannelIcon が書き込む', () => {
+    const directory: Directory = [entry({ url: FAKE_CHANNEL.url, nickname: 'れい' })]
+    const dataUrl = 'data:image/jpeg;base64,AAA'
+    const next = upsertChannelIcon(directory, FAKE_CHANNEL.url, dataUrl)
+    expect(next[0].iconDataUrl).toBe(dataUrl)
+  })
+})
+
+describe('initialForAvatar', () => {
+  it('頭文字は呼び名を優先する', () => {
+    expect(initialForAvatar({ nickname: 'まっくす', url: FAKE_CHANNEL.url })).toBe('ま')
+  })
+
+  it('呼び名が空ならハンドルの先頭', () => {
+    expect(initialForAvatar({ nickname: '', url: FAKE_CHANNEL.url })).toBe('e')
+  })
+
+  it('絵文字の呼び名を割らない', () => {
+    expect(initialForAvatar({ nickname: '🎉ぱーてぃ', url: FAKE_CHANNEL.url })).toBe('🎉')
   })
 })

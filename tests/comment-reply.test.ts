@@ -23,6 +23,7 @@ function entry(over: Partial<DirectoryEntry> = {}): DirectoryEntry {
     commentMessage: '',
     channelId: AUTHOR_ID,
     lastSeenAt: 0,
+    iconDataUrl: '',
     ...over,
   }
 }

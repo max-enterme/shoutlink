@@ -126,6 +126,52 @@ export function channelIdFromUrl(url: string): string | null {
   return match && CHANNEL_ID_PATTERN.test(match[1]) ? match[1] : null
 }
 
+/** アイコンを取りに行ってよいホスト。**og:image が指す先を無検査で fetch しない** —
+ *  壊れた / 手で編集された HTML が任意のホストを指しうる(`parseYouTubeUrl` と同じ考え方)。
+ *  **実測(2026-09-10)で確認できたのは `yt3.googleusercontent.com` の 1 つだけなので、
+ *  ここに推測でホストを足さない。** 別のホストが返るようになったら `ok: false` になって
+ *  アイコンが出なくなるだけで機能は壊れない(→ plan.md リスク / 降りる箇所) */
+const ICON_HOSTS = ['yt3.googleusercontent.com'] as const
+
+function isAllowedIconUrl(url: string): boolean {
+  let parsed: URL
+  try {
+    parsed = new URL(url)
+  } catch {
+    return false
+  }
+  return (
+    parsed.protocol === 'https:' &&
+    (ICON_HOSTS as readonly string[]).includes(parsed.hostname)
+  )
+}
+
+export type IconExtractResult = { ok: true; url: string } | { ok: false; reason: string }
+
+/**
+ * チャンネルページの HTML から `og:image` の URL を取り出す純関数。
+ * **`extractChannelId` の「複数の出所を突き合わせて食い違ったら失敗」はやらない** —
+ * 誤ったアイコンが出ても「違う画像が出る」だけで、誤った `UC…` のような実害が無い。
+ * ホストが `ICON_HOSTS` に無ければ `ok: false`。
+ */
+export function extractChannelIconUrl(html: string): IconExtractResult {
+  const match = html.match(/<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i)
+  if (!match) return { ok: false, reason: 'ページに og:image が見つからない' }
+  const url = match[1]
+  if (!isAllowedIconUrl(url)) return { ok: false, reason: '許可していないホストの画像' }
+  return { ok: true, url }
+}
+
+/**
+ * googleusercontent の URL のサイズ指定を差し替える純関数。
+ * `…=s900-c-k-c0x00ffffff-no-rj` → `…=s88-c-k-c0x00ffffff-no-rj`。
+ * **パターンに合わなければ元の URL をそのまま返す**(取得を諦めない。大きすぎれば
+ * `fetchIconAsDataUrl` の上限で弾かれる)。
+ */
+export function iconUrlAtSize(url: string, size: number): string {
+  return /=s\d+-/.test(url) ? url.replace(/=s\d+-/, `=s${size}-`) : url
+}
+
 export type ResolveOptions = {
   /** 差し替え可能にしてテストでネットワークに触らない */
   fetchImpl?: typeof fetch
@@ -186,4 +232,169 @@ export async function resolveChannelId(
   const extracted = extractChannelId(html)
   if (!extracted.ok) return { status: 'failed', reason: extracted.reason }
   return { status: 'resolved', channelId: extracted.channelId }
+}
+
+/** `fetchIconAsDataUrl` が上限を指定しなかったときの既定値。画像は実測 5,219 バイトなので、
+ *  十分な余裕を見て 1MB。og:image が指すはずの無い巨大なファイルを黙って取り切らないための歯止め */
+const DEFAULT_ICON_MAX_BYTES = 1024 * 1024
+
+function arrayBufferToBase64(buffer: ArrayBuffer): string {
+  const bytes = new Uint8Array(buffer)
+  let binary = ''
+  for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i])
+  return btoa(binary)
+}
+
+export type IconDataUrlResult = { ok: true; dataUrl: string } | { ok: false; reason: string }
+
+/**
+ * 画像 URL を取得して data URL にする。**例外を投げない**(`resolveChannelId` と同じ規約)。
+ * `Content-Length` か実バイト数が `maxBytes` を超えたら失敗として返す —
+ * **切り詰めて壊れた画像を保存しない**(`validateEntryMessage` と同じ思想)。
+ */
+export async function fetchIconAsDataUrl(
+  imageUrl: string,
+  options: ResolveOptions & { maxBytes?: number } = {},
+): Promise<IconDataUrlResult> {
+  const doFetch = options.fetchImpl ?? (typeof fetch === 'function' ? fetch : null)
+  if (!doFetch) return { ok: false, reason: 'fetch が使えない環境' }
+  const maxBytes = options.maxBytes ?? DEFAULT_ICON_MAX_BYTES
+
+  let response: Response
+  try {
+    response = await doFetch(imageUrl, {
+      credentials: 'omit',
+      redirect: 'follow',
+      signal: makeTimeoutSignal(options.timeoutMs ?? CHANNEL_PAGE_TIMEOUT_MS),
+    })
+  } catch (err) {
+    return { ok: false, reason: `取得に失敗した (${String(err)})` }
+  }
+  if (!response.ok) return { ok: false, reason: `取得に失敗した (HTTP ${response.status})` }
+
+  const contentLength = Number(response.headers?.get?.('content-length'))
+  if (Number.isFinite(contentLength) && contentLength > maxBytes) {
+    return { ok: false, reason: `画像が大きすぎる (${contentLength} バイト)` }
+  }
+
+  let buffer: ArrayBuffer
+  try {
+    buffer = await response.arrayBuffer()
+  } catch (err) {
+    return { ok: false, reason: `取得に失敗した (${String(err)})` }
+  }
+  if (buffer.byteLength > maxBytes) {
+    return { ok: false, reason: `画像が大きすぎる (${buffer.byteLength} バイト)` }
+  }
+
+  const contentType = response.headers?.get?.('content-type') ?? 'image/jpeg'
+  return { ok: true, dataUrl: `data:${contentType};base64,${arrayBufferToBase64(buffer)}` }
+}
+
+export type ChannelIconResult =
+  | { status: 'resolved'; dataUrl: string }
+  | { status: 'failed'; reason: string }
+
+function toChannelIdResult(extracted: ExtractResult): ChannelIdResult {
+  return extracted.ok
+    ? { status: 'resolved', channelId: extracted.channelId }
+    : { status: 'failed', reason: extracted.reason }
+}
+
+async function resolveIconFromHtml(
+  html: string,
+  options: ResolveOptions & { maxBytes?: number },
+): Promise<ChannelIconResult> {
+  const extracted = extractChannelIconUrl(html)
+  if (!extracted.ok) return { status: 'failed', reason: extracted.reason }
+  const sized = iconUrlAtSize(extracted.url, 88)
+  const result = await fetchIconAsDataUrl(sized, options)
+  return result.ok ? { status: 'resolved', dataUrl: result.dataUrl } : { status: 'failed', reason: result.reason }
+}
+
+/**
+ * **チャンネルページを 1 回だけ取って、要求されたものを両方返す。**
+ * 片方が失敗しても、もう片方は成功のまま返す(AC19)。
+ *
+ * HTML を取りに行くかどうかは plan.md「新規インターフェース」の擬似コードのとおり:
+ * `idFromUrl` は `want.channelId` のときだけ `channelIdFromUrl(url)` で決め、
+ * `(want.channelId && idFromUrl === null) || want.icon` が true のときだけ 1 回 fetch する。
+ * **`want.icon` が true なら、URL が `/channel/UC…` 形でも必ず fetch する**(アイコンは
+ * URL からは分からない / AC20)。
+ */
+export async function resolveChannelPage(
+  url: string,
+  want: { channelId: boolean; icon: boolean },
+  options: ResolveOptions & { maxBytes?: number } = {},
+): Promise<{ channelId: ChannelIdResult | null; icon: ChannelIconResult | null }> {
+  if (!parseYouTubeUrl(url)) {
+    const reason = 'YouTube のチャンネル URL ではない'
+    return {
+      channelId: want.channelId ? { status: 'failed', reason } : null,
+      icon: want.icon ? { status: 'failed', reason } : null,
+    }
+  }
+
+  const idFromUrl = want.channelId ? channelIdFromUrl(url) : null
+  const needsFetch = (want.channelId && idFromUrl === null) || want.icon
+  if (!needsFetch) {
+    return {
+      channelId: idFromUrl ? { status: 'already', channelId: idFromUrl } : null,
+      icon: null,
+    }
+  }
+
+  const doFetch = options.fetchImpl ?? (typeof fetch === 'function' ? fetch : null)
+  if (!doFetch) {
+    const reason = 'fetch が使えない環境'
+    return {
+      channelId: want.channelId
+        ? idFromUrl
+          ? { status: 'already', channelId: idFromUrl }
+          : { status: 'failed', reason }
+        : null,
+      icon: want.icon ? { status: 'failed', reason } : null,
+    }
+  }
+
+  let html: string
+  try {
+    const response = await doFetch(url, {
+      credentials: 'omit',
+      redirect: 'follow',
+      signal: makeTimeoutSignal(options.timeoutMs ?? CHANNEL_PAGE_TIMEOUT_MS),
+    })
+    if (!response.ok) {
+      const reason = `取得に失敗した (HTTP ${response.status})`
+      return {
+        channelId: want.channelId
+          ? idFromUrl
+            ? { status: 'already', channelId: idFromUrl }
+            : { status: 'failed', reason }
+          : null,
+        icon: want.icon ? { status: 'failed', reason } : null,
+      }
+    }
+    // resolveChannelId と同じく途中で切らない(上記コメント参照)
+    html = await response.text()
+  } catch (err) {
+    const reason = `取得に失敗した (${String(err)})`
+    return {
+      channelId: want.channelId
+        ? idFromUrl
+          ? { status: 'already', channelId: idFromUrl }
+          : { status: 'failed', reason }
+        : null,
+      icon: want.icon ? { status: 'failed', reason } : null,
+    }
+  }
+
+  const channelId = want.channelId
+    ? idFromUrl
+      ? ({ status: 'already', channelId: idFromUrl } as ChannelIdResult)
+      : toChannelIdResult(extractChannelId(html))
+    : null
+  const icon = want.icon ? await resolveIconFromHtml(html, options) : null
+
+  return { channelId, icon }
 }

@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest'
-import { channelIdFromUrl, extractChannelId, resolveChannelId } from '../src/channel-id'
+import {
+  channelIdFromUrl,
+  extractChannelId,
+  extractChannelIconUrl,
+  fetchIconAsDataUrl,
+  iconUrlAtSize,
+  resolveChannelId,
+  resolveChannelPage,
+} from '../src/channel-id'
 
 const ID = 'UCaaaaaaaaaaaaaaaaaaaaaa'
 const OTHER = 'UCbbbbbbbbbbbbbbbbbbbbbb'
@@ -9,6 +17,7 @@ const canonical = (id: string) =>
 const ogUrl = (id: string) =>
   `<meta property="og:url" content="https://www.youtube.com/channel/${id}">`
 const itemprop = (id: string) => `<meta itemprop="identifier" content="${id}">`
+const ogImage = (url: string) => `<meta property="og:image" content="${url}">`
 
 /** 実際のチャンネルページには**他人の `UC…` が大量に載っている**ことの再現 */
 const NOISE = `
@@ -224,5 +233,158 @@ describe('resolveChannelId (AC17)', () => {
   it('URL として壊れていても落ちない', async () => {
     const { impl } = fakeFetch('')
     expect((await resolveChannelId('not a url', { fetchImpl: impl })).status).toBe('failed')
+  })
+})
+
+// --- 007: アイコン (AC14 / AC19 / AC20) -------------------------------------
+
+const ICON_URL_900 = 'https://yt3.googleusercontent.com/x=s900-c-k-c0x00ffffff-no-rj'
+const ICON_URL_88 = 'https://yt3.googleusercontent.com/x=s88-c-k-c0x00ffffff-no-rj'
+
+describe('extractChannelIconUrl', () => {
+  it('og:image を取り出す', () => {
+    const html = `<html><head>${ogImage(ICON_URL_900)}</head></html>`
+    expect(extractChannelIconUrl(html)).toEqual({ ok: true, url: ICON_URL_900 })
+  })
+
+  it('og:image が無ければ失敗', () => {
+    expect(extractChannelIconUrl('<html><head></head></html>').ok).toBe(false)
+  })
+
+  it('知らないホストの og:image は採らない', () => {
+    const html = `<html><head>${ogImage('https://example.com/a.jpg')}</head></html>`
+    expect(extractChannelIconUrl(html).ok).toBe(false)
+  })
+})
+
+describe('iconUrlAtSize', () => {
+  it('サイズ指定を 88 に差し替える', () => {
+    expect(iconUrlAtSize(ICON_URL_900, 88)).toBe(ICON_URL_88)
+  })
+
+  it('サイズ指定が無い URL はそのまま', () => {
+    const url = 'https://yt3.googleusercontent.com/x'
+    expect(iconUrlAtSize(url, 88)).toBe(url)
+  })
+})
+
+/** 画像取得用の偽 fetch。**実際のネットワークには触らない** */
+function fakeImageFetch(bytes: number, init: { ok?: boolean; status?: number } = {}) {
+  const calls: string[] = []
+  const impl = (async (input: RequestInfo | URL) => {
+    calls.push(String(input))
+    return {
+      ok: init.ok ?? true,
+      status: init.status ?? 200,
+      headers: { get: () => null },
+      arrayBuffer: async () => new ArrayBuffer(bytes),
+    } as unknown as Response
+  }) as typeof fetch
+  return { impl, calls }
+}
+
+describe('fetchIconAsDataUrl', () => {
+  it('上限を超える画像は控えない', async () => {
+    const maxBytes = 100
+    const { impl } = fakeImageFetch(maxBytes + 1)
+    const result = await fetchIconAsDataUrl(ICON_URL_88, { fetchImpl: impl, maxBytes })
+    expect(result.ok).toBe(false)
+    expect(result.ok === false && result.reason).toBeTruthy()
+  })
+})
+
+/**
+ * `resolveChannelPage` 用の偽 fetch。チャンネルページ(`www.youtube.com`)と
+ * 画像(それ以外のホスト)を URL で振り分けて返す。`pageCalls` は
+ * `www.youtube.com` への呼び出しだけを数える。
+ */
+function fakePageAndIconFetch(html: string, imageBytes = 100) {
+  const pageCalls: string[] = []
+  const allCalls: string[] = []
+  const impl = (async (input: RequestInfo | URL) => {
+    const url = String(input)
+    allCalls.push(url)
+    if (url.includes('www.youtube.com')) {
+      pageCalls.push(url)
+      return { ok: true, status: 200, text: async () => html } as Response
+    }
+    return {
+      ok: true,
+      status: 200,
+      headers: { get: () => null },
+      arrayBuffer: async () => new ArrayBuffer(imageBytes),
+    } as unknown as Response
+  }) as typeof fetch
+  return { impl, pageCalls, allCalls }
+}
+
+describe('resolveChannelPage (AC19 / AC20)', () => {
+  it('ページの取得は 1 回だけ', async () => {
+    const html = `<html><head>${canonical(ID)}${ogImage(ICON_URL_900)}</head></html>`
+    const { impl, pageCalls } = fakePageAndIconFetch(html)
+    await resolveChannelPage('https://www.youtube.com/@example', { channelId: true, icon: true }, {
+      fetchImpl: impl,
+    })
+    expect(pageCalls).toHaveLength(1)
+  })
+
+  it('アイコンだけ要求しても取りに行く', async () => {
+    const html = `<html><head>${canonical(ID)}${ogImage(ICON_URL_900)}</head></html>`
+    const { impl, pageCalls } = fakePageAndIconFetch(html)
+    const result = await resolveChannelPage(
+      'https://www.youtube.com/@example',
+      { channelId: false, icon: true },
+      { fetchImpl: impl },
+    )
+    expect(pageCalls).toHaveLength(1)
+    expect(result.channelId).toBeNull()
+    expect(result.icon?.status).toBe('resolved')
+  })
+
+  it('/channel/UC… でもアイコンが要るなら取りに行く', async () => {
+    const html = `<html><head>${ogImage(ICON_URL_900)}</head></html>`
+    const { impl, pageCalls } = fakePageAndIconFetch(html)
+    const result = await resolveChannelPage(
+      `https://www.youtube.com/channel/${ID}`,
+      { channelId: false, icon: true },
+      { fetchImpl: impl },
+    )
+    expect(pageCalls).toHaveLength(1)
+    expect(result.icon?.status).toBe('resolved')
+  })
+
+  it('アイコンが失敗しても channelId は成功', async () => {
+    const html = `<html><head>${canonical(ID)}</head></html>`
+    const { impl } = fakePageAndIconFetch(html)
+    const result = await resolveChannelPage(
+      'https://www.youtube.com/@example',
+      { channelId: true, icon: true },
+      { fetchImpl: impl },
+    )
+    expect(result.channelId).toEqual({ status: 'resolved', channelId: ID })
+    expect(result.icon?.status).toBe('failed')
+  })
+
+  it('channelId が失敗してもアイコンは成功', async () => {
+    const html = `<html><head>${canonical(ID)}${ogUrl(OTHER)}${ogImage(ICON_URL_900)}</head></html>`
+    const { impl } = fakePageAndIconFetch(html)
+    const result = await resolveChannelPage(
+      'https://www.youtube.com/@example',
+      { channelId: true, icon: true },
+      { fetchImpl: impl },
+    )
+    expect(result.channelId?.status).toBe('failed')
+    expect(result.icon?.status).toBe('resolved')
+  })
+
+  it('/channel/UC… でアイコン不要なら取りに行かない', async () => {
+    const { impl, allCalls } = fakePageAndIconFetch('')
+    const result = await resolveChannelPage(
+      `https://www.youtube.com/channel/${ID}`,
+      { channelId: true, icon: false },
+      { fetchImpl: impl },
+    )
+    expect(allCalls).toHaveLength(0)
+    expect(result.channelId).toEqual({ status: 'already', channelId: ID })
   })
 })
