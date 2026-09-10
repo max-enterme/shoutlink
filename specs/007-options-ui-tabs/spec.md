@@ -32,7 +32,7 @@ status: レビュー
 ## スコープ
 
 - **含む**:
-  - `public/options.html` の骨格を 4 タブに組み替える。タブの外に警告バナーと保存バーを置く
+  - `public/options.html` の骨格を 4 タブに組み替える。タブの外に保存バーを置く(警告バナーは基本設定タブの中)
   - `src/options/options.ts` の辞書描画を、行の展開(`expandedRows`)から選択(`selectedKey`)へ作り替える
   - 左の一覧にアイコン画像 / 未取得の行のモノグラム(頭文字の丸) / 絞り込み欄 / 「アイコンをまとめて取得」を足す
   - `DirectoryEntry` にアイコンのフィールドを足し、`src/channel-id.ts` の既存 fetch で `og:image` も拾う
