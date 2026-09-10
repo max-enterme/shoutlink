@@ -331,7 +331,7 @@ export function stubChrome(options?: {
 | **履歴タブの中身** | **投稿履歴のみ**(独立したタブにする) |
 | 開発タブの中身 | **診断ログのみ** |
 | **辞書タブのスクロール** | **左の一覧と右の詳細がそれぞれ独立してスクロールする**(モックの確定 2026-09-09 の備考)。両方に `overflow-y: auto` と高さの上限を付け、ページ全体は縦に伸ばさない |
-| タブの外(常時表示) | studio 限定の警告バナー(上) / 保存バー(下・sticky) |
+| タブの外(常時表示) | **保存バー(下・sticky)だけ。** studio 限定の警告バナーは **基本設定タブの中**(2026-09-10 に AC4 を変更。全タブに常駐すると、一番使う辞書タブの左右ペインの背をそのぶん削るため) |
 | 保存の単位 | Config 7 項目をまとめて 1 回(現行のまま)。タブをまたいだ変更も 1 回で保存される |
 | 辞書の左右比 | 左 280px 固定 / 右は残り。全体の最大幅 1000px・中央寄せ |
 | 左ペインの並び | 絞り込み欄 → 「アイコンをまとめて取得」→ 一覧 → ＋ 追加欄 |
@@ -368,7 +368,7 @@ export function stubChrome(options?: {
 - **`#dirList` と `#dirDetail` の両方に `overflow-y: auto` の指定がある**(AC6b)。
   ⚠ これは**CSS の規則が存在することだけ**を見る検査で、実際にスクロールが分かれて見えるかは
   人手(spec.md 降りる箇所)。規則を誤って消したときに気付ける
-- 警告バナー(`#studioWarning`)と保存バーは、どのタブでも `hidden` にならない
+- 保存バーは、どのタブでも `hidden` にならない。**警告バナー(`#studioWarning`)は基本設定タブでだけ見える**(AC4)
 - **タブを切り替えても、入力中の未保存の値が消えない**(切り替えはパネルの `hidden` の
   付け外しだけで、DOM を作り直さない)
 - 開発タブで `#debug` を切り替え → 基本設定タブへ移動 → `#save` を押すと、
@@ -461,7 +461,8 @@ afterEach(() => {
 | `左右のペインに独立スクロールの指定がある (AC6b)` | `tests/docs.test.ts` | `import.meta.glob('../public/**/*.html', ?raw)` | `public/options.html` の `<style>` に `#dirList` と `#dirDetail` の両方を対象にした `overflow-y: auto` の規則がある |
 | `初期表示では基本設定タブだけが見える (AC1)` | `tests/options-dom.test.ts` | `options.html` を流し込んで `initOptions()` | `#panel-basic.hidden === false` / `#panel-directory` `#panel-history` `#panel-dev` がすべて `hidden === true` |
 | `タブを押すとそのタブだけが見える (AC2)` | `tests/options-dom.test.ts` | 「辞書」ボタンを `click()` | `#panel-directory` だけ `hidden === false` |
-| `警告バナーと保存バーはどのタブでも消えない (AC4)` | `tests/options-dom.test.ts` | 4 タブを順に `click()` | 毎回 `#studioWarning` と `.actions` が `hidden === false` |
+| `警告バナーは基本設定タブにだけ出る (AC4)` | `tests/options-dom.test.ts` | 4 タブを順に `click()` | 基本設定タブのときだけ `#studioWarning` の祖先に `[hidden]` が無い。他の 3 タブでは祖先が `[hidden]` になる |
+| `保存バーはどのタブでも消えない (AC5)` | `tests/options-dom.test.ts` | 4 タブを順に `click()` | 毎回 `.actions` が `hidden === false` |
 | `別タブで変えた診断ログも保存される (AC5)` | `tests/options-dom.test.ts` | 開発タブで `#debug` を `click()` → 基本設定タブへ → `#save` を `click()` | `chrome.storage.sync` に書かれた `debug` が `true` |
 | `左に全行が出て caret が無い (AC6)` | `tests/options-dom.test.ts` | 辞書 2 件(`FAKE_CHANNEL` / `FAKE_OTHER_CHANNEL`) | `#dirList` の行が 2 / `button.caret` が 0 件 |
 | `未選択なら右は案内文 (AC8)` | `tests/options-dom.test.ts` | 辞書 2 件、何も押さない | `#dirDetail` の `textContent` に `左の一覧から選んでください` |

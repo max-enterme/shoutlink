@@ -407,14 +407,23 @@ describe('タブ (AC1〜AC5)', () => {
     expect(panel('panel-dev').querySelector('#debug')).not.toBeNull()
   })
 
-  it('警告バナーと保存バーはどのタブでも消えない (AC4)', () => {
+  it('警告バナーは基本設定タブにだけ出る (AC4)', () => {
+    const studioWarning = document.querySelector('#studioWarning') as HTMLElement
     for (const tab of ['basic', 'directory', 'history', 'dev']) {
       tabButton(tab).click()
-      const studioWarning = document.querySelector('#studioWarning') as HTMLElement
+      // 直接の hidden だけでなく、祖先が hidden になっていないかも見る (F6)
+      if (tab === 'basic') {
+        expect(studioWarning.closest('[hidden]')).toBeNull()
+      } else {
+        expect(studioWarning.closest('[hidden]')).not.toBeNull()
+      }
+    }
+  })
+
+  it('保存バーはどのタブでも消えない (AC5)', () => {
+    for (const tab of ['basic', 'directory', 'history', 'dev']) {
+      tabButton(tab).click()
       const actions = document.querySelector('.actions') as HTMLElement
-      expect(studioWarning.hidden).toBe(false)
-      // 直接の hidden だけでなく、祖先が hidden になっていないことも見る (F6)
-      expect(studioWarning.closest('[hidden]')).toBeNull()
       expect(actions.hidden).toBe(false)
       expect(actions.closest('[hidden]')).toBeNull()
     }

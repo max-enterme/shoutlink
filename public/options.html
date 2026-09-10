@@ -72,8 +72,9 @@
       .dir-left { flex: 0 0 280px; display: flex; flex-direction: column; min-width: 0; }
       #dirDetail { flex: 1; }
       /* **一覧そのもの**と詳細だけが独立してスクロールする。絞り込み欄・＋ 追加欄は常に見える */
+      /* 200px は h1 + タブのボタン列 + sticky な保存バー + 余白。実測での詰めは人手(T12) */
       #dirList, #dirDetail {
-        max-height: calc(100vh - 260px);
+        max-height: calc(100vh - 200px);
         min-height: 240px;
         overflow-y: auto;
       }
@@ -150,6 +151,7 @@
       <button type="button" id="tab-dev" role="tab" data-tab="dev">開発</button>
     </nav>
 
+    <section class="panel" id="panel-basic" role="tabpanel" aria-labelledby="tab-basic">
     <p class="warn" id="studioWarning">
       この拡張は <strong><code>studio.youtube.com</code> のライブ管制室のチャットでしか動きません。</strong>
       <code>www.youtube.com</code> のライブチャットは他人の配信でも開けてしまい、自分の配信かどうかを
@@ -158,7 +160,6 @@
       「↩ 返礼」から手動で実行できます。
     </p>
 
-    <section class="panel" id="panel-basic" role="tabpanel" aria-labelledby="tab-basic">
     <fieldset>
       <legend>リダイレクト返礼</legend>
       <div class="row">
