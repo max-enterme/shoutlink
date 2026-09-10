@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { DEFAULT_CONFIG } from '../src/config'
+import { initialForAvatar } from '../src/directory'
 import type { Directory, DirectoryEntry } from '../src/directory'
 import { initOptions } from '../src/options/options'
 import type { OptionsHandle } from '../src/options/options'
@@ -378,5 +379,157 @@ describe('タブ (AC1〜AC5)', () => {
     await new Promise((resolve) => setTimeout(resolve, 0))
 
     expect((stub.sync['ytRedirectPin.config'] as { debug: boolean }).debug).toBe(true)
+  })
+})
+
+// --- 007 / B4: アイコン (AC14〜AC20) -------------------------------------------
+//
+// `resolveChannelPage` は `options.ts` から `fetchImpl` を渡さずに呼ばれる(通常運用と同じ)ので、
+// ここは `tests/channel-id.test.ts` の `fakePageAndIconFetch` と同じ形の偽物を**グローバルの
+// `fetch` に差し替える**ことで検証する。`afterEach` で必ず元に戻す。
+
+const ID = 'UCaaaaaaaaaaaaaaaaaaaaaa'
+const ICON_URL = 'https://yt3.googleusercontent.com/x=s900-c-k-c0x00ffffff-no-rj'
+const canonical = (id: string) =>
+  `<link rel="canonical" href="https://www.youtube.com/channel/${id}">`
+const ogImage = (url: string) => `<meta property="og:image" content="${url}">`
+
+/** 架空の 3 人目。実在する第三者の識別子は使わない */
+const THIRD_URL = 'https://www.youtube.com/@third-example-channel'
+
+/**
+ * `www.youtube.com` へのアクセスは `html` を返し、それ以外(画像)は `imageBytes` の
+ * バイト列を返す偽の `fetch`。`pageCalls` は `www.youtube.com` への呼び出しだけを数える。
+ */
+function stubFetch(html: string, imageBytes = 100): { pageCalls: string[]; allCalls: string[] } {
+  const pageCalls: string[] = []
+  const allCalls: string[] = []
+  const impl = (async (input: RequestInfo | URL) => {
+    const url = String(input)
+    allCalls.push(url)
+    if (url.includes('www.youtube.com')) {
+      pageCalls.push(url)
+      return { ok: true, status: 200, text: async () => html } as Response
+    }
+    return {
+      ok: true,
+      status: 200,
+      headers: { get: () => null },
+      arrayBuffer: async () => new ArrayBuffer(imageBytes),
+    } as unknown as Response
+  }) as typeof fetch
+  ;(globalThis as { fetch: typeof fetch }).fetch = impl
+  return { pageCalls, allCalls }
+}
+
+describe('アイコン (AC14〜AC20)', () => {
+  const originalFetch = globalThis.fetch
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch
+  })
+
+  it('アイコンがある行は img、無い行は頭文字 (AC18)', async () => {
+    await withDirectory([
+      entry({ url: FAKE_CHANNEL.url, iconDataUrl: 'data:image/jpeg;base64,AAA' }),
+      entry({ url: FAKE_OTHER_CHANNEL.url, iconDataUrl: '' }),
+    ])
+
+    const withIcon = rowByHandle(FAKE_CHANNEL.handle)
+    expect(withIcon.querySelector('img[src^="data:image/"]')).not.toBeNull()
+
+    const withoutIcon = rowByHandle(FAKE_OTHER_CHANNEL.handle)
+    const monogram = withoutIcon.querySelector('.monogram') as HTMLElement
+    expect(monogram).not.toBeNull()
+    expect(monogram.textContent).toBe(
+      initialForAvatar({ nickname: '', url: FAKE_OTHER_CHANNEL.url }),
+    )
+  })
+
+  it('辞書タブを開くだけでは取りに行かない (AC16)', async () => {
+    const { allCalls } = stubFetch('<html></html>')
+
+    await withDirectory([entry({ url: FAKE_CHANNEL.url }), entry({ url: FAKE_OTHER_CHANNEL.url })])
+    tabButton('directory').click()
+
+    expect(allCalls).toHaveLength(0)
+  })
+
+  it('まとめて取得は未取得の行だけ取る (AC15)', async () => {
+    const html = `<html><head>${canonical(ID)}${ogImage(ICON_URL)}</head></html>`
+    const { pageCalls } = stubFetch(html)
+
+    await withDirectory([
+      entry({ url: FAKE_CHANNEL.url, iconDataUrl: 'data:image/jpeg;base64,AAA' }),
+      entry({ url: FAKE_OTHER_CHANNEL.url }),
+      entry({ url: THIRD_URL }),
+    ])
+
+    const button = document.querySelector('#fetchAllIcons') as HTMLButtonElement
+    button.click()
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    expect(pageCalls).toHaveLength(2)
+    expect(pageCalls).not.toContain(FAKE_CHANNEL.url)
+  })
+
+  it('まとめて取得のボタンに件数が出る (AC15)', async () => {
+    await withDirectory([
+      entry({ url: FAKE_CHANNEL.url, iconDataUrl: 'data:image/jpeg;base64,AAA' }),
+      entry({ url: FAKE_OTHER_CHANNEL.url }),
+      entry({ url: THIRD_URL }),
+    ])
+
+    const button = document.querySelector('#fetchAllIcons') as HTMLButtonElement
+    expect(button.textContent).toContain('2 件')
+
+    await withDirectory([entry({ url: FAKE_CHANNEL.url, iconDataUrl: 'data:image/jpeg;base64,AAA' })])
+    const buttonAllDone = document.querySelector('#fetchAllIcons') as HTMLButtonElement
+    expect(buttonAllDone.hidden).toBe(true)
+  })
+
+  it('ON にするとアイコンも同時に控える (AC14)', async () => {
+    const html = `<html><head>${canonical(ID)}${ogImage(ICON_URL)}</head></html>`
+    const { pageCalls } = stubFetch(html)
+
+    await withDirectory([entry({ url: FAKE_CHANNEL.url })])
+
+    rowByHandle(FAKE_CHANNEL.handle).click()
+    const flag = dirDetail().querySelector('input[type="checkbox"]') as HTMLInputElement
+    flag.click()
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    expect(pageCalls).toHaveLength(1)
+    const saved = (stub.local['ytRedirectPin.directory'] as Directory).find(
+      (e) => e.url === FAKE_CHANNEL.url,
+    )!
+    expect(saved.channelId).toBe(ID)
+    expect(saved.iconDataUrl).toMatch(/^data:image\//)
+  })
+
+  it('控えたアイコンは次に開いても取りに行かない (AC17)', async () => {
+    const { allCalls } = stubFetch('<html></html>')
+
+    await withDirectory([
+      entry({ url: FAKE_CHANNEL.url, iconDataUrl: 'data:image/jpeg;base64,AAA' }),
+    ])
+
+    expect(allCalls).toHaveLength(0)
+    const row = rowByHandle(FAKE_CHANNEL.handle)
+    expect(row.querySelector('img[src^="data:image/"]')).not.toBeNull()
+  })
+
+  it('/channel/UC… 形の行もまとめて取得の対象 (AC20)', async () => {
+    const channelUrl = `https://www.youtube.com/channel/${ID}`
+    const html = `<html><head>${ogImage(ICON_URL)}</head></html>`
+    const { pageCalls } = stubFetch(html)
+
+    await withDirectory([entry({ url: channelUrl, iconDataUrl: '' })])
+
+    const button = document.querySelector('#fetchAllIcons') as HTMLButtonElement
+    button.click()
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    expect(pageCalls).toHaveLength(1)
   })
 })

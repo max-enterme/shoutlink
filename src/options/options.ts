@@ -1,7 +1,7 @@
 /**
  * 設定 UI (T7)。テンプレート編集 / ON・OFF / 固定モード / 辞書の行ごとのテスト送信。
  */
-import { resolveChannelId } from '../channel-id'
+import { resolveChannelPage } from '../channel-id'
 import { compose, composeText } from '../composer'
 import { DEFAULT_CONFIG, loadConfig, saveConfig } from '../config'
 import { normalizeChannelUrl } from '../detector'
@@ -10,11 +10,13 @@ import {
   directoryKey,
   displayHandle,
   findEntry,
+  initialForAvatar,
   loadDirectory,
   onDirectoryChanged,
   removeEntry,
   saveDirectory,
   sortForDisplay,
+  upsertChannelIcon,
   upsertChannelId,
   upsertCommentMessage,
   upsertMessage,
@@ -90,6 +92,8 @@ const retryChannelIds = el<HTMLButtonElement>('retryChannelIds')
 const dirList = el<HTMLElement>('dirList')
 const dirDetail = el<HTMLElement>('dirDetail')
 const dirFilterInput = el<HTMLInputElement>('dirFilter')
+const fetchAllIconsButton = el<HTMLButtonElement>('fetchAllIcons')
+const fetchAllIconsStatus = el<HTMLElement>('fetchAllIconsStatus')
 const directoryStatus = el<HTMLElement>('directoryStatus')
 const newHandle = el<HTMLInputElement>('newHandle')
 const newNickname = el<HTMLInputElement>('newNickname')
@@ -358,6 +362,12 @@ const channelIdErrors = new Map<string, string>()
 /** 「まとめて再試行」が走っているか。**重ねて押させない** */
 let bulkResolving = false
 
+/**
+ * 「アイコンをまとめて取得」が走っているか。**`bulkResolving` とは別のフラグ**
+ * (引き金も対象も別なので、片方が走っている間にもう片方を止める必要が無い / plan.md 確定値)
+ */
+let bulkIconFetching = false
+
 // --- テスト送信 (006 / T9) ---------------------------------------------------
 //
 // 展開した行にだけ出す 2 ボタン(確定値 A / C)。履歴を消費せず、`chrome.tabs.sendMessage` で
@@ -434,19 +444,28 @@ function renderChannelIdRetryAll(): void {
 }
 
 /**
- * 1 行ぶんの解決 (AC17)。**例外を投げない**(`resolveChannelId` が理由を返す形で握っている)。
+ * 1 行ぶんの解決 (AC17 / 007 AC14)。**例外を投げない**(`resolveChannelPage` が理由を返す形で握っている)。
  *
  * - **既に `channelId` がある行は取りに行かない** — 「一度解決した ID は自動で解決し直さない」。
  *   ON にしただけで取り直す形にすると、フラグを触るたびに通信が走る
  * - **同じ行を多重に走らせない** — ON / OFF を素早く往復されても 1 本だけ
- * - **待っている間に行が消えていたら書かない** — `upsertChannelId` は登録が無ければ**行を作る**ので、
- *   削除した行がここで復活する
+ * - **待っている間に行が消えていたら書かない** — `upsertChannelId` / `upsertChannelIcon` は
+ *   登録が無ければ**行を作る**ので、削除した行がここで復活する
+ * - **アイコンも同じチャンネルページの取得に畳む**(`resolveChannelPage` / plan.md「通信の約束を変えない」)。
+ *   `wantIcon` は呼び出し元の経路ごとに渡される(「まとめて再試行」は `false`、それ以外は `true`)。
+ *   すでに控えている行はここでも取り直さない(`entry.iconDataUrl === ''` のときだけ要求する)
+ * - **チャンネル ID とアイコンは独立に成否を扱う**(AC19)。片方が失敗してももう片方は保存する
  */
-async function resolveEntryChannelId(url: string): Promise<void> {
+async function resolveEntryChannelId(url: string, wantIcon: boolean): Promise<void> {
   const key = directoryKey(url)
   if (resolvingKeys.has(key)) return
   const before = findEntry(directory, url)
-  if (!before || !needsChannelIdResolution(before)) return
+  if (!before) return
+  const want = {
+    channelId: needsChannelIdResolution(before),
+    icon: wantIcon && before.iconDataUrl === '',
+  }
+  if (!want.channelId && !want.icon) return
 
   const handle = displayHandle(before)
   resolvingKeys.add(key)
@@ -461,18 +480,39 @@ async function resolveEntryChannelId(url: string): Promise<void> {
     // 前回の失敗は消してから走る(古い理由が「解決中」の行に残らないように)
     channelIdErrors.delete(key)
     renderDirectory()
-    setDirectoryStatus(`${handle} のチャンネル ID を取りに行っている…`)
+    setDirectoryStatus(`${handle} のチャンネル情報を取りに行っている…`)
 
-    const result = await resolveChannelId(url)
+    const result = await resolveChannelPage(url, want)
     // **待っている間に消えた / 別タブで変わった行には書かない**
     if (!findEntry(directory, url)) return
-    if (result.status === 'failed') {
-      channelIdErrors.set(key, result.reason)
-      setDirectoryStatus(`${handle}: チャンネル ID を取得できなかった (${result.reason})`)
-      return
+
+    let changed = false
+    const parts: string[] = []
+    if (result.channelId) {
+      if (result.channelId.status === 'failed') {
+        channelIdErrors.set(key, result.channelId.reason)
+        parts.push(`チャンネル ID を取得できなかった (${result.channelId.reason})`)
+      } else {
+        directory = upsertChannelId(directory, url, result.channelId.channelId)
+        changed = true
+        parts.push(`チャンネル ID を保存した (${result.channelId.channelId})`)
+      }
     }
-    directory = upsertChannelId(directory, url, result.channelId)
-    await persistDirectory(`${handle} のチャンネル ID を保存した (${result.channelId})`)
+    if (result.icon) {
+      if (result.icon.status === 'resolved') {
+        directory = upsertChannelIcon(directory, url, result.icon.dataUrl)
+        changed = true
+        parts.push('アイコンを保存した')
+      } else {
+        parts.push(`アイコンを取得できなかった (${result.icon.reason})`)
+      }
+    }
+
+    if (changed) {
+      await persistDirectory(`${handle}: ${parts.join(' / ')}`)
+    } else {
+      setDirectoryStatus(`${handle}: ${parts.join(' / ')}`)
+    }
   } finally {
     resolvingKeys.delete(key)
     // 「解決中…」の表示と、失敗の理由を反映する。**成否に関わらず必ず描き直す**
@@ -493,7 +533,9 @@ async function retryUnresolvedChannelIds(): Promise<void> {
   try {
     // 走っている間に `directory` は差し替わるので、対象は**先に確定させる**
     for (const entry of [...unresolvedChannelIdEntries(directory)]) {
-      await resolveEntryChannelId(entry.url)
+      // **アイコンは要求しない**(plan.md「通信の約束を変えない」の表)。
+      // 対象は「コメントに反応する」が ON で未解決の行だけで、アイコンの対象(全行)とは別
+      await resolveEntryChannelId(entry.url, false)
     }
   } finally {
     bulkResolving = false
@@ -507,6 +549,67 @@ async function retryUnresolvedChannelIds(): Promise<void> {
 
 retryChannelIds.addEventListener('click', () => {
   void retryUnresolvedChannelIds()
+})
+
+// --- アイコンのまとめて取得 (007 / AC15 / AC20) -------------------------------
+//
+// 対象は「まとめて再試行」と違い、**辞書の全行のうちアイコンを控えていないもの**(AC15)。
+// 通常数件の `unresolvedChannelIdEntries` と桁が違いうる(辞書 100 件なら 100 件)ので、
+// 押す前に**対象件数と通信量の目安**をボタン文言に出す(plan.md 確定値)。
+
+/** 1 件あたりの通信量の目安 (MB)。チャンネルページ実測 1.3〜1.9MB に画像ぶんを足した見積もり */
+const ICON_FETCH_MB_PER_ENTRY = 1.5
+
+/** アイコンを控えていない行(AC15 の対象。`/channel/UC…` 形も含む / AC20) */
+function iconFetchTargets(): Directory {
+  return directory.filter((entry) => entry.iconDataUrl === '')
+}
+
+/** 「アイコンをまとめて取得」ボタンと状態表示。**0 件なら隠す**(`retryChannelIds` と同じ流儀) */
+function renderFetchAllIcons(): void {
+  const count = iconFetchTargets().length
+  fetchAllIconsButton.hidden = count === 0
+  fetchAllIconsButton.disabled = bulkIconFetching
+  fetchAllIconsButton.textContent = bulkIconFetching
+    ? '取得中…'
+    : `アイコンをまとめて取得 (${count} 件 / 約${Math.round(count * ICON_FETCH_MB_PER_ENTRY)}MB)`
+}
+
+/**
+ * **1 件ずつ順に取りに行く**(既存の「まとめて再試行」と同じ / plan.md 確定値)。
+ * `bulkResolving` とは別のフラグで二度押しを止める(引き金も対象も別)。
+ */
+async function fetchAllIcons(): Promise<void> {
+  if (bulkIconFetching) return
+  const targets = [...iconFetchTargets()]
+  if (targets.length === 0) return
+
+  bulkIconFetching = true
+  renderFetchAllIcons()
+  let success = 0
+  try {
+    for (let i = 0; i < targets.length; i++) {
+      fetchAllIconsStatus.textContent = `取得中… (${i + 1}/${targets.length})`
+      // **チャンネル ID は要求しない**(plan.md の表: この経路は `{ channelId: false, icon: true }`)
+      const result = await resolveChannelPage(targets[i].url, { channelId: false, icon: true })
+      if (result.icon?.status === 'resolved') {
+        directory = upsertChannelIcon(directory, targets[i].url, result.icon.dataUrl)
+        success++
+      }
+    }
+    await saveDirectory(directory)
+    fetchAllIconsStatus.textContent =
+      success === targets.length
+        ? `${targets.length} 件取得しました`
+        : `${targets.length} 件中 ${success} 件取得しました(${targets.length - success} 件は失敗)`
+  } finally {
+    bulkIconFetching = false
+    renderDirectory()
+  }
+}
+
+fetchAllIconsButton.addEventListener('click', () => {
+  void fetchAllIcons()
 })
 
 /** 絞り込み(`dirFilter`)に呼び名かハンドルが当たるか。空文字は「絞らない」= 全件通す (AC11) */
@@ -602,8 +705,9 @@ function renderDirDetail(entry: DirectoryEntry | null, anyTestSendBusy = false):
         `${displayHandle(entry)} のコメント返しを${flag.checked ? 'ON' : 'OFF'}にした`,
       )
       // **ON にしたときが解決の引き金** (AC17)。既に解決済みの行は取りに行かない
-      // (判定は `resolveEntryChannelId` の中。3 経路で条件をずらさない)
-      if (flag.checked) await resolveEntryChannelId(entry.url)
+      // (判定は `resolveEntryChannelId` の中。3 経路で条件をずらさない)。
+      // **アイコンも同じ取得に畳む**(007 AC14。取得は 1 回のまま増やさない)
+      if (flag.checked) await resolveEntryChannelId(entry.url, true)
     })()
   })
   flagLabel.prepend(flag)
@@ -626,7 +730,7 @@ function renderDirDetail(entry: DirectoryEntry | null, anyTestSendBusy = false):
     retry.textContent = idStatus.retryLabel
     retry.title = 'この行のチャンネル URL を 1 回だけ見に行って、照合用の ID を控える'
     retry.addEventListener('click', () => {
-      void resolveEntryChannelId(entry.url)
+      void resolveEntryChannelId(entry.url, true)
     })
     idRow.appendChild(retry)
   }
@@ -853,6 +957,7 @@ function renderDirectory(): void {
     //    AC13 の常時表示と AC16 の警告が**古い内容のまま残る**(次の描画でも同じ経路を通るので
     //    自己回復しない)。常時表示は「いつ見ても正しい」ことが要件
     renderAlwaysOnNotices()
+    renderFetchAllIcons()
     // 行が 1 つも無いので戻す先も無い。**それでも呼ぶ**(出口ごとに約束が変わらないように)
     restoreFocusTarget(focusTarget)
     return
@@ -889,6 +994,20 @@ function renderDirectory(): void {
       selectedKey = key
       renderDirectory()
     })
+
+    // --- アイコン(丸)/ 未取得ならモノグラム (AC18) -----------------------------
+    if (entry.iconDataUrl) {
+      const avatar = document.createElement('img')
+      avatar.className = 'avatar'
+      avatar.src = entry.iconDataUrl
+      avatar.alt = ''
+      row.appendChild(avatar)
+    } else {
+      const monogram = document.createElement('span')
+      monogram.className = 'monogram'
+      monogram.textContent = initialForAvatar(entry)
+      row.appendChild(monogram)
+    }
 
     const main = document.createElement('div')
     main.className = 'dir-row-main'
@@ -940,6 +1059,7 @@ function renderDirectory(): void {
   renderDirDetail(selectedEntry, anyTestSendBusy)
 
   renderAlwaysOnNotices()
+  renderFetchAllIcons()
   // **作り直したあとに戻す。**打っている最中に `channelId` の解決が返っても打鍵を落とさない (T17)
   restoreFocusTarget(focusTarget)
 }

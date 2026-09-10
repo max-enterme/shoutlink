@@ -95,6 +95,22 @@
       }
       .dir-row:hover { background: #f4f4f4; }
       .dir-row.selected { background: #e6f0ff; }
+      /* --- 007 T9: アイコン(丸 32px)/ 未取得のモノグラム (AC18) --- */
+      .avatar, .monogram {
+        flex-shrink: 0;
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+      }
+      .avatar { object-fit: cover; }
+      .monogram {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: #dde3ea;
+        color: #556;
+        font-size: 14px;
+      }
       .dir-row-main { display: flex; flex-direction: column; min-width: 0; }
       .dir-row-nickname { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
       .dir-row-handle { color: #666; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
