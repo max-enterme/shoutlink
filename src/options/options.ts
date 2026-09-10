@@ -65,12 +65,16 @@ const SAMPLE_MESSAGE = 'いつも遊びに来てくれてありがとう!'
 /** コメント返しのプレビュー用。**リダイレクト返礼とは別の自由文**であることが見て分かる文にする */
 const SAMPLE_COMMENT_MESSAGE = '今日も来てくれてうれしい!'
 
+export type OptionsTab = 'basic' | 'directory' | 'history' | 'dev'
+export type OptionsHandle = { ready: Promise<void>; dispose: () => void }
+
 function el<T extends HTMLElement>(id: string): T {
   const found = document.getElementById(id)
   if (!found) throw new Error(`要素が見つからない: #${id}`)
   return found as T
 }
 
+export function initOptions(): OptionsHandle {
 const enabled = el<HTMLInputElement>('enabled')
 const template = el<HTMLTextAreaElement>('template')
 const pinMode = el<HTMLSelectElement>('pinMode')
@@ -903,15 +907,26 @@ for (const input of [newHandle, newNickname]) {
   })
 }
 
-void loadDirectory().then((loaded) => {
-  directory = loaded
-  renderDirectory()
-})
-
-onDirectoryChanged((next) => {
+const stopDirectoryChanged = onDirectoryChanged((next) => {
   directory = next
   renderDirectory()
 })
+
+const tabButtons = [...document.querySelectorAll<HTMLButtonElement>('#tabs [data-tab]')]
+const panels: Record<OptionsTab, HTMLElement> = {
+  basic: el<HTMLElement>('panel-basic'),
+  directory: el<HTMLElement>('panel-directory'),
+  history: el<HTMLElement>('panel-history'),
+  dev: el<HTMLElement>('panel-dev'),
+}
+let currentTab: OptionsTab = 'basic'
+const selectTab = (tab: OptionsTab): void => {
+  currentTab = tab
+  for (const [name, panel] of Object.entries(panels)) panel.hidden = name !== tab
+  for (const button of tabButtons) button.setAttribute('aria-selected', String(button.dataset.tab === tab))
+}
+for (const button of tabButtons) button.addEventListener('click', () => selectTab(button.dataset.tab as OptionsTab))
+selectTab(currentTab)
 
 // --- 投稿履歴 -------------------------------------------------------------
 // 再投稿を止めている根拠を人が見られるようにする。消せば同じ配信でももう一度投稿できる。
@@ -964,7 +979,6 @@ clearPostLogButton.addEventListener('click', () => {
   })()
 })
 
-void loadPostLog().then(renderPostLog)
 const preview = el<HTMLElement>('preview')
 const commentPreview = el<HTMLElement>('commentPreview')
 const status = el<HTMLElement>('status')
@@ -1028,4 +1042,14 @@ save.addEventListener('click', () => {
   })()
 })
 
-void loadConfig().then(apply)
+const ready = Promise.all([
+  loadDirectory().then((loaded) => {
+    directory = loaded
+    renderDirectory()
+  }),
+  loadPostLog().then(renderPostLog),
+  loadConfig().then(apply),
+]).then(() => undefined)
+
+return { ready, dispose: stopDirectoryChanged }
+}
