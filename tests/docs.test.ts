@@ -145,4 +145,17 @@ describe('007: 辞書の左右分割 / 20 件上限の取りこぼし', () => {
     expect(match, '.dir-row の規則が見つからない').not.toBeNull()
     expect(match?.[0]).not.toMatch(/justify-content:\s*space-between/)
   })
+
+  it('左ペインの入力欄は縦に積む', () => {
+    // ⚠ jsdom はレイアウトを計算しないので、実際に縦に積んで見えるかは検査できない。
+    //    `.dir-toolbar` と `.dir-new` の両方に `flex-direction: column` の指定があることだけを見る
+    //    (見た目の確認は人手 / T12)
+    const html = publicFiles['../public/options.html']
+    const toolbar = html.match(/\.dir-toolbar\s*\{[^}]*\}/)
+    const dirNew = html.match(/\.dir-new\s*\{[^}]*\}/)
+    expect(toolbar, '.dir-toolbar の規則が見つからない').not.toBeNull()
+    expect(dirNew, '.dir-new の規則が見つからない').not.toBeNull()
+    expect(toolbar?.[0]).toMatch(/flex-direction:\s*column/)
+    expect(dirNew?.[0]).toMatch(/flex-direction:\s*column/)
+  })
 })

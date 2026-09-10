@@ -68,10 +68,10 @@
 
       /* --- 007: 辞書の左右分割。左右それぞれ独立してスクロールする (AC6b) --- */
       .dir-split { display: flex; gap: 16px; align-items: flex-start; }
-      /* 左は 280px 固定 / 右は残り */
-      .dir-left { flex: 0 0 280px; display: flex; flex-direction: column; min-width: 0; }
+      /* 左は 320px 固定 / 右は残り */
+      .dir-left { flex: 0 0 320px; display: flex; flex-direction: column; min-width: 0; }
       #dirDetail { flex: 1; }
-      /* **一覧そのもの**と詳細だけが独立してスクロールする。絞り込み欄・＋ 追加欄は常に見える */
+      /* **一覧そのもの**と詳細だけが独立してスクロールする。絞り込み欄・登録欄は常に見える */
       /* 200px は h1 + タブのボタン列 + sticky な保存バー + 余白。実測での詰めは人手(T12) */
       #dirList, #dirDetail {
         max-height: calc(100vh - 200px);
@@ -80,9 +80,15 @@
       }
       #dirList { border: 1px solid #eee; border-radius: 6px; padding: 8px; }
       #dirDetail { border: 1px solid #eee; border-radius: 6px; padding: 8px 10px; }
-      .dir-toolbar { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
-      .dir-toolbar input[type='text'] { width: auto; flex: 1; }
-      .dir-new { display: flex; gap: 8px; margin-top: 8px; }
+      .dir-toolbar { display: flex; flex-direction: column; align-items: stretch; gap: 6px; margin-bottom: 8px; }
+      .dir-toolbar input[type='text'] { width: 100%; }
+      /* フル幅の 2 行ボタン(1 行目: ラベル / 2 行目: 対象件数・通信量の目安・小さいグレー) */
+      #fetchAllIcons { display: flex; flex-direction: column; align-items: center; gap: 2px; width: 100%; }
+      #fetchAllIcons .fetch-all-icons-detail { font-size: 12px; color: #999; font-weight: normal; }
+      /* まとめて取得の進捗(取得中… / 完了メッセージ)。小さめ・グレー。空のときに余白を作らない */
+      #fetchAllIconsStatus { font-size: 12px; color: #666; }
+      .dir-new { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+      .dir-new input[type='text'], .dir-new button { width: 100%; }
 
       /* --- 左の 1 行(表示専用 / AC7 / AC9) --- */
       .dir-row {
@@ -302,7 +308,7 @@
           <div class="dir-new">
             <input id="newHandle" type="text" placeholder="@example-channel または URL" />
             <input id="newNickname" type="text" placeholder="呼び名" />
-            <button id="addEntry" type="button" title="登録する">＋</button>
+            <button id="addEntry" type="button" title="登録する">追加</button>
           </div>
         </div>
         <div id="dirDetail">← 左の一覧から選んでください</div>
