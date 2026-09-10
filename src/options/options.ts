@@ -9,6 +9,7 @@ import { log } from '../log'
 import {
   directoryKey,
   displayHandle,
+  displayNameFor,
   findEntry,
   initialForAvatar,
   loadDirectory,
@@ -18,6 +19,7 @@ import {
   sortForDisplay,
   upsertChannelIcon,
   upsertChannelId,
+  upsertChannelName,
   upsertCommentMessage,
   upsertMessage,
   upsertNickname,
@@ -378,7 +380,7 @@ const channelIdErrors = new Map<string, string>()
 let bulkResolving = false
 
 /**
- * 「アイコンをまとめて取得」が走っているか。**`bulkResolving` とは別のフラグ**
+ * 「アイコンと表記名をまとめて取得」が走っているか。**`bulkResolving` とは別のフラグ**
  * (引き金も対象も別なので、片方が走っている間にもう片方を止める必要が無い / plan.md 確定値)
  */
 let bulkIconFetching = false
@@ -524,6 +526,13 @@ async function resolveEntryChannelId(url: string, wantIcon: boolean): Promise<vo
         parts.push(`アイコンを取得できなかった (${result.icon.reason})`)
       }
     }
+    // **HTML を取ったなら常に表記名も控える (007)。**`want` に名前用のフラグは無いので、
+    // `channelId` / `icon` のどちらかを要求していれば `result.name` が入りうる。
+    // 空なら「取れなかった」ではなく「HTML を取らなかった」の可能性もあるため、状態表示には出さない
+    if (result.name) {
+      directory = upsertChannelName(directory, url, result.name)
+      changed = true
+    }
 
     if (changed) {
       await persistDirectory(`${handle}: ${parts.join(' / ')}`)
@@ -578,19 +587,24 @@ retryChannelIds.addEventListener('click', () => {
 /** 1 件あたりの通信量の目安 (MB)。チャンネルページ実測 1.3〜1.9MB に画像ぶんを足した見積もり */
 const ICON_FETCH_MB_PER_ENTRY = 1.5
 
-/** アイコンを控えていない行(AC15 の対象。`/channel/UC…` 形も含む / AC20) */
+/**
+ * アイコンか表記名のどちらかを控えていない行(AC15 の対象。`/channel/UC…` 形も含む / AC20)。
+ *
+ * ⚠️ **`iconDataUrl === ''` だけを見ない (007)。**それだと、既にアイコンを控えてある行は
+ *    永久に表記名が埋まらない(アイコン取得済みの行はこの対象から一生外れたまま)。
+ */
 function iconFetchTargets(): Directory {
-  return directory.filter((entry) => entry.iconDataUrl === '')
+  return directory.filter((entry) => entry.iconDataUrl === '' || entry.channelName === '')
 }
 
-/** 「アイコンをまとめて取得」ボタンと状態表示。**0 件なら隠す**(`retryChannelIds` と同じ流儀) */
+/** 「アイコンと表記名をまとめて取得」ボタンと状態表示。**0 件なら隠す**(`retryChannelIds` と同じ流儀) */
 function renderFetchAllIcons(): void {
   const count = iconFetchTargets().length
   fetchAllIconsButton.hidden = count === 0
   fetchAllIconsButton.disabled = bulkIconFetching
   fetchAllIconsButton.textContent = bulkIconFetching
     ? '取得中…'
-    : `アイコンをまとめて取得 (${count} 件 / 約${Math.round(count * ICON_FETCH_MB_PER_ENTRY)}MB)`
+    : `アイコンと表記名をまとめて取得 (${count} 件 / 約${Math.round(count * ICON_FETCH_MB_PER_ENTRY)}MB)`
 }
 
 /**
@@ -625,12 +639,21 @@ async function fetchAllIcons(): Promise<void> {
       resolvingKeys.add(key)
       try {
         fetchAllIconsStatus.textContent = `取得中… (${i + 1}/${targets.length})`
-        // **チャンネル ID は要求しない**(plan.md の表: この経路は `{ channelId: false, icon: true }`)
+        // **チャンネル ID は要求しない**(plan.md の表: この経路は `{ channelId: false, icon: true }`)。
+        // **表記名は `want` に無い**ので、HTML を取れば ID を要求しなくても常に返る (007)
         const result = await resolveChannelPage(targets[i].url, { channelId: false, icon: true })
         // **待っている間に削除された行には書かない**(復活させない / F14)
         if (!findEntry(directory, targets[i].url)) continue
+        let entryChanged = false
         if (result.icon?.status === 'resolved') {
           directory = upsertChannelIcon(directory, targets[i].url, result.icon.dataUrl)
+          entryChanged = true
+        }
+        if (result.name) {
+          directory = upsertChannelName(directory, targets[i].url, result.name)
+          entryChanged = true
+        }
+        if (entryChanged) {
           success++
           // 1 件ごとに保存する(F15)。ここで保存しておけば、途中で画面を閉じても取れた分は残る
           await saveDirectory(directory)
@@ -1081,11 +1104,14 @@ function renderDirectory(): void {
     const main = document.createElement('div')
     main.className = 'dir-row-main'
     const handleText = displayHandle(entry)
-    // AC7: 呼び名が空なら**ハンドルだけを 1 段**(2 段にすると同じ文字列が並ぶだけになる)
-    if (entry.nickname.trim()) {
+    // AC7: 呼び名があればそれを、無ければ控えてあるチャンネルの表記名をグレーで出す
+    // (`.placeholder`)。どちらも無ければ**ハンドルだけを 1 段**(2 段にすると同じ文字列が並ぶだけ)
+    const nameResult = displayNameFor(entry)
+    if (nameResult.source !== 'handle') {
       const nicknameSpan = document.createElement('span')
-      nicknameSpan.className = 'dir-row-nickname'
-      nicknameSpan.textContent = entry.nickname
+      nicknameSpan.className =
+        nameResult.source === 'channelName' ? 'dir-row-nickname placeholder' : 'dir-row-nickname'
+      nicknameSpan.textContent = nameResult.text
       main.appendChild(nicknameSpan)
     }
     const handleSpan = document.createElement('span')

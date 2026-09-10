@@ -88,7 +88,7 @@
       .dir-row {
         display: flex;
         align-items: center;
-        justify-content: space-between;
+        justify-content: flex-start;
         gap: 8px;
         padding: 6px 8px;
         border-radius: 4px;
@@ -112,11 +112,13 @@
         color: #556;
         font-size: 14px;
       }
-      .dir-row-main { display: flex; flex-direction: column; min-width: 0; }
+      .dir-row-main { display: flex; flex-direction: column; min-width: 0; flex: 1; }
       .dir-row-nickname { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      /* 呼び名が無く、代わりにチャンネルの表記名で埋めているときだけグレー (AC7) */
+      .dir-row-nickname.placeholder { color: #777; }
       .dir-row-handle { color: #666; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
       .dir-row.unseen .dir-row-handle { color: #aaa; }
-      .dir-row .mark { flex-shrink: 0; color: #b3261e; cursor: help; margin-left: 4px; }
+      .dir-row .mark { flex-shrink: 0; color: #b3261e; cursor: help; margin-left: auto; }
       /* 効かない行は背景色でも分かるようにする (004 T14: アイコン + 行の背景色の両方) */
       .dir-row.ineffective { background: #fff6f6; }
       /* 選択中の色は「効かない行」の色より優先する — ⚠ の行こそ人が選んで直しに行くので、

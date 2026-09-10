@@ -54,6 +54,7 @@ function entry(over: Partial<Directory[number]> = {}): Directory[number] {
     channelId: '',
     lastSeenAt: 0,
     iconDataUrl: '',
+    channelName: '',
     ...over,
   }
 }

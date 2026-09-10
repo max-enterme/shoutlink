@@ -124,7 +124,9 @@ describe('007: 辞書の左右分割 / 20 件上限の取りこぼし', () => {
       if (!['README.md', 'docs/privacy-policy.md'].includes(key(path))) continue
       visited += 1
       expect(content, `${key(path)} に yt3.googleusercontent.com が無い`).toContain('yt3.googleusercontent.com')
-      expect(content, `${key(path)} に「アイコンをまとめて取得」が無い`).toContain('アイコンをまとめて取得')
+      expect(content, `${key(path)} に「アイコンと表記名をまとめて取得」が無い`).toContain(
+        'アイコンと表記名をまとめて取得',
+      )
     }
     expect(visited).toBe(2)
   })
@@ -132,5 +134,15 @@ describe('007: 辞書の左右分割 / 20 件上限の取りこぼし', () => {
   it('README.md と docs/* に「通信するのは 1 か所だけ」の断定が残っていない (F20 / F25)', () => {
     const hits = findMatches({ ...readmeFiles, ...docFiles }, /通信(するの)?は\s*1\s*か所だけ/)
     expect(hits).toEqual([])
+  })
+
+  it('左の行は左寄せになっている', () => {
+    // ⚠ jsdom はレイアウトを計算しないので、見た目そのものは検査できない。
+    //    `.dir-row` に `justify-content: space-between` が無いことだけを見る
+    //    (両端に離れる指定が復活していないかの機械チェック)
+    const html = publicFiles['../public/options.html']
+    const match = html.match(/\.dir-row\s*\{[^}]*\}/)
+    expect(match, '.dir-row の規則が見つからない').not.toBeNull()
+    expect(match?.[0]).not.toMatch(/justify-content:\s*space-between/)
   })
 })
