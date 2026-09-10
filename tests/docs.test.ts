@@ -117,4 +117,12 @@ describe('007: 辞書の左右分割 / 20 件上限の取りこぼし', () => {
     )
     expect(hits).toEqual([])
   })
+
+  it('通信の記述にアイコンが書かれている (AC24)', () => {
+    for (const [path, content] of Object.entries({ ...readmeFiles, ...docFiles })) {
+      if (!['README.md', 'docs/privacy-policy.md'].includes(key(path))) continue
+      expect(content, `${key(path)} に yt3.googleusercontent.com が無い`).toContain('yt3.googleusercontent.com')
+      expect(content, `${key(path)} に「アイコン」が無い`).toContain('アイコン')
+    }
+  })
 })
