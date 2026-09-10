@@ -597,14 +597,28 @@ function iconFetchTargets(): Directory {
   return directory.filter((entry) => entry.iconDataUrl === '' || entry.channelName === '')
 }
 
-/** 「アイコンと表記名をまとめて取得」ボタンと状態表示。**0 件なら隠す**(`retryChannelIds` と同じ流儀) */
+/**
+ * 「アイコンと表記名を取得」ボタンと状態表示。**0 件なら隠す**(`retryChannelIds` と同じ流儀)
+ *
+ * ボタンの中は**ラベル(1 行目)と対象件数・通信量の目安(2 行目・小さいグレー)の 2 子要素**に分ける
+ * (320px でもラベルを 1 行に収めるため)。`textContent` はこの 2 つを連結した値になるので、
+ * `N 件` を含むことを見ている既存テスト (AC15) はそのままで通る。
+ */
 function renderFetchAllIcons(): void {
   const count = iconFetchTargets().length
   fetchAllIconsButton.hidden = count === 0
   fetchAllIconsButton.disabled = bulkIconFetching
-  fetchAllIconsButton.textContent = bulkIconFetching
-    ? '取得中…'
-    : `アイコンと表記名をまとめて取得 (${count} 件 / 約${Math.round(count * ICON_FETCH_MB_PER_ENTRY)}MB)`
+  fetchAllIconsButton.textContent = ''
+  if (bulkIconFetching) {
+    fetchAllIconsButton.textContent = '取得中…'
+    return
+  }
+  const label = document.createElement('span')
+  label.textContent = 'アイコンと表記名を取得'
+  const detail = document.createElement('span')
+  detail.className = 'fetch-all-icons-detail'
+  detail.textContent = `${count} 件 / 約${Math.round(count * ICON_FETCH_MB_PER_ENTRY)}MB`
+  fetchAllIconsButton.append(label, detail)
 }
 
 /**

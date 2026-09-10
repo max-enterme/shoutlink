@@ -161,6 +161,14 @@ describe('辞書の左右分割 (AC6〜AC13)', () => {
     expect(dirList().contains(document.querySelector('#addEntry'))).toBe(false)
   })
 
+  it('追加ボタンの文言が「追加」になっている', async () => {
+    await withDirectory([])
+
+    const button = document.querySelector('#addEntry') as HTMLButtonElement
+    expect(button.textContent).toBe('追加')
+    expect(button.textContent).not.toContain('＋')
+  })
+
   it('呼び名が空ならハンドルだけ出る (AC7)', async () => {
     await withDirectory([entry({ url: FAKE_CHANNEL.url, nickname: '' })])
 
@@ -644,6 +652,17 @@ describe('アイコン (AC14〜AC20)', () => {
     ])
     const buttonAllDone = document.querySelector('#fetchAllIcons') as HTMLButtonElement
     expect(buttonAllDone.hidden).toBe(true)
+  })
+
+  it('まとめて取得のボタンはラベルと目安の 2 行に分かれている', async () => {
+    await withDirectory([entry({ url: FAKE_CHANNEL.url }), entry({ url: FAKE_OTHER_CHANNEL.url })])
+
+    const button = document.querySelector('#fetchAllIcons') as HTMLButtonElement
+    expect(button.children).toHaveLength(2)
+    const [label, detail] = [...button.children]
+    expect(label.textContent).toBe('アイコンと表記名を取得')
+    expect(detail.textContent).toMatch(/件/)
+    expect(detail.textContent).toMatch(/MB/)
   })
 
   it('ON にするとアイコンも同時に控える (AC14)', async () => {
