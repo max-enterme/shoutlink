@@ -21,8 +21,26 @@ const OPTIONS_HTML = Object.values(htmlFiles)[0]
 let handle: OptionsHandle
 let stub: ChromeStub
 
+/**
+ * `public/options.html` の `<head>` の `<style>` を jsdom の `document.head` にも入れる。
+ *
+ * ⚠️ **これをやらないと options-dom の全テストが無スタイルで走る**(PR レビュー指摘)。
+ * `document.body.innerHTML = parsed.body.innerHTML` は body の中身しか持ち込まないので、
+ * `[hidden]` の打ち消し(`#fetchAllIcons[hidden] { display: none }` 等)や
+ * `:focus-visible` のリングが**一切効かない状態**でテストしていたことになる。
+ */
+function injectOptionsStyle(parsed: Document): void {
+  document.querySelectorAll('style[data-options-test-style]').forEach((el) => el.remove())
+  const style = parsed.querySelector('style')
+  if (!style) return
+  const clone = style.cloneNode(true) as HTMLStyleElement
+  clone.setAttribute('data-options-test-style', '')
+  document.head.appendChild(clone)
+}
+
 beforeEach(async () => {
   const parsed = new DOMParser().parseFromString(OPTIONS_HTML, 'text/html')
+  injectOptionsStyle(parsed)
   document.body.innerHTML = parsed.body.innerHTML // innerHTML 経由なので <script> は実行されない
   stub = stubChrome({
     local: { 'ytRedirectPin.directory': [] },
@@ -36,6 +54,7 @@ afterEach(() => {
   handle.dispose()
   delete (globalThis as { chrome?: unknown }).chrome
   document.body.innerHTML = ''
+  document.querySelectorAll('style[data-options-test-style]').forEach((el) => el.remove())
 })
 
 function panel(id: string): HTMLElement {
@@ -74,6 +93,7 @@ async function withDirectory(directory: Directory): Promise<void> {
   handle.dispose()
   delete (globalThis as { chrome?: unknown }).chrome
   const parsed = new DOMParser().parseFromString(OPTIONS_HTML, 'text/html')
+  injectOptionsStyle(parsed)
   document.body.innerHTML = parsed.body.innerHTML
   stub = stubChrome({
     local: { 'ytRedirectPin.directory': directory },
@@ -153,6 +173,18 @@ describe('辞書の左右分割 (AC6〜AC13)', () => {
     expect(dirDetail().textContent).toContain(FAKE_CHANNEL.url)
   })
 
+  it('.dir-row をキーボードで選ぶとフォーカスリングが出る(PR レビュー)', async () => {
+    // ⚠ `.dir-row:focus-visible` と `.dir-row:focus { outline: none }` は詳細度が同点で、
+    //   カスケード順の後勝ち。順序を間違えるとキーボード操作の現在地が見えなくなる
+    await withDirectory([entry({ url: FAKE_CHANNEL.url })])
+
+    const row = rowByHandle(FAKE_CHANNEL.handle)
+    row.focus()
+
+    expect(row.matches(':focus-visible')).toBe(true)
+    expect(getComputedStyle(row).outline).not.toBe('none')
+  })
+
   it('左の一覧に入力欄が無い (AC9)', async () => {
     await withDirectory([entry({ url: FAKE_CHANNEL.url }), entry({ url: FAKE_OTHER_CHANNEL.url })])
 
@@ -166,7 +198,6 @@ describe('辞書の左右分割 (AC6〜AC13)', () => {
 
     const button = document.querySelector('#addEntry') as HTMLButtonElement
     expect(button.textContent).toBe('追加')
-    expect(button.textContent).not.toContain('＋')
   })
 
   it('呼び名が空ならハンドルだけ出る (AC7)', async () => {
@@ -407,6 +438,51 @@ describe('辞書の左右分割 (AC6〜AC13)', () => {
     const active = document.activeElement as HTMLInputElement
     expect(active.dataset.rowField).toBe('message')
     expect(active.selectionStart).toBe(3)
+  })
+
+  /**
+   * jsdom はレイアウトを計算しないので、`textContent = ''` を代入しても `scrollTop` は
+   * 自然には 0 に戻らない(実ブラウザでは戻る)。そのままだと「保存し忘れても緑になる」
+   * 死に検査になってしまうので、`textContent` の代入に実ブラウザと同じ副作用
+   * (中身を作り直すと `scrollTop` が 0 に戻る)をこのテストの中だけ足して再現する。
+   */
+  function simulateScrollResetOnClear(el: HTMLElement): void {
+    let stored = 0
+    const textContentDescriptor = Object.getOwnPropertyDescriptor(Node.prototype, 'textContent')!
+    Object.defineProperties(el, {
+      scrollTop: {
+        configurable: true,
+        get: () => stored,
+        set: (v: number) => {
+          stored = v
+        },
+      },
+      textContent: {
+        configurable: true,
+        get(this: HTMLElement) {
+          return textContentDescriptor.get!.call(this)
+        },
+        set(this: HTMLElement, v: string) {
+          stored = 0
+          textContentDescriptor.set!.call(this, v)
+        },
+      },
+    })
+  }
+
+  it('再描画をまたいでペインのスクロール位置が保たれる(PR レビュー)', async () => {
+    await withDirectory([entry({ url: FAKE_CHANNEL.url }), entry({ url: FAKE_OTHER_CHANNEL.url })])
+
+    simulateScrollResetOnClear(dirList())
+    simulateScrollResetOnClear(dirDetail())
+    dirList().scrollTop = 120
+    dirDetail().scrollTop = 40
+
+    // 人の操作と無関係な再描画(他端末の変更)を模す。renderDirectory() が dirList/dirDetail を作り直す
+    stub.emitChange('ytRedirectPin.directory', stub.local['ytRedirectPin.directory'])
+
+    expect(dirList().scrollTop).toBe(120)
+    expect(dirDetail().scrollTop).toBe(40)
   })
 })
 
@@ -666,7 +742,11 @@ describe('アイコン (AC14〜AC20)', () => {
       entry({ url: FAKE_CHANNEL.url, iconDataUrl: 'data:image/jpeg;base64,AAA', channelName: 'あああ' }),
     ])
     const buttonAllDone = document.querySelector('#fetchAllIcons') as HTMLButtonElement
+    // ⚠ `.hidden` プロパティだけでは見た目を保証しない — `#fetchAllIcons` は `display: flex` を
+    //   持つので、CSS 側に `[hidden] { display: none }` の打ち消しが無いと画面には残り続ける
+    //   (PR レビューの Critical)。実際に描画から消えているかを見る
     expect(buttonAllDone.hidden).toBe(true)
+    expect(getComputedStyle(buttonAllDone).display).toBe('none')
   })
 
   it('まとめて取得のボタンはラベルと目安の 2 行に分かれている', async () => {

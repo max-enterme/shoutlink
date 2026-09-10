@@ -70,6 +70,10 @@
       input[type='text']:focus, input[type='number']:focus, select:focus, textarea:focus, button:focus {
         outline: none;
       }
+      /* 一覧の行は role="button" の div。キーボードで選べる (007 F4) ので、
+         他のコントロールと同じ扱いにする。ここを外すと Tab の現在地が見えなくなる。
+         :focus-visible より前に置く(詳細度が同点のため、後に書くと後勝ちでリングが消える) */
+      .dir-row:focus { outline: none; }
       input[type='text']:focus-visible,
       input[type='number']:focus-visible,
       select:focus-visible,
@@ -79,9 +83,6 @@
         outline: 2px solid var(--accent);
         outline-offset: 1px;
       }
-      /* 一覧の行は role="button" の div。キーボードで選べる (007 F4) ので、
-         他のコントロールと同じ扱いにする。ここを外すと Tab の現在地が見えなくなる */
-      .dir-row:focus { outline: none; }
       textarea { height: auto; min-height: 64px; padding: 6px 10px; resize: vertical; }
       .hint { color: var(--text-muted); font-size: 12px; margin: 4px 0 0; }
       .preview { background: var(--surface-muted); border-radius: var(--radius-sm); padding: 8px; font-size: 13px; word-break: break-all; }
@@ -192,6 +193,9 @@
         color: var(--accent);
         text-align: left;
       }
+      /* display を書いた要素に hidden を立てるときは [hidden] の打ち消しもセットで書く
+         (でないとブラウザ標準の [hidden] { display: none } にオリジンの優先順で負ける) */
+      #fetchAllIcons[hidden] { display: none; }
       #fetchAllIcons:hover:not(:disabled) { background: none; text-decoration: underline; }
       #fetchAllIcons:disabled { color: var(--text-muted); text-decoration: none; }
       .fetch-all-icons-detail { font-size: 11px; color: var(--text-subtle); font-weight: normal; }
@@ -230,7 +234,7 @@
         color: #556;
         font-size: 11px;
       }
-      .dir-row-main { display: flex; align-items: baseline; gap: 6px; min-width: 0; flex: 1; }
+      .dir-row-main { display: flex; align-items: center; gap: 6px; min-width: 0; flex: 1; }
       .dir-row-nickname { flex-shrink: 0; max-width: 55%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
       /* 呼び名が無く、代わりにチャンネルの表記名で埋めているときだけグレー (AC7) */
       .dir-row-nickname.placeholder { color: var(--text-muted); }
@@ -296,13 +300,14 @@
       「↩ 返礼」から手動で実行できます。
     </p>
 
-    <section class="group">
-      <h2 class="group-title">リダイレクト返礼</h2>
+    <section class="group" aria-labelledby="group-enabled">
+      <h2 class="group-title" id="group-enabled">リダイレクト返礼</h2>
       <div class="row">
         <input id="enabled" type="checkbox" />
         <label for="enabled" style="margin: 0">リダイレクト返礼を使う</label>
       </div>
       <p class="hint">
+        <strong>既定は OFF。</strong>
         <strong>外して止まるのは自動検知だけです。チャット右下の「↩ 返礼」からは、外していても引き続き実行できます。</strong><br />
         想定外の連投を止めたいときはここを外す。自動投稿は使わず、自分で押したときだけ投稿したい場合もこの状態で使ってください。
       </p>
@@ -320,8 +325,8 @@
       <p class="preview" id="preview"></p>
     </section>
 
-    <section class="group">
-      <h2 class="group-title">コメント返し</h2>
+    <section class="group" aria-labelledby="group-comment-reply">
+      <h2 class="group-title" id="group-comment-reply">コメント返し</h2>
       <div class="row">
         <input id="commentReplyEnabled" type="checkbox" />
         <label for="commentReplyEnabled" style="margin: 0">コメント返しを使う</label>
@@ -347,8 +352,8 @@
       <p class="preview" id="commentPreview"></p>
     </section>
 
-    <section class="group">
-      <h2 class="group-title">手動トリガー</h2>
+    <section class="group" aria-labelledby="group-manual-trigger">
+      <h2 class="group-title" id="group-manual-trigger">手動トリガー</h2>
       <div class="row">
         <input id="showManualTrigger" type="checkbox" />
         <label for="showManualTrigger" style="margin: 0">ライブチャットの右下に「↩ 返礼」を出す</label>
@@ -361,8 +366,8 @@
       </p>
     </section>
 
-    <section class="group">
-      <h2 class="group-title">固定モード</h2>
+    <section class="group" aria-labelledby="group-pin-mode">
+      <h2 class="group-title" id="group-pin-mode">固定モード</h2>
       <label for="pinMode">投稿したメッセージを固定するかどうか</label>
       <select id="pinMode">
         <option value="off">off — 固定しない(投稿のみ・既定)</option>
@@ -377,8 +382,8 @@
     </section>
 
     <section class="panel" id="panel-history" role="tabpanel" aria-labelledby="tab-history" hidden>
-    <section class="group">
-      <h2 class="group-title">投稿履歴</h2>
+    <section class="group" aria-labelledby="group-post-log">
+      <h2 class="group-title" id="group-post-log">投稿履歴</h2>
       <p class="hint">
         投稿できたときだけ、<strong>誰に・何を・いつ</strong>をこの端末に記録します(再投稿の判定に使う。同期はしない)。<br />
         同じ配信で同じ相手にもう一度すぐ投稿したいときは、ここを消します。<br />
@@ -398,8 +403,8 @@
     </section>
 
     <section class="panel" id="panel-directory" role="tabpanel" aria-labelledby="tab-directory" hidden>
-    <section class="group">
-      <h2 class="group-title">呼び名の辞書</h2>
+    <section class="group" aria-labelledby="group-directory">
+      <h2 class="group-title" id="group-directory">呼び名の辞書</h2>
       <p class="hint">
         `{name}` を置き換える呼び名と、`{msg}` に入る<strong>その相手への自由文</strong>。
         <strong>リダイレクトを受けた相手は自動でこの一覧に追加されます</strong>(どちらも空のまま)。
@@ -438,7 +443,7 @@
           <!-- 一覧は表示専用(入力欄は置かない / AC9)。**独立してスクロールする** (AC6b) -->
           <div id="dirList"></div>
           <div class="dir-new">
-            <h2 class="group-title">手動で追加</h2>
+            <h3 class="group-title">手動で追加</h3>
             <input id="newHandle" type="text" placeholder="@example-channel または URL" />
             <div class="dir-new-row">
               <input id="newNickname" type="text" placeholder="呼び名" />
@@ -463,8 +468,8 @@
     </section>
 
     <section class="panel" id="panel-dev" role="tabpanel" aria-labelledby="tab-dev" hidden>
-    <section class="group">
-      <h2 class="group-title">診断ログ</h2>
+    <section class="group" aria-labelledby="group-debug">
+      <h2 class="group-title" id="group-debug">診断ログ</h2>
       <div class="row">
         <input id="debug" type="checkbox" />
         <label for="debug" style="margin: 0">チャットに現れたノードをコンソールに出す</label>

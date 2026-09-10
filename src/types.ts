@@ -13,8 +13,8 @@ export type RedirectEvent = {
 
 /** 固定モード (AC8) */
 export type PinMode =
-  | 'off' // 固定しない(投稿のみ)
-  | 'ifEmpty' // 既存の固定が無いときだけ固定する(既定)
+  | 'off' // 固定しない(投稿のみ・既定)
+  | 'ifEmpty' // 既存の固定が無いときだけ固定する
   | 'always' // 既存の固定があっても上書きする
 
 export type Config = {

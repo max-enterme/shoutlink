@@ -381,7 +381,7 @@ const channelIdErrors = new Map<string, string>()
 let bulkResolving = false
 
 /**
- * 「アイコンと表記名をまとめて取得」が走っているか。**`bulkResolving` とは別のフラグ**
+ * 「アイコンと表記名を取得」が走っているか。**`bulkResolving` とは別のフラグ**
  * (引き金も対象も別なので、片方が走っている間にもう片方を止める必要が無い / plan.md 確定値)
  */
 let bulkIconFetching = false
@@ -618,6 +618,9 @@ function renderFetchAllIcons(): void {
   label.textContent = 'アイコンと表記名を取得'
   const detail = document.createElement('span')
   detail.className = 'fetch-all-icons-detail'
+  // ラベルと隙間無く並ぶと読み上げが「アイコンと表記名を取得2 件 / 約1MB」に連結されるので、
+  // 詳細側は読み上げから外す(見た目の件数・通信量は視覚で分かれば足りる)
+  detail.setAttribute('aria-hidden', 'true')
   detail.textContent = `${count} 件 / 約${Math.round(count * ICON_FETCH_MB_PER_ENTRY)}MB`
   fetchAllIconsButton.append(label, detail)
 }
@@ -1088,6 +1091,10 @@ function renderDirectory(): void {
   captureRowDrafts()
   // 値だけでは足りない。**打っている最中の欄とキャレットも覚える** (T17)
   const focusTarget = captureFocusTarget()
+  // ⚠️ **`textContent = ''` は `scrollTop` を 0 に戻す。**左右のペインは独立してスクロールする
+  //    (AC6b) ので、控えておいて描画のあとに書き戻す(007 レビュー: 再描画のたびに先頭へ飛ぶ)
+  const dirListScrollTop = dirList.scrollTop
+  const dirDetailScrollTop = dirDetail.scrollTop
   dirList.textContent = ''
   // 行を作り直すので、前の行に紐づいた更新関数と入力欄の参照は捨てる
   templateDependents.length = 0
@@ -1107,6 +1114,9 @@ function renderDirectory(): void {
     renderFetchAllIcons()
     // 行が 1 つも無いので戻す先も無い。**それでも呼ぶ**(出口ごとに約束が変わらないように)
     restoreFocusTarget(focusTarget)
+    // フォーカス復帰(`preventScroll: true`)のあとに戻す。0 件でもペインの外枠は残っているので書き戻す
+    dirList.scrollTop = dirListScrollTop
+    dirDetail.scrollTop = dirDetailScrollTop
     return
   }
 
@@ -1235,6 +1245,9 @@ function renderDirectory(): void {
   renderFetchAllIcons()
   // **作り直したあとに戻す。**打っている最中に `channelId` の解決が返っても打鍵を落とさない (T17)
   restoreFocusTarget(focusTarget)
+  // フォーカス復帰(`preventScroll: true`)のあとに戻す(007 レビュー: 再描画のたびに先頭へ飛ぶ)
+  dirList.scrollTop = dirListScrollTop
+  dirDetail.scrollTop = dirDetailScrollTop
 }
 
 addEntry.addEventListener('click', () => {
@@ -1260,7 +1273,7 @@ for (const input of [newHandle, newNickname]) {
   })
 }
 
-// 絞り込み (AC11)。呼び名とハンドルに当たる。空にすると全件に戻る
+// 絞り込み (AC11)。呼び名・表記名・ハンドルに当たる。空にすると全件に戻る
 dirFilterInput.addEventListener('input', () => {
   dirFilter = dirFilterInput.value
   renderDirectory()
