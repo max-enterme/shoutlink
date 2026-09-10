@@ -15,7 +15,7 @@
  *    「最初に見つかった `UC…`」を採ってはいけない。
  *    → **ページ全体を表す metadata だけを見て、複数の出所が食い違ったら失敗にする**(下記)。
  */
-import { CHANNEL_ID_PATTERN, MAX_ICON_DATA_URL_LENGTH } from './directory'
+import { CHANNEL_ID_PATTERN, MAX_CHANNEL_NAME_LENGTH, MAX_ICON_DATA_URL_LENGTH } from './directory'
 
 /**
  * 取得のタイムアウト (AC17)。
@@ -144,6 +144,34 @@ function isAllowedIconUrl(url: string): boolean {
     parsed.protocol === 'https:' &&
     (ICON_HOSTS as readonly string[]).includes(parsed.hostname)
   )
+}
+
+/** `extractChannelName` が拾う実体参照。表記名に頻出するものだけに絞る */
+const HTML_ENTITIES: Readonly<Record<string, string>> = {
+  '&amp;': '&',
+  '&quot;': '"',
+  '&#39;': "'",
+  '&lt;': '<',
+  '&gt;': '>',
+}
+
+function decodeHtmlEntities(value: string): string {
+  return value.replace(/&amp;|&quot;|&#39;|&lt;|&gt;/g, (entity) => HTML_ENTITIES[entity])
+}
+
+/**
+ * チャンネルページの HTML から `og:title`(= チャンネルの表記名)を取り出す純関数。
+ * **例外は投げない。**取れなければ空文字。
+ *
+ * `extractChannelId` の「複数の出所を突き合わせて食い違ったら失敗」はやらない —
+ * **誤った表示名が出ても「違う名前が出る」だけで、誤った `UC…` のような実害が無い**
+ * (`extractChannelIconUrl` と同じ理由)。`og:title` の 1 本で決める。
+ */
+export function extractChannelName(html: string): string {
+  const match = html.match(/<meta[^>]+property=["']og:title["'][^>]+content=["']([^"']+)["']/i)
+  if (!match) return ''
+  const decoded = decodeHtmlEntities(match[1])
+  return Array.from(decoded).length > MAX_CHANNEL_NAME_LENGTH ? '' : decoded
 }
 
 export type IconExtractResult = { ok: true; url: string } | { ok: false; reason: string }
@@ -323,17 +351,22 @@ async function resolveIconFromHtml(
  * `(want.channelId && idFromUrl === null) || want.icon` が true のときだけ 1 回 fetch する。
  * **`want.icon` が true なら、URL が `/channel/UC…` 形でも必ず fetch する**(アイコンは
  * URL からは分からない / AC20)。
+ *
+ * ⚠️ **表記名(`name`)は `want` に無い。**アイコンと**同じ HTML から追加コスト 0 で取れる**ので、
+ *    「取りに行くかどうか」の判断対象にしない — **HTML を取ったなら常に返す。**
+ *    HTML を取らなかった経路(URL から即決/取得しない判断)では空文字のまま (007)。
  */
 export async function resolveChannelPage(
   url: string,
   want: { channelId: boolean; icon: boolean },
   options: ResolveOptions & { maxBytes?: number } = {},
-): Promise<{ channelId: ChannelIdResult | null; icon: ChannelIconResult | null }> {
+): Promise<{ channelId: ChannelIdResult | null; icon: ChannelIconResult | null; name: string }> {
   if (!parseYouTubeUrl(url)) {
     const reason = 'YouTube のチャンネル URL ではない'
     return {
       channelId: want.channelId ? { status: 'failed', reason } : null,
       icon: want.icon ? { status: 'failed', reason } : null,
+      name: '',
     }
   }
 
@@ -343,6 +376,7 @@ export async function resolveChannelPage(
     return {
       channelId: idFromUrl ? { status: 'already', channelId: idFromUrl } : null,
       icon: null,
+      name: '',
     }
   }
 
@@ -356,6 +390,7 @@ export async function resolveChannelPage(
           : { status: 'failed', reason }
         : null,
       icon: want.icon ? { status: 'failed', reason } : null,
+      name: '',
     }
   }
 
@@ -375,6 +410,7 @@ export async function resolveChannelPage(
             : { status: 'failed', reason }
           : null,
         icon: want.icon ? { status: 'failed', reason } : null,
+        name: '',
       }
     }
     // resolveChannelId と同じく途中で切らない(上記コメント参照)
@@ -388,6 +424,7 @@ export async function resolveChannelPage(
           : { status: 'failed', reason }
         : null,
       icon: want.icon ? { status: 'failed', reason } : null,
+      name: '',
     }
   }
 
@@ -397,6 +434,8 @@ export async function resolveChannelPage(
       : toChannelIdResult(extractChannelId(html))
     : null
   const icon = want.icon ? await resolveIconFromHtml(html, options) : null
+  // HTML を取ったので、want に関わらず常に表記名も返す(上のコメント参照)
+  const name = extractChannelName(html)
 
-  return { channelId, icon }
+  return { channelId, icon, name }
 }

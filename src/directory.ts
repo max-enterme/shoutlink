@@ -60,6 +60,12 @@ export type DirectoryEntry = {
    * 照合・投稿文には一切使わない。
    */
   iconDataUrl: string
+  /**
+   * チャンネルの表記名。**空文字は「未取得」**(`channelId` / `iconDataUrl` と同じ流儀)。
+   * チャンネルページの `og:title` から取って控える(007)。**表示専用。照合・投稿文には一切使わない。**
+   * 呼び名が空の行に、ハンドルの代わりにグレーで出す (AC7)。
+   */
+  channelName: string
 }
 
 /**
@@ -67,6 +73,13 @@ export type DirectoryEntry = {
  * 十分な余裕を見て 64KB。超えたものは控えない(切り詰めない)。
  */
 export const MAX_ICON_DATA_URL_LENGTH = 64 * 1024
+
+/**
+ * 控えてよい表記名の長さの上限(コードポイント数)。超えたものは控えない(切り詰めない。
+ * `MAX_ICON_DATA_URL_LENGTH` と同じ思想)。`channel-id.ts` の `extractChannelName` /
+ * `normalizeDirectory` の両方がこれを見る。
+ */
+export const MAX_CHANNEL_NAME_LENGTH = 100
 
 /**
  * チャンネル ID として受け付ける形 (AC14)。
@@ -98,18 +111,46 @@ export function displayHandle(entry: DirectoryEntry): string {
 
 /**
  * アイコンが無い行に出す頭文字 1 文字。
- * 呼び名があれば呼び名の先頭、無ければハンドルの `@` を除いた先頭。
+ * 呼び名があれば呼び名の先頭、無ければ表記名の先頭、それも無ければハンドルの `@` を除いた先頭
+ * (`displayNameFor` と同じ優先順 / 007 AC18)。
  * **サロゲートペアを割らない**(`Array.from` で先頭 1 要素)。取れなければ `'?'`
+ *
+ * ⚠️ **`channelName` は省略可能。**004 以前から既存の呼び出し(テスト等)は `channelName` を
+ *    持たないオブジェクトを渡すため、必須にすると既存の型が壊れる。省略時は「表記名は無い」として扱う。
  */
-export function initialForAvatar(entry: Pick<DirectoryEntry, 'nickname' | 'url'>): string {
+export function initialForAvatar(
+  entry: Pick<DirectoryEntry, 'nickname' | 'url'> & { channelName?: string },
+): string {
   const nickname = entry.nickname.trim()
   if (nickname) return Array.from(nickname)[0] ?? '?'
+  const channelName = entry.channelName?.trim()
+  if (channelName) return Array.from(channelName)[0] ?? '?'
   const handle = handleFromChannelUrl(entry.url)
   // `handleFromChannelUrl` は `@handle` にも `/c/` にも `/user/` にも当たらない URL
   // (`/channel/UC…` 形など)をそのまま返す。ハンドルが取れていないので '?' に倒す (F10)
   if (handle === entry.url) return '?'
   const stripped = handle.startsWith('@') ? handle.slice(1) : handle
   return Array.from(stripped)[0] ?? '?'
+}
+
+export type DisplayName = {
+  text: string
+  /** `text` がどこから来たか。グレー表示の判定に使う(`'nickname'` 以外はグレー) */
+  source: 'nickname' | 'channelName' | 'handle'
+}
+
+/**
+ * 左ペインの行に出す表示名を決める純関数 (007 / AC7)。
+ * 呼び名があればそれを、無ければチャンネルの表記名を、それも無ければハンドルを返す。
+ * **どれを返したかも分かる形**にしてあるのは、呼び出し側(設定画面)が
+ * 「表記名で埋めているときだけグレーにする」判定に使うため。
+ */
+export function displayNameFor(entry: Pick<DirectoryEntry, 'nickname' | 'channelName' | 'url'>): DisplayName {
+  const nickname = entry.nickname.trim()
+  if (nickname) return { text: nickname, source: 'nickname' }
+  const channelName = entry.channelName.trim()
+  if (channelName) return { text: channelName, source: 'channelName' }
+  return { text: handleFromChannelUrl(entry.url), source: 'handle' }
 }
 
 export function findEntry(directory: Directory, url: string): DirectoryEntry | undefined {
@@ -200,6 +241,7 @@ function blankEntry(url: string, patch: Partial<DirectoryEntry> = {}): Directory
     channelId: '',
     lastSeenAt: 0,
     iconDataUrl: '',
+    channelName: '',
     ...patch,
   }
 }
@@ -302,6 +344,20 @@ export function upsertChannelIcon(directory: Directory, url: string, dataUrl: st
 }
 
 /**
+ * 解決したチャンネルの表記名を保存する (007)。`upsertChannelIcon` と同じ形。
+ * アイコンとは**独立に**保存する — 片方の失敗がもう片方を巻き込まない。
+ * 妥当でない値の絞り込みは `normalizeDirectory` に任せる(保存を経由すれば必ず通るため)。
+ */
+export function upsertChannelName(directory: Directory, url: string, name: string): Directory {
+  const key = directoryKey(url)
+  const existing = directory.find((entry) => directoryKey(entry.url) === key)
+  if (existing) {
+    return directory.map((entry) => (entry === existing ? { ...entry, channelName: name } : entry))
+  }
+  return [...directory, blankEntry(url, { channelName: name })]
+}
+
+/**
  * 「コメントに反応する」フラグの切り替え (AC2 / AC13)。
  *
  * 辞書に無い URL を ON にしたときは行を作る(設定画面から直接登録できる経路)。
@@ -350,8 +406,17 @@ export function normalizeDirectory(raw: unknown): Directory {
   const out: Directory = []
   for (const item of raw) {
     if (!item || typeof item !== 'object') continue
-    const { url, nickname, message, replyToComment, commentMessage, channelId, lastSeenAt, iconDataUrl } =
-      item as Partial<DirectoryEntry>
+    const {
+      url,
+      nickname,
+      message,
+      replyToComment,
+      commentMessage,
+      channelId,
+      lastSeenAt,
+      iconDataUrl,
+      channelName,
+    } = item as Partial<DirectoryEntry>
     if (typeof url !== 'string' || !url.trim()) continue
     const key = directoryKey(url)
     if (seen.has(key)) continue
@@ -378,6 +443,13 @@ export function normalizeDirectory(raw: unknown): Directory {
         iconDataUrl.length <= MAX_ICON_DATA_URL_LENGTH
           ? iconDataUrl
           : '',
+      // **形が違う / 長すぎるものは空文字 = 未取得**(`iconDataUrl` と同じ流儀)。
+      // 切り詰めない — 本人が違和感に気づけるように未取得へ倒す
+      channelName: (() => {
+        if (typeof channelName !== 'string') return ''
+        const trimmed = channelName.trim()
+        return Array.from(trimmed).length <= MAX_CHANNEL_NAME_LENGTH ? trimmed : ''
+      })(),
     })
   }
   return out

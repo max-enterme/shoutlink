@@ -86,6 +86,18 @@ README.md:154 と docs/privacy-policy.md:14 が「**本拡張が自分で通信�
 | `README.md` (139, 154-157) | 「チャンネル ID を控える」の説明に**アイコンも同時に控える**ことと**「アイコンをまとめて取得」**の引き金を追記 |
 | `docs/privacy-policy.md` (14-25) | 同上。**取得先ホスト `yt3.googleusercontent.com`** も明記 |
 | `docs/install.md` (131, 188) / `docs/setup-and-verify.md` (80, 237) / `docs/for-testers.md` (284, 329, 341, 385) | `▸` を押して展開する前提の記述を、**左の一覧から選ぶ**操作に書き換える。**`install.md:131` と `setup-and-verify.md:80` は設定画面の構成そのものを説明する表**なので、`▸` の置換だけでなく **4 タブの構成にも書き換える** |
+| `public/options.html` `.dir-row` | **B7(追加の塊): `justify-content: space-between` を `flex-start` にする**(または宣言ごと削除)。子が 2 個/3 個で入れ替わり、名前が右端に張り付いていた実機の見え方を直す(AC7) |
+| `public/options.html` `.dir-row-main` | **B7**: `flex: 1;` を足す(`min-width: 0` は維持)。`.dir-row .mark` を `margin-left: auto` に変え、⚠ を常に右端に固定する |
+| `src/channel-id.ts` `MAX_ICON_DATA_URL_LENGTH` の隣 | **B7**: `extractChannelName(html: string): string` を足す(`og:title` の `content` を実体参照デコードして返す。`MAX_CHANNEL_NAME_LENGTH` 超は空文字。例外を投げない) |
+| `src/channel-id.ts` `resolveChannelPage()` | **B7**: 戻り値に `name: string` を足す。**`want` に名前用のフラグは足さない** — HTML を取った経路では `want` に関わらず常に `extractChannelName` を呼ぶ(同じ HTML から追加コスト 0) |
+| `src/directory.ts` `DirectoryEntry` | **B7**: `channelName: string` を足す(空文字 = 未取得。`iconDataUrl` と同じ流儀。表示専用) |
+| `src/directory.ts` `blankEntry()` / `normalizeDirectory()` | **B7**: `channelName: ''` の既定値と、`MAX_CHANNEL_NAME_LENGTH` 超・非文字列を空文字に落とす正規化を足す |
+| `src/directory.ts` `upsertChannelIcon()` の隣 | **B7**: `upsertChannelName()` を足す(同じ形。アイコンとは独立して保存する) |
+| `src/directory.ts` `initialForAvatar()` / `displayHandle()` の隣 | **B7**: `initialForAvatar` の優先順を「呼び名 → 表記名 → ハンドル」に広げる(`channelName` は省略可能な追加引数として受ける。既存呼び出しを壊さない)。表示名を決める純関数 `displayNameFor()` を新設し、`{ text, source: 'nickname' \| 'channelName' \| 'handle' }` を返す |
+| `src/options/options.ts` `resolveEntryChannelId()` | **B7**: `resolveChannelPage` の戻りの `name` が空でなければ `upsertChannelName` で控える(`channelId` / `iconDataUrl` と独立) |
+| `src/options/options.ts` `fetchAllIcons()` | **B7**: 取得した `name` も同様に控える。対象条件を `iconDataUrl === '' \|\| channelName === ''` に広げる(アイコンだけ済んでいる行が永久に表記名を取らない退行を防ぐ)。ボタン文言を「アイコンと表記名をまとめて取得」に変える(`#fetchAllIcons` の id は変えない) |
+| `src/options/options.ts` `renderDirectory()` の左の行 | **B7**: `displayNameFor(entry)` で 1 段目を決める。`source === 'channelName'` のときだけ `.placeholder` クラスを付けてグレーにする。`source === 'handle'`(=どちらも空)なら 1 段目は出さず、今までどおりハンドルだけ |
+| `public/options.html` CSS | **B7**: `.dir-row-nickname.placeholder { color: #777; }` を足す(ハンドルの `#666` とは別の色にして、呼び名/表記名/ハンドルが見分けられるようにする) |
 
 ## 新規インターフェース
 
@@ -267,6 +279,53 @@ export function stubChrome(options?: {
   tabs?: chrome.tabs.Tab[]
   sendMessage?: (tabId: number, request: unknown) => Promise<unknown>
 }): ChromeStub
+```
+
+```ts
+// src/channel-id.ts — B7(追加の塊): 表記名(og:title)の取得
+
+/** 表記名として控えてよい長さの上限。超えたら空文字(切り詰めない)。directory.ts で定義し、
+ *  channel-id.ts / directory.ts の両方から参照する(MAX_ICON_DATA_URL_LENGTH と同じ置き場の作法) */
+export const MAX_CHANNEL_NAME_LENGTH = 100 // src/directory.ts 側
+
+/**
+ * チャンネルページの HTML から `og:title`(= チャンネルの表記名)を取り出す純関数。
+ * 例外は投げない。取れなければ空文字。`extractChannelId` のような
+ * 「複数の出所を突き合わせて食い違ったら失敗」はしない(誤表示の実害が無いため)。
+ */
+export function extractChannelName(html: string): string
+
+// resolveChannelPage の戻り値に `name` を追加(want に名前用のフラグは無い)
+export async function resolveChannelPage(
+  url: string,
+  want: { channelId: boolean; icon: boolean },
+  options?: ResolveOptions & { maxBytes?: number },
+): Promise<{ channelId: ChannelIdResult | null; icon: ChannelIconResult | null; name: string }>
+```
+
+```ts
+// src/directory.ts — B7: DirectoryEntry に足すフィールド
+export type DirectoryEntry = {
+  // …既存…
+  /**
+   * チャンネルの表記名。**空文字は「未取得」**(`iconDataUrl` と同じ流儀)。
+   * チャンネルページの `og:title` から取って控える。**表示専用。照合・投稿文には一切使わない。**
+   * 呼び名が空の行に、ハンドルの代わりにグレーで出す(AC7)。
+   */
+  channelName: string
+}
+
+/** `upsertChannelIcon` と同じ形。アイコンとは独立して保存する */
+export function upsertChannelName(directory: Directory, url: string, name: string): Directory
+
+export type DisplayName = { text: string; source: 'nickname' | 'channelName' | 'handle' }
+
+/**
+ * 左ペインの行に出す表示名を決める純関数(AC7)。
+ * 呼び名 → 表記名 → ハンドルの順。**どれを返したかも分かる形**にして、
+ * 呼び出し側が「表記名で埋めているときだけグレーにする」判定に使う。
+ */
+export function displayNameFor(entry: Pick<DirectoryEntry, 'nickname' | 'channelName' | 'url'>): DisplayName
 ```
 
 ## 採らない案
@@ -506,6 +565,16 @@ afterEach(() => {
 | `頭文字は呼び名を優先する` | `tests/directory.test.ts` | `{ nickname: 'まっくす', url: '…/@example-channel' }` | `'ま'` |
 | `呼び名が空ならハンドルの先頭` | `tests/directory.test.ts` | `{ nickname: '', url: '…/@example-channel' }` | `'e'` |
 | `絵文字の呼び名を割らない` | `tests/directory.test.ts` | `{ nickname: '🎉ぱーてぃ', url: … }` | `'🎉'`(長さ 2 の文字列 1 文字ぶん) |
+| `og:title から表記名を取り出す` | `tests/channel-id.test.ts` | `<meta property="og:title" content="YouTube">` | `'YouTube'` |
+| `実体参照をデコードする` | `tests/channel-id.test.ts` | `content="Tom &amp; Jerry"` | `'Tom & Jerry'` |
+| `長すぎる表記名は控えない` | `tests/channel-id.test.ts` | `content` が 101 文字 | `''` |
+| `og:title が無ければ空文字` | `tests/channel-id.test.ts` | meta の無い HTML | `''` |
+| `ページを取ったときは表記名も返す` | `tests/channel-id.test.ts` | `want: { channelId: true, icon: false }` で `og:title` を含む HTML を返す `fetchImpl` | `result.name === 'YouTube'`(`want` に名前の指定は無いが常に返る) |
+| `呼び名が空なら表記名をグレーで出す (AC7)` | `tests/options-dom.test.ts` | `nickname: ''`, `channelName: 'YouTube'` の 1 件 | 左の行に `.dir-row-nickname.placeholder` があり `textContent` が `'YouTube'` |
+| `呼び名も表記名も空ならハンドルだけ (AC7)` | `tests/options-dom.test.ts` | `nickname: ''`, `channelName: ''` の 1 件 | `.dir-row-nickname` が 0 個、ハンドルだけが出る(既存 `呼び名が空ならハンドルだけ出る` と同じ観点を表記名にも広げる) |
+| `まとめて取得は表記名だけ未取得の行も対象にする (AC15)` | `tests/options-dom.test.ts` | `iconDataUrl` あり・`channelName: ''` の行を含む 2 件で `#fetchAllIcons` を `click()` | その行ぶんも `www.youtube.com` への呼び出しに含まれる(アイコン済みでも対象から漏れない) |
+| `頭文字は呼び名 → 表記名 → ハンドルの順 (AC18)` | `tests/directory.test.ts` | `{ nickname: '', channelName: 'YouTube', url: … }` | `'Y'` |
+| `左の行は左寄せになっている` | `tests/docs.test.ts` | `public/options.html` の `<style>` | `.dir-row { … }` の規則に `justify-content: space-between` が無い |
 
 ## 実装ブロック
 

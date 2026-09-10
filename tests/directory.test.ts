@@ -3,6 +3,7 @@ import { MAX_ENTRY_MESSAGE_LENGTH } from '../src/composer'
 import {
   findEntryByChannelId,
   displayHandle,
+  displayNameFor,
   initialForAvatar,
   loadDirectory,
   MAX_ICON_DATA_URL_LENGTH,
@@ -19,6 +20,7 @@ import {
   sortForDisplay,
   upsertChannelIcon,
   upsertChannelId,
+  upsertChannelName,
   upsertCommentMessage,
   upsertMessage,
   upsertNickname,
@@ -41,6 +43,7 @@ function entry(patch: Partial<DirectoryEntry> & { url: string }): DirectoryEntry
     channelId: '',
     lastSeenAt: 0,
     iconDataUrl: '',
+    channelName: '',
     ...patch,
   }
 }
@@ -715,5 +718,56 @@ describe('initialForAvatar', () => {
 
   it('絵文字の呼び名を割らない', () => {
     expect(initialForAvatar({ nickname: '🎉ぱーてぃ', url: FAKE_CHANNEL.url })).toBe('🎉')
+  })
+
+  it('頭文字は呼び名 → 表記名 → ハンドルの順 (AC18 / 007)', () => {
+    expect(
+      initialForAvatar({ nickname: '', channelName: 'YouTube', url: FAKE_CHANNEL.url }),
+    ).toBe('Y')
+  })
+})
+
+// --- 007: channelName(チャンネルの表記名 / AC7 / AC18) -----------------------
+
+describe('channelName の正規化 (AC14)', () => {
+  it('長すぎる channelName は空になる', () => {
+    const tooLong = 'あ'.repeat(101)
+    const [row] = normalizeDirectory([{ url: FAKE_CHANNEL.url, channelName: tooLong }])
+    expect(row.channelName).toBe('')
+  })
+
+  it('正当な channelName は正規化を生き延びる', () => {
+    const [row] = normalizeDirectory([{ url: FAKE_CHANNEL.url, channelName: 'YouTube' }])
+    expect(row.channelName).toBe('YouTube')
+  })
+
+  it('非文字列は空文字になる', () => {
+    const [row] = normalizeDirectory([{ url: FAKE_CHANNEL.url, channelName: 123 }])
+    expect(row.channelName).toBe('')
+  })
+})
+
+describe('upsertChannelName', () => {
+  it('upsertChannelName が書き込む', () => {
+    const directory: Directory = [entry({ url: FAKE_CHANNEL.url, nickname: 'れい' })]
+    const next = upsertChannelName(directory, FAKE_CHANNEL.url, 'YouTube')
+    expect(next[0].channelName).toBe('YouTube')
+  })
+})
+
+describe('displayNameFor (AC7)', () => {
+  it('呼び名があれば呼び名', () => {
+    const result = displayNameFor(entry({ url: FAKE_CHANNEL.url, nickname: 'れい', channelName: 'YouTube' }))
+    expect(result).toEqual({ text: 'れい', source: 'nickname' })
+  })
+
+  it('呼び名が空なら表記名', () => {
+    const result = displayNameFor(entry({ url: FAKE_CHANNEL.url, channelName: 'YouTube' }))
+    expect(result).toEqual({ text: 'YouTube', source: 'channelName' })
+  })
+
+  it('呼び名も表記名も空ならハンドル', () => {
+    const result = displayNameFor(entry({ url: FAKE_CHANNEL.url }))
+    expect(result).toEqual({ text: displayHandle(entry({ url: FAKE_CHANNEL.url })), source: 'handle' })
   })
 })

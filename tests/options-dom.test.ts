@@ -57,6 +57,7 @@ function entry(patch: Partial<DirectoryEntry> & { url: string }): DirectoryEntry
     channelId: '',
     lastSeenAt: 0,
     iconDataUrl: '',
+    channelName: '',
     ...patch,
   }
 }
@@ -164,6 +165,28 @@ describe('辞書の左右分割 (AC6〜AC13)', () => {
     await withDirectory([entry({ url: FAKE_CHANNEL.url, nickname: '' })])
 
     const row = rowByHandle(FAKE_CHANNEL.handle)
+    const occurrences = (row.textContent ?? '').split(FAKE_CHANNEL.handle).length - 1
+    expect(occurrences).toBe(1)
+  })
+
+  it('呼び名が空なら表記名をグレーで出す (AC7)', async () => {
+    await withDirectory([
+      entry({ url: FAKE_CHANNEL.url, nickname: '', channelName: 'YouTube' }),
+    ])
+
+    const row = rowByHandle(FAKE_CHANNEL.handle)
+    const placeholder = row.querySelector('.dir-row-nickname.placeholder')
+    expect(placeholder).not.toBeNull()
+    expect(placeholder?.textContent).toBe('YouTube')
+  })
+
+  it('呼び名も表記名も空ならハンドルだけ (AC7)', async () => {
+    await withDirectory([
+      entry({ url: FAKE_CHANNEL.url, nickname: '', channelName: '' }),
+    ])
+
+    const row = rowByHandle(FAKE_CHANNEL.handle)
+    expect(row.querySelectorAll('.dir-row-nickname').length).toBe(0)
     const occurrences = (row.textContent ?? '').split(FAKE_CHANNEL.handle).length - 1
     expect(occurrences).toBe(1)
   })
@@ -454,6 +477,7 @@ const ICON_URL = 'https://yt3.googleusercontent.com/x=s900-c-k-c0x00ffffff-no-rj
 const canonical = (id: string) =>
   `<link rel="canonical" href="https://www.youtube.com/channel/${id}">`
 const ogImage = (url: string) => `<meta property="og:image" content="${url}">`
+const ogTitle = (name: string) => `<meta property="og:title" content="${name}">`
 
 /** 架空の 3 人目。実在する第三者の識別子は使わない */
 const THIRD_URL = 'https://www.youtube.com/@third-example-channel'
@@ -521,7 +545,8 @@ describe('アイコン (AC14〜AC20)', () => {
     const { pageCalls } = stubFetch(html)
 
     await withDirectory([
-      entry({ url: FAKE_CHANNEL.url, iconDataUrl: 'data:image/jpeg;base64,AAA' }),
+      // アイコン・表記名とも既に控えてある行だけが対象から外れる(007: 片方だけ未取得でも対象)
+      entry({ url: FAKE_CHANNEL.url, iconDataUrl: 'data:image/jpeg;base64,AAA', channelName: 'あああ' }),
       entry({ url: FAKE_OTHER_CHANNEL.url }),
       entry({ url: THIRD_URL }),
     ])
@@ -532,6 +557,27 @@ describe('アイコン (AC14〜AC20)', () => {
 
     expect(pageCalls).toHaveLength(2)
     expect(pageCalls).not.toContain(FAKE_CHANNEL.url)
+  })
+
+  it('まとめて取得は表記名だけ未取得の行も対象にする (AC15)', async () => {
+    // FAKE_CHANNEL は**アイコンは既に控えてあるが、表記名だけ未取得**。
+    // 対象条件を `iconDataUrl === ''` だけで見ていると、この行は永久に対象から漏れる
+    const html = `<html><head>${canonical(ID)}${ogImage(ICON_URL)}${ogTitle('YouTube')}</head></html>`
+    const { pageCalls } = stubFetch(html)
+
+    await withDirectory([
+      entry({ url: FAKE_CHANNEL.url, iconDataUrl: 'data:image/jpeg;base64,AAA', channelName: '' }),
+    ])
+
+    const button = document.querySelector('#fetchAllIcons') as HTMLButtonElement
+    button.click()
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    expect(pageCalls).toContain(FAKE_CHANNEL.url)
+    const saved = (stub.local['ytRedirectPin.directory'] as Directory).find(
+      (e) => e.url === FAKE_CHANNEL.url,
+    )
+    expect(saved?.channelName).toBe('YouTube')
   })
 
   it('待っている間に削除された行を復活させない (F14 / Critical)', async () => {
@@ -584,7 +630,8 @@ describe('アイコン (AC14〜AC20)', () => {
 
   it('まとめて取得のボタンに件数が出る (AC15)', async () => {
     await withDirectory([
-      entry({ url: FAKE_CHANNEL.url, iconDataUrl: 'data:image/jpeg;base64,AAA' }),
+      // アイコン・表記名とも控えてある行だけが対象から外れる
+      entry({ url: FAKE_CHANNEL.url, iconDataUrl: 'data:image/jpeg;base64,AAA', channelName: 'あああ' }),
       entry({ url: FAKE_OTHER_CHANNEL.url }),
       entry({ url: THIRD_URL }),
     ])
@@ -592,7 +639,9 @@ describe('アイコン (AC14〜AC20)', () => {
     const button = document.querySelector('#fetchAllIcons') as HTMLButtonElement
     expect(button.textContent).toContain('2 件')
 
-    await withDirectory([entry({ url: FAKE_CHANNEL.url, iconDataUrl: 'data:image/jpeg;base64,AAA' })])
+    await withDirectory([
+      entry({ url: FAKE_CHANNEL.url, iconDataUrl: 'data:image/jpeg;base64,AAA', channelName: 'あああ' }),
+    ])
     const buttonAllDone = document.querySelector('#fetchAllIcons') as HTMLButtonElement
     expect(buttonAllDone.hidden).toBe(true)
   })

@@ -309,6 +309,7 @@ describe('{msg} に渡す値の選択 (004 / AC16)', () => {
       channelId: '',
       lastSeenAt: 0,
       iconDataUrl: '',
+      channelName: '',
     },
   ]
 

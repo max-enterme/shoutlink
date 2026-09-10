@@ -3,6 +3,7 @@ import {
   channelIdFromUrl,
   extractChannelId,
   extractChannelIconUrl,
+  extractChannelName,
   fetchIconAsDataUrl,
   iconUrlAtSize,
   resolveChannelId,
@@ -18,6 +19,7 @@ const ogUrl = (id: string) =>
   `<meta property="og:url" content="https://www.youtube.com/channel/${id}">`
 const itemprop = (id: string) => `<meta itemprop="identifier" content="${id}">`
 const ogImage = (url: string) => `<meta property="og:image" content="${url}">`
+const ogTitle = (name: string) => `<meta property="og:title" content="${name}">`
 
 /** 実際のチャンネルページには**他人の `UC…` が大量に載っている**ことの再現 */
 const NOISE = `
@@ -257,6 +259,27 @@ describe('extractChannelIconUrl', () => {
   })
 })
 
+describe('extractChannelName (007)', () => {
+  it('og:title から表記名を取り出す', () => {
+    const html = `<html><head>${ogTitle('YouTube')}</head></html>`
+    expect(extractChannelName(html)).toBe('YouTube')
+  })
+
+  it('実体参照をデコードする', () => {
+    const html = `<html><head>${ogTitle('Tom &amp; Jerry')}</head></html>`
+    expect(extractChannelName(html)).toBe('Tom & Jerry')
+  })
+
+  it('長すぎる表記名は控えない', () => {
+    const html = `<html><head>${ogTitle('あ'.repeat(101))}</head></html>`
+    expect(extractChannelName(html)).toBe('')
+  })
+
+  it('og:title が無ければ空文字', () => {
+    expect(extractChannelName('<html><head></head></html>')).toBe('')
+  })
+})
+
 describe('iconUrlAtSize', () => {
   it('サイズ指定を 88 に差し替える', () => {
     expect(iconUrlAtSize(ICON_URL_900, 88)).toBe(ICON_URL_88)
@@ -470,5 +493,17 @@ describe('resolveChannelPage (AC19 / AC20)', () => {
     )
     expect(allCalls).toHaveLength(0)
     expect(result.channelId).toEqual({ status: 'already', channelId: ID })
+  })
+
+  it('ページを取ったときは表記名も返す (007)', async () => {
+    const html = `<html><head>${canonical(ID)}${ogImage(ICON_URL_900)}${ogTitle('YouTube')}</head></html>`
+    const { impl } = fakePageAndIconFetch(html)
+    // `want` に名前の指定は無い。channelId だけを要求してもページを取れば名前は返る
+    const result = await resolveChannelPage(
+      'https://www.youtube.com/@example',
+      { channelId: true, icon: false },
+      { fetchImpl: impl },
+    )
+    expect(result.name).toBe('YouTube')
   })
 })
