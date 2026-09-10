@@ -399,7 +399,7 @@ export function displayNameFor(entry: Pick<DirectoryEntry, 'nickname' | 'channel
 | **左ペインは表示専用** | 入力欄を置かない。呼び名の編集は右ペインだけ(現行は一覧に呼び名の `<input>` があったが、左右分割で右へ移す) |
 | 未取得アイコン | 頭文字 1 文字を描いた丸。文字は `initialForAvatar` |
 | 選択の見せ方 | 行の背景色。選択は 1 件のみ |
-| 右ペインの並び | **⚠ の理由(効かない行のときだけ)** → ハンドル → 呼び名 → コメントに反応する → チャンネル ID の状態と再試行 → 自由文(リダイレクト返礼) → 自由文(コメント返し) → テスト送信 2 ボタンと結果 → 削除 |
+| 右ペインの並び | **⚠ の理由(効かない行のときだけ)** → ハンドル → 呼び名 → チャンネル ID の状態と再試行 → 自由文(リダイレクト返礼) → 自由文(コメント返し) → コメントに反応する → テスト送信 2 ボタンと結果 → 削除(007 D3: コメント返し関連が 1 か所にまとまるよう「コメントに反応する」をコメント返しの自由文の下に移した) |
 | 未選択のときの右ペイン | `← 左の一覧から選んでください`(モックの文言にそろえる) |
 | ⚠ の理由の出し方 | 左は印だけ(`title` に理由)。**選ぶと右ペインの先頭に理由を文で出す** |
 | 絞り込みの対象 | 呼び名 と ハンドル。大文字小文字を区別しない |
@@ -525,7 +525,7 @@ afterEach(() => {
 | `別タブで変えた診断ログも保存される (AC5)` | `tests/options-dom.test.ts` | 開発タブで `#debug` を `click()` → 基本設定タブへ → `#save` を `click()` | `chrome.storage.sync` に書かれた `debug` が `true` |
 | `左に全行が出て caret が無い (AC6)` | `tests/options-dom.test.ts` | 辞書 2 件(`FAKE_CHANNEL` / `FAKE_OTHER_CHANNEL`) | `#dirList` の行が 2 / `button.caret` が 0 件 |
 | `未選択なら右は案内文 (AC8)` | `tests/options-dom.test.ts` | 辞書 2 件、何も押さない | `#dirDetail` の `textContent` に `左の一覧から選んでください` |
-| `行を選ぶと右に詳細が出る (AC9)` | `tests/options-dom.test.ts` | 1 行目を `click()` | `#dirDetail` に ハンドル / 呼び名の `input` / `コメントに反応する` / チャンネル ID の行 / 自由文 2 欄 / テスト送信 2 ボタン / 削除 が、この DOM 順で存在 |
+| `行を選ぶと右に詳細が出る (AC9)` | `tests/options-dom.test.ts` | 1 行目を `click()` | `#dirDetail` に ハンドル / 呼び名の `input` / チャンネル ID の行 / 自由文 2 欄 / `コメントに反応する` / テスト送信 2 ボタン / 削除 が、この DOM 順で存在 |
 | `左の一覧に入力欄が無い (AC9)` | `tests/options-dom.test.ts` | 辞書 2 件 | `#dirList` の中に `input` が 0 個(＋ 追加欄は `#dirList` の外) |
 | `呼び名が空ならハンドルだけ出る (AC7)` | `tests/options-dom.test.ts` | `nickname: ''` の 1 件 | 左の行の `textContent` に現れる `@example-channel` が 1 回だけ(2 段にしない) |
 | `効かない行の理由は選ぶと右に出る (AC10)` | `tests/options-dom.test.ts` | `replyToComment: true` かつ `channelId: ''` の 1 件 | 左に `⚠` / 選ぶと `#dirDetail` に `ineffectiveReasons` の文言 |

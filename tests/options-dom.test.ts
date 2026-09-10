@@ -123,15 +123,15 @@ describe('辞書の左右分割 (AC6〜AC13)', () => {
 
     const detail = dirDetail()
     const classNames = [...detail.children].map((el) => el.className)
-    // ⚠ の理由(無し) / ハンドル / 呼び名の input / コメントに反応する /
-    // チャンネル ID の行 / 自由文 2 欄 / テスト送信 2 ボタン / 削除、の DOM 順
+    // ⚠ の理由(無し) / ハンドル / 呼び名の input / チャンネル ID の行 /
+    // 自由文 2 欄 / コメントに反応する / テスト送信 2 ボタン / 削除、の DOM 順 (007 D3)
     expect(classNames).toEqual([
       'dir-detail-handle',
       'dir-detail-nickname',
-      'row',
       'channel-id',
       'detail-field',
       'detail-field',
+      'row',
       'row test-send',
       '',
     ])
