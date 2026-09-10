@@ -93,6 +93,7 @@ const channelIdRetryRow = el<HTMLElement>('channelIdRetryRow')
 const retryChannelIds = el<HTMLButtonElement>('retryChannelIds')
 const dirList = el<HTMLElement>('dirList')
 const dirDetail = el<HTMLElement>('dirDetail')
+const dirDetailHeader = el<HTMLElement>('dirDetailHeader')
 const dirFilterInput = el<HTMLInputElement>('dirFilter')
 const fetchAllIconsButton = el<HTMLButtonElement>('fetchAllIcons')
 const fetchAllIconsStatus = el<HTMLElement>('fetchAllIconsStatus')
@@ -695,14 +696,75 @@ fetchAllIconsButton.addEventListener('click', () => {
   void fetchAllIcons()
 })
 
-/** 絞り込み(`dirFilter`)に呼び名かハンドルが当たるか。空文字は「絞らない」= 全件通す (AC11) */
+/**
+ * 絞り込み(`dirFilter`)に呼び名か表記名かハンドルが当たるか。空文字は「絞らない」= 全件通す (AC11)
+ *
+ * **`channelName`(表記名)も見る (A1)。**画面に表記名で出ている行を、その文字で探せないのは
+ * 半端なので、呼び名・ハンドルに加えて表記名にも当たるようにする。大小無視は変わらない。
+ */
 function matchesDirectoryFilter(entry: DirectoryEntry): boolean {
   const filter = dirFilter.trim().toLowerCase()
   if (!filter) return true
   return (
     entry.nickname.toLowerCase().includes(filter) ||
+    entry.channelName.toLowerCase().includes(filter) ||
     displayHandle(entry).toLowerCase().includes(filter)
   )
+}
+
+/**
+ * 右ペインの先頭ヘッダ(アバター + 呼び名 + ハンドル)。**`#dirDetail` の外に置く**(B9)。
+ *
+ * ⚠️ `#dirDetail` の子要素にしない。AC9 は「⚠ の理由 / ハンドル / 呼び名 / … / 削除」の
+ *    DOM 順を `#dirDetail` の子要素で固定しており(既存テスト)、ここへヘッダを差し込むと
+ *    その順序判定が壊れる。**見た目上の先頭**は `#dirDetailHeader` を `#dirDetail` の直前に
+ *    置くことで作る(CSS のみで足りる。JS 側は独立した要素として描く)。
+ */
+function renderDirDetailHeader(entry: DirectoryEntry | null): void {
+  dirDetailHeader.textContent = ''
+  if (!entry) {
+    dirDetailHeader.hidden = true
+    return
+  }
+  dirDetailHeader.hidden = false
+
+  if (entry.iconDataUrl) {
+    const avatar = document.createElement('img')
+    avatar.className = 'avatar avatar-lg'
+    avatar.src = entry.iconDataUrl
+    avatar.alt = ''
+    avatar.addEventListener(
+      'error',
+      () => {
+        const monogram = document.createElement('span')
+        monogram.className = 'monogram monogram-lg'
+        monogram.textContent = initialForAvatar(entry)
+        avatar.replaceWith(monogram)
+      },
+      { once: true },
+    )
+    dirDetailHeader.appendChild(avatar)
+  } else {
+    const monogram = document.createElement('span')
+    monogram.className = 'monogram monogram-lg'
+    monogram.textContent = initialForAvatar(entry)
+    dirDetailHeader.appendChild(monogram)
+  }
+
+  const main = document.createElement('div')
+  main.className = 'dir-detail-header-main'
+  const nameResult = displayNameFor(entry)
+  if (nameResult.source !== 'handle') {
+    const nameSpan = document.createElement('span')
+    nameSpan.className = 'dir-detail-header-name'
+    nameSpan.textContent = nameResult.text
+    main.appendChild(nameSpan)
+  }
+  const handleSpan = document.createElement('span')
+  handleSpan.className = 'dir-detail-header-handle'
+  handleSpan.textContent = displayHandle(entry)
+  main.appendChild(handleSpan)
+  dirDetailHeader.appendChild(main)
 }
 
 /**
@@ -711,6 +773,7 @@ function matchesDirectoryFilter(entry: DirectoryEntry): boolean {
  * ここで行う(左の表示専用の行ぶんは `renderDirectory` 側で push する)。
  */
 function renderDirDetail(entry: DirectoryEntry | null, anyTestSendBusy = false): void {
+  renderDirDetailHeader(entry)
   dirDetail.textContent = ''
   if (!entry) {
     dirDetail.textContent = '← 左の一覧から選んでください'

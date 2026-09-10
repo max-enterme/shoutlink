@@ -530,6 +530,7 @@ afterEach(() => {
 | `呼び名が空ならハンドルだけ出る (AC7)` | `tests/options-dom.test.ts` | `nickname: ''` の 1 件 | 左の行の `textContent` に現れる `@example-channel` が 1 回だけ(2 段にしない) |
 | `効かない行の理由は選ぶと右に出る (AC10)` | `tests/options-dom.test.ts` | `replyToComment: true` かつ `channelId: ''` の 1 件 | 左に `⚠` / 選ぶと `#dirDetail` に `ineffectiveReasons` の文言 |
 | `絞り込みは呼び名とハンドルに当たる (AC11)` | `tests/options-dom.test.ts` | 2 件、`#dirFilter` に片方のハンドルの一部を `input` | 左の行が 1 / 空に戻すと 2 |
+| `絞り込みは表記名にも当たる (AC11)` | `tests/options-dom.test.ts` | 呼び名が空で表記名だけがある行を、`#dirFilter` に表記名の一部を `input`(B9 / A1) | 左の行が 1 のまま残る |
 | `絞り込みで消えても選択は外れない (AC11)` | `tests/options-dom.test.ts` | 1 行目を選んだ後、2 行目だけに当たる語で絞る | `#dirDetail` は 1 行目のまま |
 | `辞書 0 件の左右 (AC12)` | `tests/options-dom.test.ts` | 辞書 0 件 | 左に `まだ登録がありません` / 右に `左の一覧から選んでください` |
 | `選択中の行を削除すると右が戻る (AC13)` | `tests/options-dom.test.ts` | 1 行目を選び「削除」を `click()` | `#dirDetail` に `左の一覧から選んでください` |

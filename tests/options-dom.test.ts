@@ -238,6 +238,21 @@ describe('辞書の左右分割 (AC6〜AC13)', () => {
     expect(dirRows().length).toBe(2)
   })
 
+  it('絞り込みは表記名にも当たる (AC11)', async () => {
+    // 呼び名は空で、控えてある表記名だけがある行を、表記名の一部で絞る
+    await withDirectory([
+      entry({ url: FAKE_CHANNEL.url, nickname: '', channelName: 'ようつべ公式' }),
+      entry({ url: FAKE_OTHER_CHANNEL.url, nickname: 'まっくす' }),
+    ])
+
+    const filter = document.querySelector('#dirFilter') as HTMLInputElement
+    filter.value = 'ようつべ'
+    filter.dispatchEvent(new Event('input'))
+
+    expect(dirRows().length).toBe(1)
+    expect(dirRows()[0].textContent).toContain('ようつべ公式')
+  })
+
   it('絞り込みで消えても選択は外れない (AC11)', async () => {
     await withDirectory([entry({ url: FAKE_CHANNEL.url }), entry({ url: FAKE_OTHER_CHANNEL.url })])
 

@@ -146,6 +146,12 @@ describe('007: 辞書の左右分割 / 20 件上限の取りこぼし', () => {
     expect(match?.[0]).not.toMatch(/justify-content:\s*space-between/)
   })
 
+  it('fieldset を使っていない', () => {
+    // B9: 素の <fieldset>/<legend> をやめ、<section class="group"> + 小見出しにした
+    const html = publicFiles['../public/options.html']
+    expect(html).not.toMatch(/<fieldset/)
+  })
+
   it('左ペインの入力欄は縦に積む', () => {
     // ⚠ jsdom はレイアウトを計算しないので、実際に縦に積んで見えるかは検査できない。
     //    `.dir-toolbar` と `.dir-new` の両方に `flex-direction: column` の指定があることだけを見る
