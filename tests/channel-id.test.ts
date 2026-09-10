@@ -278,6 +278,11 @@ describe('extractChannelName (007)', () => {
   it('og:title が無ければ空文字', () => {
     expect(extractChannelName('<html><head></head></html>')).toBe('')
   })
+
+  it('og:title が空白だけなら空文字を返す (X1)', () => {
+    const html = `<html><head>${ogTitle('   ')}</head></html>`
+    expect(extractChannelName(html)).toBe('')
+  })
 })
 
 describe('iconUrlAtSize', () => {

@@ -170,7 +170,7 @@ function decodeHtmlEntities(value: string): string {
 export function extractChannelName(html: string): string {
   const match = html.match(/<meta[^>]+property=["']og:title["'][^>]+content=["']([^"']+)["']/i)
   if (!match) return ''
-  const decoded = decodeHtmlEntities(match[1])
+  const decoded = decodeHtmlEntities(match[1]).trim()
   return Array.from(decoded).length > MAX_CHANNEL_NAME_LENGTH ? '' : decoded
 }
 
