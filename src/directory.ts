@@ -54,7 +54,19 @@ export type DirectoryEntry = {
   channelId: string
   /** 最後にリダイレクトを受けた時刻。0 は「まだ受けていない」(手動登録) */
   lastSeenAt: number
+  /**
+   * チャンネルアイコンの data URL。**空文字は「未取得」**(`channelId` と同じ流儀)。
+   * チャンネルページの `og:image` から 88px 版を取って控える。**表示専用**で、
+   * 照合・投稿文には一切使わない。
+   */
+  iconDataUrl: string
 }
+
+/**
+ * 控えてよい data URL の上限。88px の JPEG が実測 5,219 バイト = base64 で約 7KB なので、
+ * 十分な余裕を見て 64KB。超えたものは控えない(切り詰めない)。
+ */
+export const MAX_ICON_DATA_URL_LENGTH = 64 * 1024
 
 /**
  * チャンネル ID として受け付ける形 (AC14)。
@@ -82,6 +94,19 @@ export function directoryKey(url: string): string {
 /** 表示用のハンドル */
 export function displayHandle(entry: DirectoryEntry): string {
   return handleFromChannelUrl(entry.url)
+}
+
+/**
+ * アイコンが無い行に出す頭文字 1 文字。
+ * 呼び名があれば呼び名の先頭、無ければハンドルの `@` を除いた先頭。
+ * **サロゲートペアを割らない**(`Array.from` で先頭 1 要素)。取れなければ `'?'`
+ */
+export function initialForAvatar(entry: Pick<DirectoryEntry, 'nickname' | 'url'>): string {
+  const nickname = entry.nickname.trim()
+  if (nickname) return Array.from(nickname)[0] ?? '?'
+  const handle = handleFromChannelUrl(entry.url)
+  const stripped = handle.startsWith('@') ? handle.slice(1) : handle
+  return Array.from(stripped)[0] ?? '?'
 }
 
 export function findEntry(directory: Directory, url: string): DirectoryEntry | undefined {
@@ -171,6 +196,7 @@ function blankEntry(url: string, patch: Partial<DirectoryEntry> = {}): Directory
     commentMessage: '',
     channelId: '',
     lastSeenAt: 0,
+    iconDataUrl: '',
     ...patch,
   }
 }
@@ -258,6 +284,21 @@ export function upsertChannelId(directory: Directory, url: string, channelId: st
 }
 
 /**
+ * 解決したアイコンの data URL を保存する (AC14)。`upsertChannelId` と同じ形。
+ *
+ * **妥当でない値の絞り込みは `normalizeDirectory` に任せる。**保存を経由すれば
+ * `saveDirectory` → `normalizeDirectory` を必ず通るため、ここでは受け取った値をそのまま置く。
+ */
+export function upsertChannelIcon(directory: Directory, url: string, dataUrl: string): Directory {
+  const key = directoryKey(url)
+  const existing = directory.find((entry) => directoryKey(entry.url) === key)
+  if (existing) {
+    return directory.map((entry) => (entry === existing ? { ...entry, iconDataUrl: dataUrl } : entry))
+  }
+  return [...directory, blankEntry(url, { iconDataUrl: dataUrl })]
+}
+
+/**
  * 「コメントに反応する」フラグの切り替え (AC2 / AC13)。
  *
  * 辞書に無い URL を ON にしたときは行を作る(設定画面から直接登録できる経路)。
@@ -306,7 +347,7 @@ export function normalizeDirectory(raw: unknown): Directory {
   const out: Directory = []
   for (const item of raw) {
     if (!item || typeof item !== 'object') continue
-    const { url, nickname, message, replyToComment, commentMessage, channelId, lastSeenAt } =
+    const { url, nickname, message, replyToComment, commentMessage, channelId, lastSeenAt, iconDataUrl } =
       item as Partial<DirectoryEntry>
     if (typeof url !== 'string' || !url.trim()) continue
     const key = directoryKey(url)
@@ -326,6 +367,14 @@ export function normalizeDirectory(raw: unknown): Directory {
       channelId:
         typeof channelId === 'string' && CHANNEL_ID_PATTERN.test(channelId) ? channelId : '',
       lastSeenAt: Number.isFinite(lastSeenAt) ? Number(lastSeenAt) : 0,
+      // **`data:image/` で始まり `MAX_ICON_DATA_URL_LENGTH` 以下の文字列だけ通す**(AC14)。
+      // 壊れた URL や大きすぎる値は切り詰めず空文字(= 未取得)に落とす
+      iconDataUrl:
+        typeof iconDataUrl === 'string' &&
+        iconDataUrl.startsWith('data:image/') &&
+        iconDataUrl.length <= MAX_ICON_DATA_URL_LENGTH
+          ? iconDataUrl
+          : '',
     })
   }
   return out

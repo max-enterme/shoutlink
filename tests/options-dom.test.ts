@@ -55,6 +55,7 @@ function entry(patch: Partial<DirectoryEntry> & { url: string }): DirectoryEntry
     commentMessage: '',
     channelId: '',
     lastSeenAt: 0,
+    iconDataUrl: '',
     ...patch,
   }
 }

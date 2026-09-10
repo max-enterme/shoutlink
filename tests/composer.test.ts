@@ -308,6 +308,7 @@ describe('{msg} に渡す値の選択 (004 / AC16)', () => {
       commentMessage: 'コメントの自由文',
       channelId: '',
       lastSeenAt: 0,
+      iconDataUrl: '',
     },
   ]
 
