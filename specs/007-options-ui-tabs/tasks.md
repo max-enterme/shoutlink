@@ -17,5 +17,5 @@ feature: options-ui-tabs
 - [x] T8: `src/directory.ts` に `iconDataUrl` / `MAX_ICON_DATA_URL_LENGTH` / `upsertChannelIcon` / `initialForAvatar` を足し、`tests/directory.test.ts` で固定する  <!-- #137 -->
 - [x] T9: `resolveEntryChannelId` の取得を `resolveChannelPage` に差し替え、左ペインにアイコンとモノグラム、「アイコンをまとめて取得」ボタンを足す(T6・T7・T8 の後)  <!-- #138 -->
 - [x] T10: アイコンの AC14〜AC20 を `tests/options-dom.test.ts` で固定する(T9 の後)  <!-- #139 -->
-- [ ] T11: README.md / docs/privacy-policy.md の通信の記述を更新し、docs/install.md・docs/setup-and-verify.md・docs/for-testers.md の `▸` を前提にした手順と設定画面の構成表を 4 タブへ書き換える(T10 の後)  <!-- #140 -->
+- [x] T11: README.md / docs/privacy-policy.md の通信の記述を更新し、docs/install.md・docs/setup-and-verify.md・docs/for-testers.md の `▸` を前提にした手順と設定画面の構成表を 4 タブへ書き換える(T10 の後)  <!-- #140 -->
 - [ ] T12: **人手** — `dist/` を Chrome に読み込んで設定画面を開き、`docs/assets/screenshot-1-options.png` と `screenshot-3-directory.png` を同じ構図で撮り直して差し替える(T11 の後)  <!-- #141 -->
