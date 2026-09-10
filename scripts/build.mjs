@@ -21,7 +21,7 @@ await mkdir(outdir, { recursive: true })
 await build({
   entryPoints: {
     content: path.join(root, 'src', 'main.ts'),
-    options: path.join(root, 'src', 'options', 'options.ts'),
+    options: path.join(root, 'src', 'options', 'main.ts'),
   },
   bundle: true,
   format: 'iife',
