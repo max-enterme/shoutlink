@@ -66,10 +66,22 @@
         background: var(--surface);
         color: var(--text);
       }
+      /* マウスで押しただけのときはリングを出さない。キーボード到達性は :focus-visible で必ず残す (007 D2) */
       input[type='text']:focus, input[type='number']:focus, select:focus, textarea:focus, button:focus {
+        outline: none;
+      }
+      input[type='text']:focus-visible,
+      input[type='number']:focus-visible,
+      select:focus-visible,
+      textarea:focus-visible,
+      button:focus-visible,
+      .dir-row:focus-visible {
         outline: 2px solid var(--accent);
         outline-offset: 1px;
       }
+      /* 一覧の行は role="button" の div。キーボードで選べる (007 F4) ので、
+         他のコントロールと同じ扱いにする。ここを外すと Tab の現在地が見えなくなる */
+      .dir-row:focus { outline: none; }
       textarea { height: auto; min-height: 64px; padding: 6px 10px; resize: vertical; }
       .hint { color: var(--text-muted); font-size: 12px; margin: 4px 0 0; }
       .preview { background: var(--surface-muted); border-radius: var(--radius-sm); padding: 8px; font-size: 13px; word-break: break-all; }
@@ -127,6 +139,13 @@
         color: var(--text);
         border-bottom-color: var(--text);
         font-weight: 600;
+      }
+      /* タブは下線 2px が「選択中」の印。フォーカスリングはそれとは別物として
+         角丸のリングで見せる(007 D2。ブラウザ既定の四角いリングが浮いて見えたため) */
+      nav#tabs button:focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: 2px;
+        border-radius: var(--radius-sm);
       }
       .panel { padding: 4px 0 4px; }
 
@@ -347,8 +366,8 @@
       <h2 class="group-title">固定モード</h2>
       <label for="pinMode">投稿したメッセージを固定するかどうか</label>
       <select id="pinMode">
-        <option value="off">off — 固定しない(投稿のみ)</option>
-        <option value="ifEmpty">ifEmpty — 既存の固定が無いときだけ固定する(既定)</option>
+        <option value="off">off — 固定しない(投稿のみ・既定)</option>
+        <option value="ifEmpty">ifEmpty — 既存の固定が無いときだけ固定する</option>
         <option value="always">always — 既存の固定があっても上書きする</option>
       </select>
       <p class="hint">

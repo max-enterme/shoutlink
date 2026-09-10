@@ -835,31 +835,6 @@ function renderDirDetail(entry: DirectoryEntry | null, anyTestSendBusy = false):
   nicknameLabel.appendChild(nicknameInput)
   dirDetail.appendChild(nicknameLabel)
 
-  // --- 「コメントに反応する」(即保存 / AC13) --------------------------------
-  const flagRow = document.createElement('div')
-  flagRow.className = 'row'
-  const flag = document.createElement('input')
-  flag.type = 'checkbox'
-  flag.checked = entry.replyToComment
-  const flagLabel = document.createElement('label')
-  flagLabel.style.margin = '0'
-  flagLabel.textContent = 'コメントに反応する'
-  flag.addEventListener('change', () => {
-    directory = setReplyToComment(directory, entry.url, flag.checked)
-    void (async () => {
-      await persistDirectory(
-        `${displayHandle(entry)} のコメント返しを${flag.checked ? 'ON' : 'OFF'}にした`,
-      )
-      // **ON にしたときが解決の引き金** (AC17)。既に解決済みの行は取りに行かない
-      // (判定は `resolveEntryChannelId` の中。3 経路で条件をずらさない)。
-      // **アイコンも同じ取得に畳む**(007 AC14。取得は 1 回のまま増やさない)
-      if (flag.checked) await resolveEntryChannelId(entry.url, true)
-    })()
-  })
-  flagLabel.prepend(flag)
-  flagRow.appendChild(flagLabel)
-  dirDetail.appendChild(flagRow)
-
   // --- チャンネル ID の状態と再試行 (AC17 / T14 の決定 3) ---------------------
   const idStatus = channelIdRowStatus({
     channelId: entry.channelId,
@@ -983,6 +958,32 @@ function renderDirDetail(entry: DirectoryEntry | null, anyTestSendBusy = false):
     },
   )
 
+  // --- 「コメントに反応する」(即保存 / AC13) --------------------------------
+  // コメント返し関連が 1 か所にまとまるよう、コメント返しの自由文の下に置く (007 D3)
+  const flagRow = document.createElement('div')
+  flagRow.className = 'row'
+  const flag = document.createElement('input')
+  flag.type = 'checkbox'
+  flag.checked = entry.replyToComment
+  const flagLabel = document.createElement('label')
+  flagLabel.style.margin = '0'
+  flagLabel.textContent = 'コメントに反応する'
+  flag.addEventListener('change', () => {
+    directory = setReplyToComment(directory, entry.url, flag.checked)
+    void (async () => {
+      await persistDirectory(
+        `${displayHandle(entry)} のコメント返しを${flag.checked ? 'ON' : 'OFF'}にした`,
+      )
+      // **ON にしたときが解決の引き金** (AC17)。既に解決済みの行は取りに行かない
+      // (判定は `resolveEntryChannelId` の中。3 経路で条件をずらさない)。
+      // **アイコンも同じ取得に畳む**(007 AC14。取得は 1 回のまま増やさない)
+      if (flag.checked) await resolveEntryChannelId(entry.url, true)
+    })()
+  })
+  flagLabel.prepend(flag)
+  flagRow.appendChild(flagLabel)
+  dirDetail.appendChild(flagRow)
+
   // --- テスト送信 (T9 / AC7 / AC9 / AC10 / AC13) -----------------------------
   // **選んだ行だけに出す**(確定値 A)。保存済みの内容で、履歴を残さず実際に投稿する。
   const testSendState = testSendStates.get(key) ?? { busy: false, message: null }
@@ -1018,7 +1019,7 @@ function renderDirDetail(entry: DirectoryEntry | null, anyTestSendBusy = false):
 
   const testSendRedirect = document.createElement('button')
   testSendRedirect.type = 'button'
-  testSendRedirect.textContent = '返礼文をテスト送信'
+  testSendRedirect.textContent = 'リダイレクト返礼文をテスト送信'
   // ⚠️ 押し間違いの実害があるので、**実際に投稿される**ことが分かる文言にする(配信中は視聴者に見える)
   testSendRedirect.title =
     '保存済みの返礼文を、開いているライブチャットへ実際に投稿します(履歴には残りません)'
