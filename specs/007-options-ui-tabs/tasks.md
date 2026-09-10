@@ -15,7 +15,7 @@ feature: options-ui-tabs
 - [x] T6: 左右分割の AC6・AC6b・AC7〜AC13 と、回帰の AC21〜AC23 を `tests/options-dom.test.ts` と `tests/docs.test.ts` で固定する(T5 の後)  <!-- #135 -->
 - [x] T7: `src/channel-id.ts` に `extractChannelIconUrl` / `iconUrlAtSize` / `fetchIconAsDataUrl` / `resolveChannelPage` を足し、`tests/channel-id.test.ts` で固定する  <!-- #136 -->
 - [x] T8: `src/directory.ts` に `iconDataUrl` / `MAX_ICON_DATA_URL_LENGTH` / `upsertChannelIcon` / `initialForAvatar` を足し、`tests/directory.test.ts` で固定する  <!-- #137 -->
-- [ ] T9: `resolveEntryChannelId` の取得を `resolveChannelPage` に差し替え、左ペインにアイコンとモノグラム、「アイコンをまとめて取得」ボタンを足す(T6・T7・T8 の後)  <!-- #138 -->
-- [ ] T10: アイコンの AC14〜AC20 を `tests/options-dom.test.ts` で固定する(T9 の後)  <!-- #139 -->
+- [x] T9: `resolveEntryChannelId` の取得を `resolveChannelPage` に差し替え、左ペインにアイコンとモノグラム、「アイコンをまとめて取得」ボタンを足す(T6・T7・T8 の後)  <!-- #138 -->
+- [x] T10: アイコンの AC14〜AC20 を `tests/options-dom.test.ts` で固定する(T9 の後)  <!-- #139 -->
 - [ ] T11: README.md / docs/privacy-policy.md の通信の記述を更新し、docs/install.md・docs/setup-and-verify.md・docs/for-testers.md の `▸` を前提にした手順と設定画面の構成表を 4 タブへ書き換える(T10 の後)  <!-- #140 -->
 - [ ] T12: **人手** — `dist/` を Chrome に読み込んで設定画面を開き、`docs/assets/screenshot-1-options.png` と `screenshot-3-directory.png` を同じ構図で撮り直して差し替える(T11 の後)  <!-- #141 -->
