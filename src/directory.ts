@@ -105,6 +105,9 @@ export function initialForAvatar(entry: Pick<DirectoryEntry, 'nickname' | 'url'>
   const nickname = entry.nickname.trim()
   if (nickname) return Array.from(nickname)[0] ?? '?'
   const handle = handleFromChannelUrl(entry.url)
+  // `handleFromChannelUrl` は `@handle` にも `/c/` にも `/user/` にも当たらない URL
+  // (`/channel/UC…` 形など)をそのまま返す。ハンドルが取れていないので '?' に倒す (F10)
+  if (handle === entry.url) return '?'
   const stripped = handle.startsWith('@') ? handle.slice(1) : handle
   return Array.from(stripped)[0] ?? '?'
 }
