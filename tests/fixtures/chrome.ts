@@ -22,7 +22,11 @@ type ChangeListener = (
   areaName: string,
 ) => void
 
-function fakeArea(store: FakeStore): chrome.storage.StorageArea {
+/**
+ * `areaName` と `listeners` を渡すのは、`set()` からも `onChanged` を発火するため(F2)。
+ * 実物の `chrome.storage.local.set()` は自分の書き込みでも `onChanged` を発火する。
+ */
+function fakeArea(store: FakeStore, areaName: string, listeners: ChangeListener[]): chrome.storage.StorageArea {
   return {
     async get(keys?: string | string[] | null): Promise<FakeStore> {
       const names = keys == null ? Object.keys(store) : Array.isArray(keys) ? keys : [keys]
@@ -31,7 +35,12 @@ function fakeArea(store: FakeStore): chrome.storage.StorageArea {
       return out
     },
     async set(items: FakeStore): Promise<void> {
+      const changes: Record<string, chrome.storage.StorageChange> = {}
+      for (const [key, newValue] of Object.entries(items)) {
+        changes[key] = { oldValue: store[key], newValue }
+      }
       Object.assign(store, items)
+      for (const fn of listeners) fn(changes, areaName)
     },
   } as unknown as chrome.storage.StorageArea
 }
@@ -50,8 +59,8 @@ export function stubChrome(options?: {
 
   ;(globalThis as { chrome?: unknown }).chrome = {
     storage: {
-      local: fakeArea(local),
-      sync: fakeArea(sync),
+      local: fakeArea(local, 'local', listeners),
+      sync: fakeArea(sync, 'sync', listeners),
       onChanged: {
         addListener: (fn: ChangeListener) => listeners.push(fn),
         removeListener: (fn: ChangeListener) => {

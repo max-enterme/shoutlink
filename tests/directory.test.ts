@@ -678,6 +678,12 @@ describe('iconDataUrl の正規化 (AC14)', () => {
     const [row] = normalizeDirectory([{ url: FAKE_CHANNEL.url, iconDataUrl: tooLong }])
     expect(row.iconDataUrl).toBe('')
   })
+
+  it('正当な data URL は正規化を生き延びる (F11)', () => {
+    const dataUrl = 'data:image/jpeg;base64,AAA'
+    const [row] = normalizeDirectory([{ url: FAKE_CHANNEL.url, iconDataUrl: dataUrl }])
+    expect(row.iconDataUrl).toBe(dataUrl)
+  })
 })
 
 describe('upsertChannelIcon', () => {
@@ -696,6 +702,15 @@ describe('initialForAvatar', () => {
 
   it('呼び名が空ならハンドルの先頭', () => {
     expect(initialForAvatar({ nickname: '', url: FAKE_CHANNEL.url })).toBe('e')
+  })
+
+  it('/channel/UC… 形でハンドルが取れないときは ? に倒す (F10)', () => {
+    expect(
+      initialForAvatar({
+        nickname: '',
+        url: 'https://www.youtube.com/channel/UCaaaaaaaaaaaaaaaaaaaaaa',
+      }),
+    ).toBe('?')
   })
 
   it('絵文字の呼び名を割らない', () => {

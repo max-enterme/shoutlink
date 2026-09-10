@@ -61,10 +61,19 @@ function entry(patch: Partial<DirectoryEntry> & { url: string }): DirectoryEntry
   }
 }
 
-/** 辞書を差し替えて `initOptions()` を取り直す。`beforeEach` の既定(0 件)では書けないケース用 */
+/**
+ * 辞書を差し替えて `initOptions()` を取り直す。`beforeEach` の既定(0 件)では書けないケース用。
+ *
+ * ⚠️ **`beforeEach` と同じ手順で DOM も張り直す(F1)。**`dispose()` は `chrome.storage.onChanged`
+ *    の購読を外すだけで、DOM に張った `addEventListener` は 1 つも外れない。DOM を使い回すと
+ *    1 個目の `initOptions()` のハンドラが残ったまま 2 個目のハンドラが重ねて載り、
+ *    クリックのたびに両方が発火する(先に登録された 1 個目が先に走る)。
+ */
 async function withDirectory(directory: Directory): Promise<void> {
   handle.dispose()
   delete (globalThis as { chrome?: unknown }).chrome
+  const parsed = new DOMParser().parseFromString(OPTIONS_HTML, 'text/html')
+  document.body.innerHTML = parsed.body.innerHTML
   stub = stubChrome({
     local: { 'ytRedirectPin.directory': directory },
     sync: { 'ytRedirectPin.config': DEFAULT_CONFIG },
@@ -132,6 +141,17 @@ describe('辞書の左右分割 (AC6〜AC13)', () => {
     expect([...detail.querySelectorAll('button')].some((b) => b.textContent === '削除')).toBe(true)
   })
 
+  it('Enter で選択が変わる(キーボード操作 / F4)', async () => {
+    await withDirectory([entry({ url: FAKE_CHANNEL.url }), entry({ url: FAKE_OTHER_CHANNEL.url })])
+
+    const row = rowByHandle(FAKE_CHANNEL.handle)
+    expect(row.tabIndex).toBe(0)
+    expect(row.getAttribute('role')).toBe('button')
+    row.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }))
+
+    expect(dirDetail().textContent).toContain(FAKE_CHANNEL.url)
+  })
+
   it('左の一覧に入力欄が無い (AC9)', async () => {
     await withDirectory([entry({ url: FAKE_CHANNEL.url }), entry({ url: FAKE_OTHER_CHANNEL.url })])
 
@@ -168,6 +188,17 @@ describe('辞書の左右分割 (AC6〜AC13)', () => {
 
     const filter = document.querySelector('#dirFilter') as HTMLInputElement
     filter.value = 'another'
+    filter.dispatchEvent(new Event('input'))
+    expect(dirRows().length).toBe(1)
+
+    // 呼び名にも当たる (F7)
+    filter.value = 'まっくす'
+    filter.dispatchEvent(new Event('input'))
+    expect(dirRows().length).toBe(1)
+    expect(dirRows()[0].textContent).toContain('まっくす')
+
+    // 大小無視 (F7)
+    filter.value = 'ANOTHER'
     filter.dispatchEvent(new Event('input'))
     expect(dirRows().length).toBe(1)
 
@@ -277,35 +308,42 @@ describe('辞書の左右分割 (AC6〜AC13)', () => {
   it('絞り込み中に消えた行の状態も掃除される (AC21)', async () => {
     await withDirectory([entry({ url: FAKE_CHANNEL.url }), entry({ url: FAKE_OTHER_CHANNEL.url })])
 
+    // 1. 行 A(FAKE_CHANNEL)を選ぶ → 自由文を打つ
     rowByHandle(FAKE_CHANNEL.handle).click()
     const field = dirDetail().querySelectorAll('.detail-field input')[0] as HTMLInputElement
     field.value = 'あ'.repeat(250)
     field.dispatchEvent(new Event('input'))
     field.dispatchEvent(new Event('change'))
 
+    // 2. 行 B(FAKE_OTHER_CHANNEL)を選ぶ。ここで A の下書きが rowDrafts に確定し、
+    //    A は非選択の表示専用行として liveRows に入る(まだ選択されていない状態を作る)
+    rowByHandle(FAKE_OTHER_CHANNEL.handle).click()
+
+    // 3. 絞り込みで A を #dirList から外す。この描画で A は liveRows から完全に消える
     const filter = document.querySelector('#dirFilter') as HTMLInputElement
     filter.value = FAKE_OTHER_CHANNEL.handle
-    // captureRowDrafts が下書きを拾うのはこの再描画(絞り込みで 1 行目が #dirList から消える)
     filter.dispatchEvent(new Event('input'))
 
-    // 別のタブで 1 行目が削除された辞書が届く
+    // 4. 別のタブで A が削除された辞書が届く
     const remaining = (stub.local['ytRedirectPin.directory'] as Directory).filter(
       (e) => e.url !== FAKE_CHANNEL.url,
     )
     stub.emitChange('ytRedirectPin.directory', remaining)
 
+    // 5. 絞り込みを戻し、A と同じハンドルを ＋ から再登録する
     filter.value = ''
     filter.dispatchEvent(new Event('input'))
 
-    // 同じハンドルを ＋ から再登録する
     const newHandleInput = document.querySelector('#newHandle') as HTMLInputElement
     newHandleInput.value = FAKE_CHANNEL.handle
     ;(document.querySelector('#addEntry') as HTMLButtonElement).click()
     await new Promise((resolve) => setTimeout(resolve, 0))
 
+    // 6. rowDrafts(下書き)が残っていなければ、再登録した行の自由文欄は空のまま
     rowByHandle(FAKE_CHANNEL.handle).click()
     const reregistered = dirDetail().querySelectorAll('.detail-field input')[0] as HTMLInputElement
     expect(reregistered.value).toBe('')
+    expect(reregistered.classList.contains('invalid')).toBe(false)
   })
 
   it('再描画でフォーカスとキャレットが戻る (AC22)', async () => {
@@ -332,6 +370,11 @@ describe('タブ (AC1〜AC5)', () => {
     expect(panel('panel-directory').hidden).toBe(true)
     expect(panel('panel-history').hidden).toBe(true)
     expect(panel('panel-dev').hidden).toBe(true)
+    // 選択中タブの唯一の手掛かりである aria-selected も見る (F6)
+    expect(tabButton('basic').getAttribute('aria-selected')).toBe('true')
+    expect(tabButton('directory').getAttribute('aria-selected')).toBe('false')
+    expect(tabButton('history').getAttribute('aria-selected')).toBe('false')
+    expect(tabButton('dev').getAttribute('aria-selected')).toBe('false')
   })
 
   it('タブを押すとそのタブだけが見える (AC2)', () => {
@@ -341,6 +384,10 @@ describe('タブ (AC1〜AC5)', () => {
     expect(panel('panel-basic').hidden).toBe(true)
     expect(panel('panel-history').hidden).toBe(true)
     expect(panel('panel-dev').hidden).toBe(true)
+    expect(tabButton('directory').getAttribute('aria-selected')).toBe('true')
+    expect(tabButton('basic').getAttribute('aria-selected')).toBe('false')
+    expect(tabButton('history').getAttribute('aria-selected')).toBe('false')
+    expect(tabButton('dev').getAttribute('aria-selected')).toBe('false')
   })
 
   it('各タブが受け持つ節を持っている (AC3)', () => {
@@ -363,8 +410,13 @@ describe('タブ (AC1〜AC5)', () => {
   it('警告バナーと保存バーはどのタブでも消えない (AC4)', () => {
     for (const tab of ['basic', 'directory', 'history', 'dev']) {
       tabButton(tab).click()
-      expect((document.querySelector('#studioWarning') as HTMLElement).hidden).toBe(false)
-      expect((document.querySelector('.actions') as HTMLElement).hidden).toBe(false)
+      const studioWarning = document.querySelector('#studioWarning') as HTMLElement
+      const actions = document.querySelector('.actions') as HTMLElement
+      expect(studioWarning.hidden).toBe(false)
+      // 直接の hidden だけでなく、祖先が hidden になっていないことも見る (F6)
+      expect(studioWarning.closest('[hidden]')).toBeNull()
+      expect(actions.hidden).toBe(false)
+      expect(actions.closest('[hidden]')).toBeNull()
     }
   })
 
@@ -414,7 +466,7 @@ function stubFetch(html: string, imageBytes = 100): { pageCalls: string[]; allCa
     return {
       ok: true,
       status: 200,
-      headers: { get: () => null },
+      headers: { get: (name: string) => (name === 'content-type' ? 'image/jpeg' : null) },
       arrayBuffer: async () => new ArrayBuffer(imageBytes),
     } as unknown as Response
   }) as typeof fetch
@@ -473,6 +525,54 @@ describe('アイコン (AC14〜AC20)', () => {
     expect(pageCalls).not.toContain(FAKE_CHANNEL.url)
   })
 
+  it('待っている間に削除された行を復活させない (F14 / Critical)', async () => {
+    const html = `<html><head>${canonical(ID)}${ogImage(ICON_URL)}</head></html>`
+    // ⚠️ プレーンな `let` だと、クロージャの中だけで代入する変数を TS が誤って `null` に
+    //    narrow することがあるため、保持先をオブジェクトにしてある
+    const paused: { resolve: (() => void) | null } = { resolve: null }
+    let pageCallCount = 0
+    const impl = (async (input: RequestInfo | URL) => {
+      const url = String(input)
+      if (url.includes('www.youtube.com')) {
+        pageCallCount++
+        // 1 件目のページ取得だけ、外から進められるまで待たせる
+        if (pageCallCount === 1) {
+          await new Promise<void>((resolve) => {
+            paused.resolve = resolve
+          })
+        }
+        return { ok: true, status: 200, text: async () => html } as Response
+      }
+      return {
+        ok: true,
+        status: 200,
+        headers: { get: (name: string) => (name === 'content-type' ? 'image/jpeg' : null) },
+        arrayBuffer: async () => new ArrayBuffer(10),
+      } as unknown as Response
+    }) as typeof fetch
+    globalThis.fetch = impl
+
+    await withDirectory([entry({ url: FAKE_CHANNEL.url }), entry({ url: FAKE_OTHER_CHANNEL.url })])
+
+    const button = document.querySelector('#fetchAllIcons') as HTMLButtonElement
+    button.click()
+
+    // 1 件目(FAKE_CHANNEL)の取得中に、2 件目(FAKE_OTHER_CHANNEL)を選んで削除する
+    rowByHandle(FAKE_OTHER_CHANNEL.handle).click()
+    const remove = [...dirDetail().querySelectorAll('button')].find((b) => b.textContent === '削除')!
+    remove.click()
+
+    // 1 件目の取得を進めてループを完了させる
+    paused.resolve?.()
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    const restored = (stub.local['ytRedirectPin.directory'] as Directory).find(
+      (e) => e.url === FAKE_OTHER_CHANNEL.url,
+    )
+    expect(restored).toBeUndefined()
+  })
+
   it('まとめて取得のボタンに件数が出る (AC15)', async () => {
     await withDirectory([
       entry({ url: FAKE_CHANNEL.url, iconDataUrl: 'data:image/jpeg;base64,AAA' }),
@@ -505,6 +605,26 @@ describe('アイコン (AC14〜AC20)', () => {
     )!
     expect(saved.channelId).toBe(ID)
     expect(saved.iconDataUrl).toMatch(/^data:image\//)
+  })
+
+  it('片方(アイコン)が失敗しても、成功した側(チャンネル ID)は保存する (AC19 / F18)', async () => {
+    // canonical はあるが og:image が無い HTML(アイコンだけ失敗する)
+    const html = `<html><head>${canonical(ID)}</head></html>`
+    const { pageCalls } = stubFetch(html)
+
+    await withDirectory([entry({ url: FAKE_CHANNEL.url })])
+
+    rowByHandle(FAKE_CHANNEL.handle).click()
+    const flag = dirDetail().querySelector('input[type="checkbox"]') as HTMLInputElement
+    flag.click()
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    expect(pageCalls).toHaveLength(1)
+    const saved = (stub.local['ytRedirectPin.directory'] as Directory).find(
+      (e) => e.url === FAKE_CHANNEL.url,
+    )!
+    expect(saved.channelId).toBe(ID)
+    expect(saved.iconDataUrl).toBe('')
   })
 
   it('控えたアイコンは次に開いても取りに行かない (AC17)', async () => {

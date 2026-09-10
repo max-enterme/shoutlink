@@ -119,10 +119,18 @@ describe('007: 辞書の左右分割 / 20 件上限の取りこぼし', () => {
   })
 
   it('通信の記述にアイコンが書かれている (AC24)', () => {
+    let visited = 0
     for (const [path, content] of Object.entries({ ...readmeFiles, ...docFiles })) {
       if (!['README.md', 'docs/privacy-policy.md'].includes(key(path))) continue
+      visited += 1
       expect(content, `${key(path)} に yt3.googleusercontent.com が無い`).toContain('yt3.googleusercontent.com')
-      expect(content, `${key(path)} に「アイコン」が無い`).toContain('アイコン')
+      expect(content, `${key(path)} に「アイコンをまとめて取得」が無い`).toContain('アイコンをまとめて取得')
     }
+    expect(visited).toBe(2)
+  })
+
+  it('README.md と docs/* に「通信するのは 1 か所だけ」の断定が残っていない (F20 / F25)', () => {
+    const hits = findMatches({ ...readmeFiles, ...docFiles }, /通信(するの)?は\s*1\s*か所だけ/)
+    expect(hits).toEqual([])
   })
 })

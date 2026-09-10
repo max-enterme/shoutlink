@@ -15,7 +15,7 @@
  *    「最初に見つかった `UC…`」を採ってはいけない。
  *    → **ページ全体を表す metadata だけを見て、複数の出所が食い違ったら失敗にする**(下記)。
  */
-import { CHANNEL_ID_PATTERN } from './directory'
+import { CHANNEL_ID_PATTERN, MAX_ICON_DATA_URL_LENGTH } from './directory'
 
 /**
  * 取得のタイムアウト (AC17)。
@@ -195,48 +195,31 @@ function makeTimeoutSignal(ms: number): AbortSignal | undefined {
  *
  * **例外を投げない。**失敗は `{ status: 'failed', reason }` で返す — 呼び出し側(設定画面)が
  * 理由をそのまま画面に出せるようにするため。**握って空配列を返すと「なぜ空なのか」が消える。**
+ *
+ * ⚠️ **`resolveChannelPage` の薄いラッパ (F12)。**取得部(`parseYouTubeUrl` → fetch →
+ *    `!response.ok` → `text()`)と結果組み立てが `resolveChannelPage` と丸ごと重複していたため、
+ *    `resolveChannelId(url, o)` は `(await resolveChannelPage(url, { channelId: true, icon: false }, o)).channelId`
+ *    と等価な形に寄せてある。`want.channelId` が true のとき `resolveChannelPage` は必ず
+ *    `channelId` を返す(null にならない)ので、`??` の右側は理論上通らない安全弁。
  */
 export async function resolveChannelId(
   url: string,
   options: ResolveOptions = {},
 ): Promise<ChannelIdResult> {
-  // **YouTube のチャンネル URL でなければ、取りに行きもしない**(上記 `parseYouTubeUrl`)
-  if (!parseYouTubeUrl(url)) {
-    return { status: 'failed', reason: 'YouTube のチャンネル URL ではない' }
-  }
-
-  const direct = channelIdFromUrl(url)
-  if (direct) return { status: 'already', channelId: direct }
-
-  const doFetch = options.fetchImpl ?? (typeof fetch === 'function' ? fetch : null)
-  if (!doFetch) return { status: 'failed', reason: 'fetch が使えない環境' }
-
-  let html: string
-  try {
-    const response = await doFetch(url, {
-      credentials: 'omit',
-      redirect: 'follow',
-      signal: makeTimeoutSignal(options.timeoutMs ?? CHANNEL_PAGE_TIMEOUT_MS),
-    })
-    if (!response.ok) {
-      return { status: 'failed', reason: `取得に失敗した (HTTP ${response.status})` }
-    }
-    // ⚠️ **途中で切らない。**実測(2026-08-15)でチャンネルページは 1.3〜1.9 MB あり、
-    //    `<head>` の metadata は先頭ではなく **約 733 KB 地点**、`externalId` に至っては
-    //    **1.89 MB 地点**に出た。上限で切ると**出所が黙って減り、相互照合が弱る。**
-    html = await response.text()
-  } catch (err) {
-    return { status: 'failed', reason: `取得に失敗した (${String(err)})` }
-  }
-
-  const extracted = extractChannelId(html)
-  if (!extracted.ok) return { status: 'failed', reason: extracted.reason }
-  return { status: 'resolved', channelId: extracted.channelId }
+  const { channelId } = await resolveChannelPage(url, { channelId: true, icon: false }, options)
+  return channelId ?? { status: 'failed', reason: 'YouTube のチャンネル URL ではない' }
 }
 
-/** `fetchIconAsDataUrl` が上限を指定しなかったときの既定値。画像は実測 5,219 バイトなので、
- *  十分な余裕を見て 1MB。og:image が指すはずの無い巨大なファイルを黙って取り切らないための歯止め */
-const DEFAULT_ICON_MAX_BYTES = 1024 * 1024
+/**
+ * `fetchIconAsDataUrl` が上限を指定しなかったときの既定値。
+ *
+ * ⚠️ **`directory.ts` の `MAX_ICON_DATA_URL_LENGTH`(保存できる data URL の上限 = 64KB)から逆算する。**
+ *    以前は画像の実測(5,219 バイト)に余裕を見ただけの 1MB を既定にしていたが、それだと
+ *    49,135〜1,048,576 バイトの画像が「取得は成功 (`ok: true`)」を返しつつ、保存直前の
+ *    `normalizeDirectory` に 64KB 超として黙って空文字へ落とされていた(F8)。
+ *    ここで保存できる上限に合わせておけば、収まらない画像は**取得の時点で**理由付きの失敗になる。
+ */
+const DEFAULT_ICON_MAX_BYTES = Math.floor((MAX_ICON_DATA_URL_LENGTH - 64) / 4) * 3
 
 function arrayBufferToBase64(buffer: ArrayBuffer): string {
   const bytes = new Uint8Array(buffer)
@@ -286,9 +269,28 @@ export async function fetchIconAsDataUrl(
   if (buffer.byteLength > maxBytes) {
     return { ok: false, reason: `画像が大きすぎる (${buffer.byteLength} バイト)` }
   }
+  // **0 バイト応答も成功にしない (F13)。** `btoa('') = ''` なので、無検査だと
+  // `data:image/jpeg;base64,` という壊れた画像が `ok: true` のまま保存され、
+  // 空でないので再取得の対象にもならず居座り続ける
+  if (buffer.byteLength === 0) {
+    return { ok: false, reason: '画像が 0 バイトだった' }
+  }
 
-  const contentType = response.headers?.get?.('content-type') ?? 'image/jpeg'
-  return { ok: true, dataUrl: `data:${contentType};base64,${arrayBufferToBase64(buffer)}` }
+  // **content-type を検査する (F13)。** 無検査で埋めると、200 で返る HTML のエラーページまで
+  // `ok: true` として保存し、読み戻しの `startsWith('data:image/')` で落ちて無言で消える(F8 と同じ穴)
+  const contentType = response.headers?.get?.('content-type') ?? ''
+  if (!contentType.startsWith('image/')) {
+    return { ok: false, reason: `画像ではないレスポンス (${contentType || '不明'})` }
+  }
+
+  const dataUrl = `data:${contentType};base64,${arrayBufferToBase64(buffer)}`
+  // **生成した data URL の長さも、保存できる上限と突き合わせる (F8)。**
+  // `maxBytes` の既定値は `MAX_ICON_DATA_URL_LENGTH` から逆算してあるので通常はここに来ないが、
+  // 呼び出し側が `maxBytes` を明示的に大きく指定した場合や、content-type が長い場合の保険にする
+  if (dataUrl.length > MAX_ICON_DATA_URL_LENGTH) {
+    return { ok: false, reason: `保存できる大きさを超えている (${dataUrl.length} 文字)` }
+  }
+  return { ok: true, dataUrl }
 }
 
 export type ChannelIconResult =

@@ -268,15 +268,19 @@ describe('iconUrlAtSize', () => {
   })
 })
 
-/** 画像取得用の偽 fetch。**実際のネットワークには触らない** */
-function fakeImageFetch(bytes: number, init: { ok?: boolean; status?: number } = {}) {
+/** 画像取得用の偽 fetch。**実際のネットワークには触らない**。既定の content-type は `image/jpeg` */
+function fakeImageFetch(
+  bytes: number,
+  init: { ok?: boolean; status?: number; contentType?: string | null } = {},
+) {
   const calls: string[] = []
+  const contentType = init.contentType === undefined ? 'image/jpeg' : init.contentType
   const impl = (async (input: RequestInfo | URL) => {
     calls.push(String(input))
     return {
       ok: init.ok ?? true,
       status: init.status ?? 200,
-      headers: { get: () => null },
+      headers: { get: (name: string) => (name === 'content-type' ? contentType : null) },
       arrayBuffer: async () => new ArrayBuffer(bytes),
     } as unknown as Response
   }) as typeof fetch
@@ -290,6 +294,74 @@ describe('fetchIconAsDataUrl', () => {
     const result = await fetchIconAsDataUrl(ICON_URL_88, { fetchImpl: impl, maxBytes })
     expect(result.ok).toBe(false)
     expect(result.ok === false && result.reason).toBeTruthy()
+  })
+
+  // --- F8: 取得時点で保存できる大きさかを確かめる -----------------------------
+
+  it('保存の上限(64KB)を超える画像は、取得時点で理由つきの失敗にする (F8)', async () => {
+    // 元バイト長が 49,135〜1,048,576 バイトだと、旧仕様(既定 1MB)では ok: true を返し、
+    // 保存直前の normalizeDirectory が黙って空文字に落としていた
+    const { impl } = fakeImageFetch(100_000)
+    const result = await fetchIconAsDataUrl(ICON_URL_88, { fetchImpl: impl })
+    expect(result.ok).toBe(false)
+  })
+
+  // --- F13: 「取得成功」の判定を厳しくする -------------------------------------
+
+  it('content-type が image/ で始まらないレスポンスは失敗にする (F13)', async () => {
+    const { impl } = fakeImageFetch(100, { contentType: 'text/html' })
+    const result = await fetchIconAsDataUrl(ICON_URL_88, { fetchImpl: impl })
+    expect(result.ok).toBe(false)
+  })
+
+  it('0 バイトの応答は失敗にする (F13)', async () => {
+    const { impl } = fakeImageFetch(0)
+    const result = await fetchIconAsDataUrl(ICON_URL_88, { fetchImpl: impl })
+    expect(result.ok).toBe(false)
+  })
+
+  // --- F9: data URL の中身と、未検証だった経路 ---------------------------------
+
+  it('既知のバイト列を正しく base64 化する', async () => {
+    const impl = (async () => ({
+      ok: true,
+      status: 200,
+      headers: { get: (name: string) => (name === 'content-type' ? 'image/jpeg' : null) },
+      arrayBuffer: async () => new Uint8Array([0xff, 0xd8, 0xff]).buffer,
+    })) as unknown as typeof fetch
+    const result = await fetchIconAsDataUrl(ICON_URL_88, { fetchImpl: impl })
+    expect(result).toEqual({ ok: true, dataUrl: 'data:image/jpeg;base64,/9j/' })
+  })
+
+  it('非 200 は失敗として返す', async () => {
+    const { impl } = fakeImageFetch(100, { ok: false, status: 500 })
+    const result = await fetchIconAsDataUrl(ICON_URL_88, { fetchImpl: impl })
+    expect(result.ok).toBe(false)
+  })
+
+  it('通信が例外を投げても握って理由を返す', async () => {
+    const impl = (async () => {
+      throw new Error('ネットワークが死んだ')
+    }) as unknown as typeof fetch
+    const result = await fetchIconAsDataUrl(ICON_URL_88, { fetchImpl: impl })
+    expect(result.ok).toBe(false)
+    expect(result.ok === false && result.reason).toContain('ネットワークが死んだ')
+  })
+
+  it('Content-Length が上限を超えていれば、本文を読まずに失敗にする', async () => {
+    let bodyRead = false
+    const impl = (async () => ({
+      ok: true,
+      status: 200,
+      headers: { get: (name: string) => (name === 'content-length' ? '999999' : null) },
+      arrayBuffer: async () => {
+        bodyRead = true
+        return new ArrayBuffer(10)
+      },
+    })) as unknown as typeof fetch
+    const result = await fetchIconAsDataUrl(ICON_URL_88, { fetchImpl: impl, maxBytes: 100 })
+    expect(result.ok).toBe(false)
+    expect(bodyRead).toBe(false)
   })
 })
 
@@ -311,7 +383,7 @@ function fakePageAndIconFetch(html: string, imageBytes = 100) {
     return {
       ok: true,
       status: 200,
-      headers: { get: () => null },
+      headers: { get: (name: string) => (name === 'content-type' ? 'image/jpeg' : null) },
       arrayBuffer: async () => new ArrayBuffer(imageBytes),
     } as unknown as Response
   }) as typeof fetch
@@ -339,6 +411,18 @@ describe('resolveChannelPage (AC19 / AC20)', () => {
     expect(pageCalls).toHaveLength(1)
     expect(result.channelId).toBeNull()
     expect(result.icon?.status).toBe('resolved')
+  })
+
+  it('アイコンの data URL の中身を検証する (F9)', async () => {
+    const html = `<html><head>${canonical(ID)}${ogImage(ICON_URL_900)}</head></html>`
+    // 既知のバイト列([0,0,0])= base64 で "AAAA" になることを確かめる
+    const { impl } = fakePageAndIconFetch(html, 3)
+    const result = await resolveChannelPage(
+      'https://www.youtube.com/@example',
+      { channelId: false, icon: true },
+      { fetchImpl: impl },
+    )
+    expect(result.icon).toEqual({ status: 'resolved', dataUrl: 'data:image/jpeg;base64,AAAA' })
   })
 
   it('/channel/UC… でもアイコンが要るなら取りに行く', async () => {

@@ -115,7 +115,9 @@
       .dir-row-nickname { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
       .dir-row-handle { color: #666; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
       .dir-row.unseen .dir-row-handle { color: #aaa; }
-      .dir-row .mark { flex-shrink: 0; }
+      .dir-row .mark { flex-shrink: 0; color: #b3261e; cursor: help; margin-left: 4px; }
+      /* 効かない行は背景色でも分かるようにする (004 T14: アイコン + 行の背景色の両方) */
+      .dir-row.ineffective { background: #fff6f6; }
 
       /* --- 右の詳細 (AC9) --- */
       .dir-detail-reason { color: #b3261e; font-size: 13px; margin: 0 0 8px; }
@@ -139,10 +141,10 @@
     <h1>返礼リンク 設定</h1>
 
     <nav id="tabs" role="tablist">
-      <button type="button" data-tab="basic">基本設定</button>
-      <button type="button" data-tab="directory">辞書</button>
-      <button type="button" data-tab="history">履歴</button>
-      <button type="button" data-tab="dev">開発</button>
+      <button type="button" id="tab-basic" role="tab" data-tab="basic">基本設定</button>
+      <button type="button" id="tab-directory" role="tab" data-tab="directory">辞書</button>
+      <button type="button" id="tab-history" role="tab" data-tab="history">履歴</button>
+      <button type="button" id="tab-dev" role="tab" data-tab="dev">開発</button>
     </nav>
 
     <p class="warn" id="studioWarning">
@@ -153,7 +155,7 @@
       「↩ 返礼」から手動で実行できます。
     </p>
 
-    <section class="panel" id="panel-basic">
+    <section class="panel" id="panel-basic" role="tabpanel" aria-labelledby="tab-basic">
     <fieldset>
       <legend>リダイレクト返礼</legend>
       <div class="row">
@@ -236,7 +238,7 @@
     </fieldset>
     </section>
 
-    <section class="panel" id="panel-history" hidden>
+    <section class="panel" id="panel-history" role="tabpanel" aria-labelledby="tab-history" hidden>
     <fieldset>
       <legend>投稿履歴</legend>
       <p class="hint">
@@ -257,7 +259,7 @@
     </fieldset>
     </section>
 
-    <section class="panel" id="panel-directory" hidden>
+    <section class="panel" id="panel-directory" role="tabpanel" aria-labelledby="tab-directory" hidden>
     <fieldset>
       <legend>呼び名の辞書</legend>
       <p class="hint">
@@ -310,7 +312,7 @@
     </fieldset>
     </section>
 
-    <section class="panel" id="panel-dev" hidden>
+    <section class="panel" id="panel-dev" role="tabpanel" aria-labelledby="tab-dev" hidden>
     <fieldset>
       <legend>診断ログ</legend>
       <div class="row">

@@ -244,9 +244,10 @@ function restoreFocusTarget(target: FocusTarget | null): void {
  *    ③ T9 で足した `testSendStates` も同じ穴を踏む。消さずに残すと、削除して登録し直した
  *      行に前の行のテスト送信結果がそのまま出る
  *
- * ⚠️ **`resolvingKeys` はここで消さない。**あれは「いま fetch が飛んでいる」という
- *    実行中の事実で、持ち主は `resolveEntryChannelId` の `finally`(必ず消える)。
- *    外から消すと**多重に走らせない歯止めが外れ**、同じ URL へ 2 本目が飛びうる。
+ * ⚠️ **`resolvingKeys` / `resolvingChannelIdKeys` はここで消さない。**あれは「いま fetch が
+ *    飛んでいる」という実行中の事実で、持ち主は `resolveEntryChannelId` / `fetchAllIcons` の
+ *    それぞれの `finally`(必ず消える)。外から消すと**多重に走らせない歯止めが外れ**、
+ *    同じ URL へ 2 本目が飛びうる(F16)。
  *    行が消えている間に出る「解決中…」の表示は、その `finally` の再描画で自然に消える
  *    (`channelIdErrors` と違い、**残り続ける嘘にならない**)
  */
@@ -348,8 +349,22 @@ async function persistDirectory(message: string): Promise<void> {
 //   ② **未解決の行に対する明示的な再試行**(展開したときの個別 / 辞書の上のまとめて)
 // **辞書を開いただけでは 1 件も取りに行かない。**
 
-/** いま解決を走らせている行(鍵は `directoryKey`)。**同じ行を多重に走らせない** */
+/**
+ * いま fetch を走らせている行(鍵は `directoryKey`)。**同じ行を多重に走らせない**
+ * (`resolveEntryChannelId` と `fetchAllIcons` の両方がここに足す / F16)。
+ */
 const resolvingKeys = new Set<string>()
+
+/**
+ * いま**チャンネル ID を**解決している行(鍵は `directoryKey`)。**表示専用**で、
+ * `resolvingKeys` とは別に持つ(F17)。
+ *
+ * ⚠️ **`resolvingKeys` をそのまま「解決中…」の表示に使わない。**`fetchAllIcons` は
+ *    `want.channelId: false` でも `resolvingKeys` に足すので、それをそのまま使うと
+ *    「アイコンだけ取りに行っている行」にまで「チャンネル ID を解決中…」と出て、
+ *    既に持っている `channelId` の表示を隠してしまう(この塊が作った退行)。
+ */
+const resolvingChannelIdKeys = new Set<string>()
 
 /**
  * 直近の失敗の理由(鍵は `directoryKey`)。**保存しない。**
@@ -469,6 +484,8 @@ async function resolveEntryChannelId(url: string, wantIcon: boolean): Promise<vo
 
   const handle = displayHandle(before)
   resolvingKeys.add(key)
+  // 表示用(F17)。「チャンネル ID を解決中…」は、実際にチャンネル ID を要求しているときだけ出す
+  if (want.channelId) resolvingChannelIdKeys.add(key)
 
   // ⚠️ **`add` の直後から `try` を開ける。**この鍵は `finally` だけが消す設計なので、
   //    **`add` と `try` の間で throw されると鍵が永久に残る。**そうなるとその行は
@@ -515,6 +532,7 @@ async function resolveEntryChannelId(url: string, wantIcon: boolean): Promise<vo
     }
   } finally {
     resolvingKeys.delete(key)
+    resolvingChannelIdKeys.delete(key)
     // 「解決中…」の表示と、失敗の理由を反映する。**成否に関わらず必ず描き直す**
     renderDirectory()
   }
@@ -578,6 +596,18 @@ function renderFetchAllIcons(): void {
 /**
  * **1 件ずつ順に取りに行く**(既存の「まとめて再試行」と同じ / plan.md 確定値)。
  * `bulkResolving` とは別のフラグで二度押しを止める(引き金も対象も別)。
+ *
+ * - **`resolvingKeys` を通す (F16)。**`resolveEntryChannelId` の排他機構をここでも使わないと、
+ *   まとめて取得が処理中の行を、個別の「コメントに反応する」ON / まとめて再試行と
+ *   同時に走らせてしまい、同じチャンネルページ(1.3〜1.9MB)を二重に取りに行く。
+ * - **upsert の直前に、行がまだ辞書にあるかを確かめる (F14 / Critical)。**`upsertChannelIcon` は
+ *   登録が無ければ行を作る。ガード無しだと、取得を待っている間に削除された行(別タブでの削除も含む)
+ *   が**空行として復活し**、ループ末尾の保存でその復活が永続化されてしまう。
+ * - **1 件ごとに保存する (F15)。**ループの最後にしか保存しないと、100 件のような大きい辞書では
+ *   分オーダーで掛かり、その間に画面を閉じる・他所の保存(`onDirectoryChanged` の差し替え)が
+ *   起きるだけで、それまでに取れたアイコンが丸ごと失われる。`resolveEntryChannelId` と同じ約束にそろえる。
+ * - **保存が失敗しても(chrome.storage のクォータ等)状態表示が固まったままにしない。**
+ *   `void fetchAllIcons()` で呼ばれるので、ここで握らないと unhandled rejection として黙って消える。
  */
 async function fetchAllIcons(): Promise<void> {
   if (bulkIconFetching) return
@@ -589,19 +619,35 @@ async function fetchAllIcons(): Promise<void> {
   let success = 0
   try {
     for (let i = 0; i < targets.length; i++) {
-      fetchAllIconsStatus.textContent = `取得中… (${i + 1}/${targets.length})`
-      // **チャンネル ID は要求しない**(plan.md の表: この経路は `{ channelId: false, icon: true }`)
-      const result = await resolveChannelPage(targets[i].url, { channelId: false, icon: true })
-      if (result.icon?.status === 'resolved') {
-        directory = upsertChannelIcon(directory, targets[i].url, result.icon.dataUrl)
-        success++
+      const key = directoryKey(targets[i].url)
+      // 個別の解決やまとめて再試行と同じ行を同時に取りに行かせない (F16)
+      if (resolvingKeys.has(key)) continue
+      resolvingKeys.add(key)
+      try {
+        fetchAllIconsStatus.textContent = `取得中… (${i + 1}/${targets.length})`
+        // **チャンネル ID は要求しない**(plan.md の表: この経路は `{ channelId: false, icon: true }`)
+        const result = await resolveChannelPage(targets[i].url, { channelId: false, icon: true })
+        // **待っている間に削除された行には書かない**(復活させない / F14)
+        if (!findEntry(directory, targets[i].url)) continue
+        if (result.icon?.status === 'resolved') {
+          directory = upsertChannelIcon(directory, targets[i].url, result.icon.dataUrl)
+          success++
+          // 1 件ごとに保存する(F15)。ここで保存しておけば、途中で画面を閉じても取れた分は残る
+          await saveDirectory(directory)
+          renderDirectory()
+        }
+      } finally {
+        resolvingKeys.delete(key)
       }
     }
-    await saveDirectory(directory)
     fetchAllIconsStatus.textContent =
       success === targets.length
         ? `${targets.length} 件取得しました`
         : `${targets.length} 件中 ${success} 件取得しました(${targets.length - success} 件は失敗)`
+  } catch (err) {
+    // saveDirectory の失敗(クォータ超過等)をここで握る。**状態表示を「取得中…」のまま固めない** (F15)
+    log.error('アイコンのまとめて取得で保存に失敗した:', err)
+    fetchAllIconsStatus.textContent = `保存に失敗しました(${success} 件は取得済み)`
   } finally {
     bulkIconFetching = false
     renderDirectory()
@@ -664,8 +710,8 @@ function renderDirDetail(entry: DirectoryEntry | null, anyTestSendBusy = false):
   const handleLine = document.createElement('p')
   handleLine.className = 'dir-detail-handle'
   handleLine.textContent = entry.url
-  // 走っている間の表示 (AC17)
-  if (resolvingKeys.has(key)) {
+  // 走っている間の表示 (AC17)。**チャンネル ID を要求しているときだけ**(F17)
+  if (resolvingChannelIdKeys.has(key)) {
     const busy = document.createElement('span')
     busy.className = 'resolving'
     busy.textContent = 'チャンネル ID を解決中…'
@@ -718,7 +764,7 @@ function renderDirDetail(entry: DirectoryEntry | null, anyTestSendBusy = false):
   const idStatus = channelIdRowStatus({
     channelId: entry.channelId,
     replyToComment: entry.replyToComment,
-    resolving: resolvingKeys.has(key),
+    resolving: resolvingChannelIdKeys.has(key),
     error: channelIdErrors.get(key) ?? null,
   })
   const idRow = document.createElement('p')
@@ -990,9 +1036,18 @@ function renderDirectory(): void {
     row.className = entry.lastSeenAt ? 'dir-row' : 'dir-row unseen'
     if (isSelected) row.classList.add('selected')
     row.title = entry.lastSeenAt ? entry.url : `${entry.url}(まだリダイレクトを受けていない)`
-    row.addEventListener('click', () => {
+    // 右の詳細ペインが呼び名・自由文・削除の唯一の編集口なので、マウス無しでも到達できるようにする (F4)
+    row.tabIndex = 0
+    row.setAttribute('role', 'button')
+    const selectRow = (): void => {
       selectedKey = key
       renderDirectory()
+    }
+    row.addEventListener('click', selectRow)
+    row.addEventListener('keydown', (ev) => {
+      if (ev.key !== 'Enter' && ev.key !== ' ') return
+      ev.preventDefault()
+      selectRow()
     })
 
     // --- アイコン(丸)/ 未取得ならモノグラム (AC18) -----------------------------
@@ -1001,6 +1056,20 @@ function renderDirectory(): void {
       avatar.className = 'avatar'
       avatar.src = entry.iconDataUrl
       avatar.alt = ''
+      // **読み込みに失敗したらモノグラムへ差し替える (F19)。**`normalizeDirectory` は
+      // `data:image/` 前置と 64KB 以下しか見ないので、非画像本文が素通りすることがある。
+      // 見えなくても `iconDataUrl` は空でないため通常の取得対象にも二度と乗らず、
+      // このままだと UI から復旧する手段が無い(削除して登録し直すしかない)
+      avatar.addEventListener(
+        'error',
+        () => {
+          const monogram = document.createElement('span')
+          monogram.className = 'monogram'
+          monogram.textContent = initialForAvatar(entry)
+          avatar.replaceWith(monogram)
+        },
+        { once: true },
+      )
       row.appendChild(avatar)
     } else {
       const monogram = document.createElement('span')
