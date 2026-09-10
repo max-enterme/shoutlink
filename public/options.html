@@ -68,16 +68,43 @@
 
       /* --- 007: 辞書の左右分割。左右それぞれ独立してスクロールする (AC6b) --- */
       .dir-split { display: flex; gap: 16px; align-items: flex-start; }
+      /* 左は 280px 固定 / 右は残り */
+      .dir-left { flex: 0 0 280px; display: flex; flex-direction: column; min-width: 0; }
+      #dirDetail { flex: 1; }
+      /* **一覧そのもの**と詳細だけが独立してスクロールする。絞り込み欄・＋ 追加欄は常に見える */
       #dirList, #dirDetail {
         max-height: calc(100vh - 260px);
         min-height: 240px;
         overflow-y: auto;
       }
-      #dirList { flex: 1; border: 1px solid #eee; border-radius: 6px; padding: 8px; }
-      #dirDetail { flex: 1; border: 1px solid #eee; border-radius: 6px; padding: 8px 10px; }
-      #dirList .dir-toolbar { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
-      #dirList .dir-toolbar input[type='text'] { width: auto; flex: 1; }
-      #dirList .dir-new { display: flex; gap: 8px; margin-top: 8px; }
+      #dirList { border: 1px solid #eee; border-radius: 6px; padding: 8px; }
+      #dirDetail { border: 1px solid #eee; border-radius: 6px; padding: 8px 10px; }
+      .dir-toolbar { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+      .dir-toolbar input[type='text'] { width: auto; flex: 1; }
+      .dir-new { display: flex; gap: 8px; margin-top: 8px; }
+
+      /* --- 左の 1 行(表示専用 / AC7 / AC9) --- */
+      .dir-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        padding: 6px 8px;
+        border-radius: 4px;
+        cursor: pointer;
+      }
+      .dir-row:hover { background: #f4f4f4; }
+      .dir-row.selected { background: #e6f0ff; }
+      .dir-row-main { display: flex; flex-direction: column; min-width: 0; }
+      .dir-row-nickname { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .dir-row-handle { color: #666; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .dir-row.unseen .dir-row-handle { color: #aaa; }
+      .dir-row .mark { flex-shrink: 0; }
+
+      /* --- 右の詳細 (AC9) --- */
+      .dir-detail-reason { color: #b3261e; font-size: 13px; margin: 0 0 8px; }
+      .dir-detail-handle { color: #666; font-size: 12px; margin: 0 0 8px; word-break: break-all; }
+      .dir-detail-nickname { display: block; margin-bottom: 12px; }
 
       .remaining { display: block; color: #666; font-size: 11px; margin-top: 2px; }
       /* 負(超過)は色でも分かるようにする。投稿時に削られるが保存は妨げない (AC8) */
@@ -233,20 +260,21 @@
       </p>
       <!-- AC17: 同じチャンネル ID の行が 2 件以上 = どちらを使うか決められないので何もしない。**常時表示** -->
       <p class="warn" id="channelIdDuplicate" hidden></p>
-      <!-- AC17 / T14 の決定 3: 再試行は「展開したときの個別」と「ここのまとめて」の 2 つ -->
+      <!-- AC17 / T14 の決定 3: 再試行は「選んだ行の個別」と「ここのまとめて」の 2 つ -->
       <p class="hint" id="channelIdRetryRow" hidden>
         <button id="retryChannelIds" type="button"></button>
         「コメントに反応する」が ON なのに<strong>チャンネル ID を取得できていない行</strong>です。
         取得できるまで、その人のコメントには反応しません。
       </p>
       <div class="dir-split">
-        <div id="dirList">
+        <div class="dir-left">
           <div class="dir-toolbar">
             <input id="dirFilter" type="text" placeholder="呼び名・ハンドルで絞り込み" />
             <button id="fetchAllIcons" type="button"></button>
             <span id="fetchAllIconsStatus"></span>
           </div>
-          <div id="directoryRows"></div>
+          <!-- 一覧は表示専用(入力欄は置かない / AC9)。**独立してスクロールする** (AC6b) -->
+          <div id="dirList"></div>
           <div class="dir-new">
             <input id="newHandle" type="text" placeholder="@example-channel または URL" />
             <input id="newNickname" type="text" placeholder="呼び名" />

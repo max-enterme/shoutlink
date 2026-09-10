@@ -101,3 +101,20 @@ describe('docs / cooldownSec の残存', () => {
     expect(hits).toEqual([])
   })
 })
+
+describe('007: 辞書の左右分割 / 20 件上限の取りこぼし', () => {
+  it('左右のペインに独立スクロールの指定がある (AC6b)', () => {
+    // ⚠️ これは**CSS の規則が存在することだけ**を見る検査で、実際にスクロールが分かれて
+    //    見えるかは人手(spec.md 降りる箇所)。規則を誤って消したときに気付ける
+    const html = publicFiles['../public/options.html']
+    expect(html).toMatch(/#dirList,\s*#dirDetail\s*\{[^}]*overflow-y:\s*auto/)
+  })
+
+  it('設定画面に撤廃した 20 件の上限が残っていない (AC25)', () => {
+    const hits = findMatches(
+      Object.fromEntries(Object.entries(publicFiles).filter(([path]) => key(path) === 'public/options.html')),
+      /20\s*件/,
+    )
+    expect(hits).toEqual([])
+  })
+})
