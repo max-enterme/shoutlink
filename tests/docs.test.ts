@@ -101,3 +101,76 @@ describe('docs / cooldownSec の残存', () => {
     expect(hits).toEqual([])
   })
 })
+
+describe('007: 辞書の左右分割 / 20 件上限の取りこぼし', () => {
+  it('左右のペインに独立スクロールの指定がある (AC6b)', () => {
+    // ⚠️ これは**CSS の規則が存在することだけ**を見る検査で、実際にスクロールが分かれて
+    //    見えるかは人手(spec.md 降りる箇所)。規則を誤って消したときに気付ける
+    const html = publicFiles['../public/options.html']
+    expect(html).toMatch(/#dirList,\s*#dirDetail\s*\{[^}]*overflow-y:\s*auto/)
+  })
+
+  it('設定画面に撤廃した 20 件の上限が残っていない (AC25)', () => {
+    const hits = findMatches(
+      Object.fromEntries(Object.entries(publicFiles).filter(([path]) => key(path) === 'public/options.html')),
+      /20\s*件/,
+    )
+    expect(hits).toEqual([])
+  })
+
+  it('通信の記述にアイコンが書かれている (AC24)', () => {
+    let visited = 0
+    for (const [path, content] of Object.entries({ ...readmeFiles, ...docFiles })) {
+      if (!['README.md', 'docs/privacy-policy.md'].includes(key(path))) continue
+      visited += 1
+      expect(content, `${key(path)} に yt3.googleusercontent.com が無い`).toContain('yt3.googleusercontent.com')
+      expect(content, `${key(path)} に「アイコンと表記名を取得」が無い`).toContain(
+        'アイコンと表記名を取得',
+      )
+    }
+    expect(visited).toBe(2)
+  })
+
+  it('README.md と docs/* に「通信するのは 1 か所だけ」の断定が残っていない (F20 / F25)', () => {
+    const hits = findMatches({ ...readmeFiles, ...docFiles }, /通信(するの)?は\s*1\s*か所だけ/)
+    expect(hits).toEqual([])
+  })
+
+  it('左の行は左寄せになっている', () => {
+    // ⚠ jsdom はレイアウトを計算しないので、見た目そのものは検査できない。
+    //    `.dir-row` に `justify-content: space-between` が無いことだけを見る
+    //    (両端に離れる指定が復活していないかの機械チェック)
+    const html = publicFiles['../public/options.html']
+    const match = html.match(/\.dir-row\s*\{[^}]*\}/)
+    expect(match, '.dir-row の規則が見つからない').not.toBeNull()
+    expect(match?.[0]).not.toMatch(/justify-content:\s*space-between/)
+  })
+
+  it('fieldset を使っていない', () => {
+    // B9: 素の <fieldset>/<legend> をやめ、<section class="group"> + 小見出しにした
+    const html = publicFiles['../public/options.html']
+    expect(html).not.toMatch(/<fieldset/)
+  })
+
+  it('左ペインの入力欄は縦に積む', () => {
+    // ⚠ jsdom はレイアウトを計算しないので、実際に縦に積んで見えるかは検査できない。
+    //    `.dir-toolbar` と `.dir-new` の両方に `flex-direction: column` の指定があることだけを見る
+    //    (見た目の確認は人手 / T12)
+    const html = publicFiles['../public/options.html']
+    const toolbar = html.match(/\.dir-toolbar\s*\{[^}]*\}/)
+    const dirNew = html.match(/\.dir-new\s*\{[^}]*\}/)
+    expect(toolbar, '.dir-toolbar の規則が見つからない').not.toBeNull()
+    expect(dirNew, '.dir-new の規則が見つからない').not.toBeNull()
+    expect(toolbar?.[0]).toMatch(/flex-direction:\s*column/)
+    expect(dirNew?.[0]).toMatch(/flex-direction:\s*column/)
+  })
+
+  it('基本設定のスイッチは全体スイッチの文言になっている', () => {
+    const html = publicFiles['../public/options.html']
+    expect(html).not.toContain('リダイレクトを自動検知して投稿する')
+    expect(html).not.toContain('コメントに反応して投稿する')
+    // ⚠ 否定形だけだとラベルを消しても緑になる。新ラベルが実在することも見る
+    expect(html).toContain('リダイレクト返礼を使う')
+    expect(html).toContain('コメント返しを使う')
+  })
+})

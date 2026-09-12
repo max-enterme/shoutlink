@@ -4,78 +4,295 @@
     <meta charset="utf-8" />
     <title>返礼リンク 設定</title>
     <style>
+      /* --- 色・形の基本値。以後はここの変数を参照する (B9)。ダークモードは対応しない (002 won't) --- */
+      :root {
+        --surface: #ffffff;
+        --surface-muted: #f7f7f8;
+        --surface-hover: #f2f4f7;
+        --surface-selected: #e8f0fe;
+        --text: #1f2328;
+        --text-muted: #6b7280;
+        --text-subtle: #99a1ab;
+        --border: #e6e8eb;
+        --border-strong: #d0d5dd;
+        --danger: #b3261e;
+        --danger-surface: #fff6f6;
+        --warn-surface: #fff6e0;
+        --warn-border: #e8cf94;
+        --success: #227a22;
+        --accent: #3a6df0;
+        --radius-lg: 12px;
+        --radius: 6px;
+        --radius-sm: 4px;
+      }
       body {
         font: 14px/1.7 system-ui, sans-serif;
-        max-width: 640px;
+        max-width: 960px;
         margin: 24px auto;
         padding: 0 16px;
-        color: #202020;
+        color: var(--text);
+        background: var(--surface-muted);
       }
-      h1 { font-size: 18px; }
-      fieldset { border: 1px solid #ddd; border-radius: 6px; margin: 0 0 16px; padding: 12px 16px; }
-      legend { color: #666; padding: 0 4px; }
+      h1 { font-size: 18px; margin: 0 0 16px; }
+
+      /* --- 外側は 1 枚のカード。中にタブ列 → パネル → 保存バー (B9) --- */
+      .card {
+        background: var(--surface);
+        border: 0.5px solid var(--border-strong);
+        border-radius: var(--radius-lg);
+        padding: 0 20px;
+      }
+
+      /* --- fieldset/legend の代わり(B9)。小見出し + 区切り線 + 余白で階層を作る --- */
+      .group { padding: 16px 0; }
+      .group + .group { border-top: 1px solid var(--border); }
+      .group-title {
+        font-size: 11px;
+        font-weight: 600;
+        color: var(--text-muted);
+        letter-spacing: 0.02em;
+        margin: 0 0 10px;
+      }
+
       label { display: block; margin-bottom: 4px; }
       input[type='text'], input[type='number'], select, textarea {
         font: inherit;
         width: 100%;
         box-sizing: border-box;
-        padding: 6px 8px;
-        border: 1px solid #bbb;
-        border-radius: 4px;
+        height: 30px;
+        padding: 0 10px;
+        border: 0.5px solid var(--border-strong);
+        border-radius: var(--radius-sm);
+        background: var(--surface);
+        color: var(--text);
       }
-      textarea { min-height: 64px; resize: vertical; }
-      .hint { color: #666; font-size: 12px; margin: 4px 0 0; }
-      .preview { background: #f4f4f4; border-radius: 4px; padding: 8px; font-size: 13px; word-break: break-all; }
+      /* マウスで押しただけのときはリングを出さない。キーボード到達性は :focus-visible で必ず残す (007 D2) */
+      input[type='text']:focus, input[type='number']:focus, select:focus, textarea:focus, button:focus {
+        outline: none;
+      }
+      /* 一覧の行は role="button" の div。キーボードで選べる (007 F4) ので、
+         他のコントロールと同じ扱いにする。ここを外すと Tab の現在地が見えなくなる。
+         :focus-visible より前に置く(詳細度が同点のため、後に書くと後勝ちでリングが消える) */
+      .dir-row:focus { outline: none; }
+      input[type='text']:focus-visible,
+      input[type='number']:focus-visible,
+      select:focus-visible,
+      textarea:focus-visible,
+      button:focus-visible,
+      .dir-row:focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: 1px;
+      }
+      textarea { height: auto; min-height: 64px; padding: 6px 10px; resize: vertical; }
+      .hint { color: var(--text-muted); font-size: 12px; margin: 4px 0 0; }
+      .preview { background: var(--surface-muted); border-radius: var(--radius-sm); padding: 8px; font-size: 13px; word-break: break-all; }
       .row { display: flex; align-items: center; gap: 8px; }
       .row input[type='checkbox'] { width: auto; }
-      .actions { display: flex; align-items: center; gap: 12px; }
-      button { font: inherit; padding: 6px 16px; border-radius: 4px; border: 1px solid #bbb; cursor: pointer; }
-      .status { color: #227a22; min-height: 1.5em; }
-      .warn { background: #fff6e0; border: 1px solid #e8cf94; border-radius: 6px; padding: 8px 12px; font-size: 13px; }
-      table.directory { width: 100%; border-collapse: collapse; font-size: 13px; }
-      table.directory th { text-align: left; color: #666; font-weight: normal; padding: 4px 6px 4px 0; }
-      table.directory td { padding: 3px 6px 3px 0; vertical-align: middle; }
-      table.directory td:last-child, table.directory th:last-child { width: 2.5em; padding-right: 0; }
-      table.directory .handle { word-break: break-all; }
-      table.directory .unseen { color: #888; }
-      table.directory .remaining { display: block; color: #666; font-size: 11px; margin-top: 2px; }
-      /* 負(超過)は色でも分かるようにする。投稿時に削られるが保存は妨げない (AC8) */
-      table.directory .remaining.over { color: #b3261e; }
-      table.directory input.invalid { border-color: #b3261e; background: #fff6f6; }
-      table.directory button { padding: 2px 8px; white-space: nowrap; }
-      table.directory tfoot td { padding-top: 8px; border-top: 1px solid #eee; }
-      table.postlog td:last-child, table.postlog th:last-child { width: auto; white-space: nowrap; color: #666; }
-      table.postlog .text { word-break: break-all; }
-      .empty { color: #888; }
-
-      /* --- 004: 行を畳む表示 (T14 で確定) --- */
-      /* 展開の操作子は**左端の ▸**。行全体クリックにも「編集」ボタンにもしない */
-      table.directory td.caret, table.directory th.caret { width: 1.6em; padding-right: 0; }
-      table.directory button.caret {
-        border: none; background: none; padding: 0 2px; color: #666; cursor: pointer; line-height: 1;
+      .actions {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        position: sticky;
+        bottom: 0;
+        background: var(--surface);
+        padding: 12px 20px;
+        margin: 0 -20px;
+        border-top: 1px solid var(--border);
+        border-radius: 0 0 var(--radius-lg) var(--radius-lg);
       }
-      /* 「効かない行」の印は**アイコン + 行の背景色**の両方 (T14 で確定) */
-      /* 展開している行では**詳細行にも**付ける(上段だけ色が変わると半端になる) */
-      table.directory tr.ineffective > td { background: #fff6f6; }
-      table.directory tr.ineffective > td.detail { background: #fff2f2; }
-      table.directory .mark { color: #b3261e; cursor: help; margin-left: 4px; }
-      /* 詳細セルは `colspan` なので `td:last-child` の幅指定が当たる。ここで戻す */
-      table.directory td.detail { background: #fafafa; border-left: 3px solid #ddd; padding: 8px 10px; width: auto; }
-      table.directory .detail-field { display: block; color: #666; font-size: 12px; margin-top: 8px; }
-      table.directory .detail .row { margin-bottom: 4px; }
+      /* --- ボタンは既定の灰色ボタンをやめ、枠線ベースの控えめなものに (B9) --- */
+      button {
+        font: inherit;
+        height: 30px;
+        padding: 0 16px;
+        border-radius: var(--radius-sm);
+        border: 0.5px solid var(--border-strong);
+        background: var(--surface);
+        color: var(--text);
+        cursor: pointer;
+      }
+      button:hover:not(:disabled) { background: var(--surface-hover); }
+      button:disabled { color: var(--text-subtle); cursor: default; }
+      .status { color: var(--success); min-height: 1.5em; }
+      .warn { background: var(--warn-surface); border: 1px solid var(--warn-border); border-radius: var(--radius); padding: 8px 12px; font-size: 13px; }
+      table.postlog { width: 100%; border-collapse: collapse; font-size: 13px; }
+      table.postlog th { text-align: left; color: var(--text-muted); font-weight: normal; padding: 4px 6px 4px 0; }
+      table.postlog td { padding: 3px 6px 3px 0; vertical-align: middle; }
+      table.postlog .handle { word-break: break-all; }
+      table.postlog .unseen { color: var(--text-subtle); }
+      table.postlog td:last-child, table.postlog th:last-child { width: auto; white-space: nowrap; color: var(--text-muted); }
+      table.postlog .text { word-break: break-all; }
+      .empty { color: var(--text-subtle); }
+
+      /* --- タブ (T2 / B9: 下線 2px で選択中を示す) --- */
+      nav#tabs { display: flex; gap: 20px; margin: 0 -20px 4px; padding: 4px 20px 0; border-bottom: 1px solid var(--border); }
+      nav#tabs button {
+        height: auto;
+        border: none;
+        border-bottom: 2px solid transparent;
+        border-radius: 0;
+        background: none;
+        padding: 10px 0;
+        color: var(--text-muted);
+        cursor: pointer;
+      }
+      nav#tabs button[aria-selected='true'] {
+        color: var(--text);
+        border-bottom-color: var(--text);
+        font-weight: 600;
+      }
+      /* タブは下線 2px が「選択中」の印。フォーカスリングはそれとは別物として
+         角丸のリングで見せる(007 D2。ブラウザ既定の四角いリングが浮いて見えたため) */
+      nav#tabs button:focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: 2px;
+        border-radius: var(--radius-sm);
+      }
+      .panel { padding: 4px 0 4px; }
+
+      /* --- 007: 辞書の左右分割。左右それぞれ独立してスクロールする (AC6b) --- */
+      .dir-split { display: flex; gap: 16px; align-items: flex-start; }
+      /* 左は 320px 固定 / 右は残り */
+      .dir-left { flex: 0 0 320px; display: flex; flex-direction: column; min-width: 0; }
+      .dir-right { flex: 1; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+      /* **一覧そのもの**と詳細だけが独立してスクロールする。絞り込み欄・登録欄は常に見える */
+      /* 200px は h1 + タブのボタン列 + sticky な保存バー + 余白。実測での詰めは人手(T12) */
+      #dirList, #dirDetail {
+        max-height: calc(100vh - 200px);
+        min-height: 240px;
+        overflow-y: auto;
+      }
+      #dirList { border: 0.5px solid var(--border-strong); border-radius: var(--radius); padding: 4px; }
+      #dirDetail { flex: 1; border: 0.5px solid var(--border-strong); border-radius: var(--radius); padding: 10px 12px; }
+      .dir-toolbar { display: flex; flex-direction: column; align-items: stretch; gap: 6px; margin-bottom: 8px; }
+      .dir-toolbar input[type='text'] { width: 100%; }
+      /* --- 絞り込み欄。虫眼鏡はインライン SVG(外部リソースは読めない) --- */
+      .dir-filter { position: relative; }
+      .dir-filter svg {
+        position: absolute;
+        left: 8px;
+        top: 50%;
+        transform: translateY(-50%);
+        width: 13px;
+        height: 13px;
+        color: var(--text-subtle);
+        pointer-events: none;
+      }
+      .dir-filter input { padding-left: 26px; }
+      /* --- まとめて取得: リンク調に降格(B9)。左にラベル、右端に件数・通信量を 11px グレーで --- */
+      #fetchAllIcons {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        width: 100%;
+        height: auto;
+        padding: 2px 0;
+        border: none;
+        background: none;
+        color: var(--accent);
+        text-align: left;
+      }
+      /* display を書いた要素に hidden を立てるときは [hidden] の打ち消しもセットで書く
+         (でないとブラウザ標準の [hidden] { display: none } にオリジンの優先順で負ける) */
+      #fetchAllIcons[hidden] { display: none; }
+      #fetchAllIcons:hover:not(:disabled) { background: none; text-decoration: underline; }
+      #fetchAllIcons:disabled { color: var(--text-muted); text-decoration: none; }
+      .fetch-all-icons-detail { font-size: 11px; color: var(--text-subtle); font-weight: normal; }
+      /* まとめて取得の進捗(取得中… / 完了メッセージ)。小さめ・グレー。空のときに余白を作らない */
+      #fetchAllIconsStatus { font-size: 12px; color: var(--text-muted); }
+      .dir-new { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border); }
+      .dir-new-row { display: flex; gap: 6px; }
+      .dir-new-row input[type='text'] { flex: 1; min-width: 0; }
+      .dir-new-row button { flex-shrink: 0; }
+
+      /* --- 左の 1 行(表示専用 / AC7 / AC9)。1 行 1 人に詰める (B9) --- */
+      .dir-row {
+        display: flex;
+        align-items: center;
+        justify-content: flex-start;
+        gap: 8px;
+        padding: 4px 8px;
+        border-radius: var(--radius-sm);
+        cursor: pointer;
+      }
+      .dir-row:hover { background: var(--surface-hover); }
+      .dir-row.selected { background: var(--surface-selected); }
+      /* --- 007 T9: アイコン(丸)/ 未取得のモノグラム (AC18)。左の行では 22px (B9) --- */
+      .avatar, .monogram {
+        flex-shrink: 0;
+        width: 22px;
+        height: 22px;
+        border-radius: 50%;
+      }
+      .avatar { object-fit: cover; }
+      .monogram {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: #dde3ea;
+        color: #556;
+        font-size: 11px;
+      }
+      .dir-row-main { display: flex; align-items: center; gap: 6px; min-width: 0; flex: 1; }
+      .dir-row-nickname { flex-shrink: 0; max-width: 55%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      /* 呼び名が無く、代わりにチャンネルの表記名で埋めているときだけグレー (AC7) */
+      .dir-row-nickname.placeholder { color: var(--text-muted); }
+      .dir-row-handle { min-width: 0; flex: 1; color: var(--text-muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .dir-row.unseen .dir-row-handle { color: var(--text-subtle); }
+      .dir-row .mark { flex-shrink: 0; color: var(--danger); cursor: help; margin-left: auto; }
+      /* 効かない行は背景色でも分かるようにする (004 T14: アイコン + 行の背景色の両方)。
+         1 行が詰まったぶん、004 のときより薄くする */
+      .dir-row.ineffective { background: #fffafa; }
+      /* 選択中の色は「効かない行」の色より優先する — ⚠ の行こそ人が選んで直しに行くので、
+         選択が見えないと直せない。同じ詳細度だと後勝ちで ineffective が勝ってしまう */
+      .dir-row.ineffective.selected { background: var(--surface-selected); }
+
+      /* --- 右の詳細ヘッダ(アバター + 呼び名 + ハンドル)。`#dirDetail` の外に置く (B9) ---
+         AC9 は `#dirDetail` の子要素の順序を固定しているので、ヘッダはその外に独立させる */
+      .dir-detail-header { display: flex; align-items: center; gap: 10px; padding: 2px 4px; }
+      .dir-detail-header[hidden] { display: none; }
+      .avatar-lg, .monogram-lg { width: 34px; height: 34px; }
+      .monogram-lg { font-size: 15px; }
+      .dir-detail-header-main { display: flex; flex-direction: column; min-width: 0; }
+      .dir-detail-header-name { font-size: 14px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .dir-detail-header-handle { font-size: 12px; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+      /* --- 右の詳細 (AC9) --- */
+      .dir-detail-reason { color: var(--danger); font-size: 13px; margin: 0 0 8px; }
+      .dir-detail-handle { color: var(--text-muted); font-size: 12px; margin: 0 0 8px; word-break: break-all; }
+      .dir-detail-nickname { display: block; margin-bottom: 12px; }
+
+      /* --- 各欄の 11px グレーの小見出し(B9)。右ペインの `label` に共通で使う --- */
+      .dir-detail-nickname, .detail-field { font-size: 11px; color: var(--text-muted); }
+      .dir-detail-nickname input, .detail-field input { font-size: 14px; color: var(--text); }
+
+      .remaining { display: block; color: var(--text-muted); font-size: 11px; margin-top: 2px; }
+      /* 負(超過)は色でも分かるようにする。投稿時に削られるが保存は妨げない (AC8) */
+      .remaining.over { color: var(--danger); }
+      input.invalid { border-color: var(--danger); background: var(--danger-surface); }
+      .detail-field { display: block; margin-top: 8px; }
       /* --- 004 AC17: チャンネル ID の解決 --- */
-      /* 展開したときの 1 行(状態 + 再試行)。理由は**行ごと**に出す */
-      table.directory .channel-id { margin: 6px 0 0; color: #666; font-size: 12px; }
-      table.directory .channel-id.failed { color: #b3261e; }
-      table.directory .channel-id button { margin-left: 6px; }
+      .channel-id { margin: 6px 0 0; color: var(--text-muted); font-size: 12px; }
+      .channel-id.failed { color: var(--danger); }
+      .channel-id button { margin-left: 6px; }
       /* 走っている間の表示。畳んだ行でも分かるようにハンドルの横に出す */
-      table.directory .resolving { color: #666; font-size: 11px; margin-left: 4px; }
+      .resolving { color: var(--text-muted); font-size: 11px; margin-left: 4px; }
     </style>
   </head>
   <body>
     <h1>返礼リンク 設定</h1>
 
-    <p class="warn">
+    <div class="card">
+    <nav id="tabs" role="tablist">
+      <button type="button" id="tab-basic" role="tab" data-tab="basic">基本設定</button>
+      <button type="button" id="tab-directory" role="tab" data-tab="directory">辞書</button>
+      <button type="button" id="tab-history" role="tab" data-tab="history">履歴</button>
+      <button type="button" id="tab-dev" role="tab" data-tab="dev">開発</button>
+    </nav>
+
+    <section class="panel" id="panel-basic" role="tabpanel" aria-labelledby="tab-basic">
+    <p class="warn" id="studioWarning">
       この拡張は <strong><code>studio.youtube.com</code> のライブ管制室のチャットでしか動きません。</strong>
       <code>www.youtube.com</code> のライブチャットは他人の配信でも開けてしまい、自分の配信かどうかを
       判別できないためです(ポップアウトも Studio 側のものを使ってください)。<br />
@@ -83,16 +300,16 @@
       「↩ 返礼」から手動で実行できます。
     </p>
 
-    <fieldset>
-      <legend>リダイレクト返礼</legend>
+    <section class="group" aria-labelledby="group-enabled">
+      <h2 class="group-title" id="group-enabled">リダイレクト返礼</h2>
       <div class="row">
         <input id="enabled" type="checkbox" />
-        <label for="enabled" style="margin: 0">リダイレクトを自動検知して投稿する</label>
+        <label for="enabled" style="margin: 0">リダイレクト返礼を使う</label>
       </div>
       <p class="hint">
-        想定外の連投を止めたいときはここを外す。<br />
-        <strong>外しても、チャット右下の「↩ 返礼」からは実行できます。</strong>
-        自動投稿は使わず、自分で押したときだけ投稿したい場合はこの状態で使ってください。
+        <strong>既定は OFF。</strong>
+        <strong>外して止まるのは自動検知だけです。チャット右下の「↩ 返礼」からは、外していても引き続き実行できます。</strong><br />
+        想定外の連投を止めたいときはここを外す。自動投稿は使わず、自分で押したときだけ投稿したい場合もこの状態で使ってください。
       </p>
 
       <label for="template" style="margin-top: 12px">
@@ -106,18 +323,17 @@
       </p>
       <p class="hint">プレビュー:</p>
       <p class="preview" id="preview"></p>
-    </fieldset>
+    </section>
 
-    <fieldset>
-      <legend>コメント返し</legend>
+    <section class="group" aria-labelledby="group-comment-reply">
+      <h2 class="group-title" id="group-comment-reply">コメント返し</h2>
       <div class="row">
         <input id="commentReplyEnabled" type="checkbox" />
-        <label for="commentReplyEnabled" style="margin: 0">コメントに反応して投稿する</label>
+        <label for="commentReplyEnabled" style="margin: 0">コメント返しを使う</label>
       </div>
       <p class="hint">
         辞書で<strong>「コメントに反応する」を付けた人</strong>がチャットにコメントしたときに投稿します。
-        <strong>既定は OFF。</strong>同じ配信で同じ人には 1 回だけ、最低 5 秒の間隔、
-        1 配信あたり 20 件までです。<br />
+        <strong>既定は OFF。</strong>同じ配信で同じ人には 1 回だけ、最低 5 秒の間隔。<br />
         <strong>固定はしません</strong>(固定枠は 1 件しかなく、リダイレクト返礼の固定が流れるため)。
       </p>
       <!-- AC13: 一時表示ではなく**常時**出す -->
@@ -134,10 +350,10 @@
       </p>
       <p class="hint">プレビュー:</p>
       <p class="preview" id="commentPreview"></p>
-    </fieldset>
+    </section>
 
-    <fieldset>
-      <legend>手動トリガー</legend>
+    <section class="group" aria-labelledby="group-manual-trigger">
+      <h2 class="group-title" id="group-manual-trigger">手動トリガー</h2>
       <div class="row">
         <input id="showManualTrigger" type="checkbox" />
         <label for="showManualTrigger" style="margin: 0">ライブチャットの右下に「↩ 返礼」を出す</label>
@@ -148,31 +364,32 @@
         自動検知が動かないときや、投稿・固定を切り分けたいときだけ ON にする
         (ページの再読み込みは不要)。
       </p>
-    </fieldset>
+    </section>
 
-
-    <fieldset>
-      <legend>固定モード</legend>
+    <section class="group" aria-labelledby="group-pin-mode">
+      <h2 class="group-title" id="group-pin-mode">固定モード</h2>
       <label for="pinMode">投稿したメッセージを固定するかどうか</label>
       <select id="pinMode">
-        <option value="off">off — 固定しない(投稿のみ)</option>
-        <option value="ifEmpty">ifEmpty — 既存の固定が無いときだけ固定する(既定)</option>
+        <option value="off">off — 固定しない(投稿のみ・既定)</option>
+        <option value="ifEmpty">ifEmpty — 既存の固定が無いときだけ固定する</option>
         <option value="always">always — 既存の固定があっても上書きする</option>
       </select>
       <p class="hint">
         YouTube の固定は 1 件のみ。<code>always</code> は告知等の既存の固定を消す。
         <code>ifEmpty</code> は「現在何かが固定されているか」の DOM 判定に依存しており、これは未検証。
       </p>
-    </fieldset>
+    </section>
+    </section>
 
-    <fieldset>
-      <legend>投稿履歴</legend>
+    <section class="panel" id="panel-history" role="tabpanel" aria-labelledby="tab-history" hidden>
+    <section class="group" aria-labelledby="group-post-log">
+      <h2 class="group-title" id="group-post-log">投稿履歴</h2>
       <p class="hint">
         投稿できたときだけ、<strong>誰に・何を・いつ</strong>をこの端末に記録します(再投稿の判定に使う。同期はしない)。<br />
         同じ配信で同じ相手にもう一度すぐ投稿したいときは、ここを消します。<br />
         設定を試したいだけなら、辞書の行にある「テスト送信」を使えば履歴を残さず何度でも試せます(固定はしません)。
       </p>
-      <table class="directory postlog">
+      <table class="postlog">
         <thead>
           <tr><th>ハンドル</th><th>種別</th><th>投稿した文面</th><th>投稿時刻</th></tr>
         </thead>
@@ -182,10 +399,12 @@
         <button id="clearPostLog" type="button">履歴を消す</button>
         <span id="postLogStatus"></span>
       </p>
-    </fieldset>
+    </section>
+    </section>
 
-    <fieldset>
-      <legend>呼び名の辞書</legend>
+    <section class="panel" id="panel-directory" role="tabpanel" aria-labelledby="tab-directory" hidden>
+    <section class="group" aria-labelledby="group-directory">
+      <h2 class="group-title" id="group-directory">呼び名の辞書</h2>
       <p class="hint">
         `{name}` を置き換える呼び名と、`{msg}` に入る<strong>その相手への自由文</strong>。
         <strong>リダイレクトを受けた相手は自動でこの一覧に追加されます</strong>(どちらも空のまま)。
@@ -202,38 +421,55 @@
       </p>
       <!-- AC17: 同じチャンネル ID の行が 2 件以上 = どちらを使うか決められないので何もしない。**常時表示** -->
       <p class="warn" id="channelIdDuplicate" hidden></p>
-      <!-- AC17 / T14 の決定 3: 再試行は「展開したときの個別」と「ここのまとめて」の 2 つ -->
+      <!-- AC17 / T14 の決定 3: 再試行は「選んだ行の個別」と「ここのまとめて」の 2 つ -->
       <p class="hint" id="channelIdRetryRow" hidden>
         <button id="retryChannelIds" type="button"></button>
         「コメントに反応する」が ON なのに<strong>チャンネル ID を取得できていない行</strong>です。
         取得できるまで、その人のコメントには反応しません。
       </p>
-      <table class="directory">
-        <thead>
-          <tr><th class="caret"></th><th>ハンドル</th><th>呼び名</th><th></th></tr>
-        </thead>
-        <tbody id="directoryRows"></tbody>
-        <tfoot>
-          <tr>
-            <td class="caret"></td>
-            <td><input id="newHandle" type="text" placeholder="@example-channel または URL" /></td>
-            <td><input id="newNickname" type="text" placeholder="呼び名" /></td>
-            <td><button id="addEntry" type="button" title="登録する">＋</button></td>
-          </tr>
-        </tfoot>
-      </table>
+      <div class="dir-split">
+        <div class="dir-left">
+          <div class="dir-toolbar">
+            <div class="dir-filter">
+              <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                <circle cx="7" cy="7" r="5" stroke="currentColor" stroke-width="1.5" />
+                <line x1="11" y1="11" x2="15" y2="15" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
+              </svg>
+              <input id="dirFilter" type="text" placeholder="呼び名・表記名・ハンドル" />
+            </div>
+            <button id="fetchAllIcons" type="button"></button>
+            <span id="fetchAllIconsStatus"></span>
+          </div>
+          <!-- 一覧は表示専用(入力欄は置かない / AC9)。**独立してスクロールする** (AC6b) -->
+          <div id="dirList"></div>
+          <div class="dir-new">
+            <h3 class="group-title">手動で追加</h3>
+            <input id="newHandle" type="text" placeholder="@example-channel または URL" />
+            <div class="dir-new-row">
+              <input id="newNickname" type="text" placeholder="呼び名" />
+              <button id="addEntry" type="button" title="登録する">追加</button>
+            </div>
+          </div>
+        </div>
+        <div class="dir-right">
+          <div id="dirDetailHeader" class="dir-detail-header" hidden></div>
+          <div id="dirDetail">← 左の一覧から選んでください</div>
+        </div>
+      </div>
       <p class="hint">
-        <strong>▸ を押すと、自由文 2 本と「コメントに反応する」が開きます。</strong>
-        畳んだ状態でも、<strong>設定したのに効かない行には ⚠ が出ます</strong>(理由はアイコンにカーソルを合わせると出ます)。<br />
+        <strong>左の一覧から行を選ぶと、右に詳細が開きます。</strong>
+        左の一覧でも、<strong>設定したのに効かない行には ⚠ が出ます</strong>(理由は選ぶと右の詳細に出ます)。<br />
         「コメントに反応する」を ON にすると、<strong>その人のチャンネルページを 1 回だけ見に行って照合用の ID を控えます</strong>
         (ライブチャットの画面では通信しません)。失敗しても他の機能は動きますが、<strong>その人のコメントには反応しません</strong>
-        — 理由は行を開くと出ます。
+        — 理由は行を選ぶと出ます。
       </p>
       <p class="hint" id="directoryStatus"></p>
-    </fieldset>
+    </section>
+    </section>
 
-    <fieldset>
-      <legend>診断ログ</legend>
+    <section class="panel" id="panel-dev" role="tabpanel" aria-labelledby="tab-dev" hidden>
+    <section class="group" aria-labelledby="group-debug">
+      <h2 class="group-title" id="group-debug">診断ログ</h2>
       <div class="row">
         <input id="debug" type="checkbox" />
         <label for="debug" style="margin: 0">チャットに現れたノードをコンソールに出す</label>
@@ -243,11 +479,13 @@
         次のリダイレクトを待つ。ライブチャットのウィンドウで F12 → Console に
         <code>[shoutlink] [debug] ノード追加:</code> が出る。
       </p>
-    </fieldset>
+    </section>
+    </section>
 
     <div class="actions">
       <button id="save" type="button">保存</button>
       <span class="status" id="status"></span>
+    </div>
     </div>
 
     <script src="options.js"></script>

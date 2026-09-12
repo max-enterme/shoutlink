@@ -9,11 +9,11 @@ const STORAGE_KEY = 'ytRedirectPin.config'
 export const PIN_MODES: readonly PinMode[] = ['off', 'ifEmpty', 'always']
 
 export const DEFAULT_CONFIG: Config = {
-  enabled: true,
+  enabled: false,
   template: '{name}さんからリダイレクトありがとうございます! {url}',
-  // 既定は ifEmpty (spec.md AC8)。ただし成立は「固定中かどうか」を DOM から
-  // 判定できることが前提で、T1 未確認 (plan.md R4)。
-  pinMode: 'ifEmpty',
+  // 既定は off。固定は 1 枠しか無く、既存の固定を消しうる副作用のある操作なので、
+  // 使う人が明示的に選んだときだけ動かす。
+  pinMode: 'off',
   // 既定で出さない。配信画面にチャット窓を載せていると映り込むため (security-review.md S8)
   showManualTrigger: false,
   debug: false,

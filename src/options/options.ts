@@ -1,7 +1,7 @@
 /**
  * 設定 UI (T7)。テンプレート編集 / ON・OFF / 固定モード / 辞書の行ごとのテスト送信。
  */
-import { resolveChannelId } from '../channel-id'
+import { resolveChannelPage } from '../channel-id'
 import { compose, composeText } from '../composer'
 import { DEFAULT_CONFIG, loadConfig, saveConfig } from '../config'
 import { normalizeChannelUrl } from '../detector'
@@ -9,19 +9,23 @@ import { log } from '../log'
 import {
   directoryKey,
   displayHandle,
+  displayNameFor,
   findEntry,
+  initialForAvatar,
   loadDirectory,
   onDirectoryChanged,
   removeEntry,
   saveDirectory,
   sortForDisplay,
+  upsertChannelIcon,
   upsertChannelId,
+  upsertChannelName,
   upsertCommentMessage,
   upsertMessage,
   upsertNickname,
   setReplyToComment,
 } from '../directory'
-import type { Directory } from '../directory'
+import type { Directory, DirectoryEntry } from '../directory'
 import { clearPostLog, loadPostLog } from '../post-log'
 import type { PostLog } from '../post-log'
 import { TEST_SEND_TYPE } from '../test-send'
@@ -65,12 +69,16 @@ const SAMPLE_MESSAGE = 'いつも遊びに来てくれてありがとう!'
 /** コメント返しのプレビュー用。**リダイレクト返礼とは別の自由文**であることが見て分かる文にする */
 const SAMPLE_COMMENT_MESSAGE = '今日も来てくれてうれしい!'
 
+export type OptionsTab = 'basic' | 'directory' | 'history' | 'dev'
+export type OptionsHandle = { ready: Promise<void>; dispose: () => void }
+
 function el<T extends HTMLElement>(id: string): T {
   const found = document.getElementById(id)
   if (!found) throw new Error(`要素が見つからない: #${id}`)
   return found as T
 }
 
+export function initOptions(): OptionsHandle {
 const enabled = el<HTMLInputElement>('enabled')
 const template = el<HTMLTextAreaElement>('template')
 const pinMode = el<HTMLSelectElement>('pinMode')
@@ -83,7 +91,12 @@ const commentMismatch = el<HTMLElement>('commentMismatch')
 const channelIdDuplicate = el<HTMLElement>('channelIdDuplicate')
 const channelIdRetryRow = el<HTMLElement>('channelIdRetryRow')
 const retryChannelIds = el<HTMLButtonElement>('retryChannelIds')
-const directoryRows = el<HTMLElement>('directoryRows')
+const dirList = el<HTMLElement>('dirList')
+const dirDetail = el<HTMLElement>('dirDetail')
+const dirDetailHeader = el<HTMLElement>('dirDetailHeader')
+const dirFilterInput = el<HTMLInputElement>('dirFilter')
+const fetchAllIconsButton = el<HTMLButtonElement>('fetchAllIcons')
+const fetchAllIconsStatus = el<HTMLElement>('fetchAllIconsStatus')
 const directoryStatus = el<HTMLElement>('directoryStatus')
 const newHandle = el<HTMLInputElement>('newHandle')
 const newNickname = el<HTMLInputElement>('newNickname')
@@ -149,11 +162,14 @@ const liveRows: Array<{
  * (古い値が勝ち続けると、他のタブや ＋ の欄からの変更が画面に出なくなる)。
  */
 /**
- * **展開している行**(T14 で確定: 左端の `▸` で開閉)。
- * AC13 は「展開状態は保存しなくてよい」だが、**再描画のたびに畳むと自由文が書けない**ので
- * セッション中はここで覚える(保存はしない)。
+ * 右ペインに出している行(007 / AC6 で `expandedRows` の展開から置き換え)。
+ * `directoryKey(url)`。**`null` は「まだ選んでいない」**。選択状態は保存しない
+ * (AC13 が「展開状態は保存しなくてよい」としていたのと同じ扱いをそのまま引き継ぐ)。
  */
-const expandedRows = new Set<string>()
+let selectedKey: string | null = null
+
+/** 左の一覧の絞り込み(AC11)。空文字は「絞らない」。呼び名とハンドルに大小無視で当たる */
+let dirFilter = ''
 
 /** コメント返し用の自由文の下書き。リダイレクト側と同じ仕組みを field ごとに持つ */
 const commentDrafts = new Map<string, RowDraft>()
@@ -210,37 +226,49 @@ function restoreFocusTarget(target: FocusTarget | null): void {
   input.setSelectionRange(selection.start, selection.end)
 }
 
+/**
+ * **辞書から消えた行の「行ごとの状態」を、ここで全部まとめて捨てる。**
+ * 鍵はどれも `directoryKey(url)` なので、**同じハンドルを ＋ から再登録すると
+ * 前の行の状態がそのまま新しい行に付く。**
+ *
+ * ⚠️ **`liveRows` からは切り離してある**(007 / T4〜T6)。絞り込み(`dirFilter`)で
+ *    `#dirList` に作っていない行は `liveRows` に入らないので、`liveRows` を基準に掃除すると
+ *    **絞り込んでいる間に別のタブで削除された行の状態が残り続ける。**掃除は `directory`
+ *    (辞書そのもの)と直接突き合わせる。
+ *
+ * ⚠️ **行ごとの状態を足したら、この掃除にも足すこと。**ここは 2 度踏んでいる:
+ *    ① 掃除をコメント側の `if (!row.comment) continue` の後ろに置いていたため、
+ *      `row.comment` が**展開している行にしか付かない**ことで
+ *      **畳んだまま削除した行のコメント側の下書きだけが残った**
+ *      (再登録すると、弾かれた 200 字超が赤枠つきで復活する)
+ *    ② T17 で足した `channelIdErrors` を掃除から漏らした。
+ *      解決に失敗した行を削除して同じハンドルを登録し直すと、**1 度も取りに行っていないのに**
+ *      「チャンネル ID を取得できませんでした: …」が出る(AC17 の「理由を画面に出す」の誤表示)
+ *    ③ T9 で足した `testSendStates` も同じ穴を踏む。消さずに残すと、削除して登録し直した
+ *      行に前の行のテスト送信結果がそのまま出る
+ *
+ * ⚠️ **`resolvingKeys` / `resolvingChannelIdKeys` はここで消さない。**あれは「いま fetch が
+ *    飛んでいる」という実行中の事実で、持ち主は `resolveEntryChannelId` / `fetchAllIcons` の
+ *    それぞれの `finally`(必ず消える)。外から消すと**多重に走らせない歯止めが外れ**、
+ *    同じ URL へ 2 本目が飛びうる(F16)。
+ *    行が消えている間に出る「解決中…」の表示は、その `finally` の再描画で自然に消える
+ *    (`channelIdErrors` と違い、**残り続ける嘘にならない**)
+ */
+function cleanupStaleRowState(): void {
+  const existingKeys = new Set(directory.map((entry) => directoryKey(entry.url)))
+  for (const key of [...rowDrafts.keys()]) if (!existingKeys.has(key)) rowDrafts.delete(key)
+  for (const key of [...commentDrafts.keys()]) if (!existingKeys.has(key)) commentDrafts.delete(key)
+  for (const key of [...channelIdErrors.keys()]) if (!existingKeys.has(key)) channelIdErrors.delete(key)
+  for (const key of [...testSendStates.keys()]) if (!existingKeys.has(key)) testSendStates.delete(key)
+  if (selectedKey !== null && !existingKeys.has(selectedKey)) selectedKey = null
+}
+
 function captureRowDrafts(): void {
+  cleanupStaleRowState()
   for (const row of liveRows) {
     const saved = findEntry(directory, row.url)
-    // **辞書から消えた行の「行ごとの状態」は、ここで全部まとめて捨てる。**
-    // 鍵はどれも `directoryKey(url)` なので、**同じハンドルを ＋ から再登録すると
-    // 前の行の状態がそのまま新しい行に付く。**
-    //
-    // ⚠️ **行ごとの状態を足したら、この掃除にも足すこと。**ここは 2 度踏んでいる:
-    //    ① 掃除をコメント側の `if (!row.comment) continue` の後ろに置いていたため、
-    //      `row.comment` が**展開している行にしか付かない**ことで
-    //      **畳んだまま削除した行のコメント側の下書きだけが残った**
-    //      (再登録すると、弾かれた 200 字超が赤枠つきで復活する)
-    //    ② T17 で足した `channelIdErrors` を掃除から漏らした。
-    //      解決に失敗した行を削除して同じハンドルを登録し直すと、**1 度も取りに行っていないのに**
-    //      「チャンネル ID を取得できませんでした: …」が出る(AC17 の「理由を画面に出す」の誤表示)
-    //    ③ T9 で足した `testSendStates` も同じ穴を踏む。消さずに残すと、削除して登録し直した
-    //      行に前の行のテスト送信結果がそのまま出る
-    //
-    // ⚠️ **`resolvingKeys` はここで消さない。**あれは「いま fetch が飛んでいる」という
-    //    実行中の事実で、持ち主は `resolveEntryChannelId` の `finally`(必ず消える)。
-    //    外から消すと**多重に走らせない歯止めが外れ**、同じ URL へ 2 本目が飛びうる。
-    //    行が消えている間に出る「解決中…」の表示は、その `finally` の再描画で自然に消える
-    //    (`channelIdErrors` と違い、**残り続ける嘘にならない**)
-    if (!saved) {
-      rowDrafts.delete(row.key)
-      commentDrafts.delete(row.key)
-      expandedRows.delete(row.key)
-      channelIdErrors.delete(row.key)
-      testSendStates.delete(row.key)
-      continue
-    }
+    // 消えた行は上の `cleanupStaleRowState` が掃除済み。ここでは書く先が無いので飛ばすだけ
+    if (!saved) continue
     const draft = captureRowDraft(saved, row.shown, row.read(), row.shownFromDraft)
     if (draft) rowDrafts.set(row.key, draft)
     else rowDrafts.delete(row.key)
@@ -324,8 +352,22 @@ async function persistDirectory(message: string): Promise<void> {
 //   ② **未解決の行に対する明示的な再試行**(展開したときの個別 / 辞書の上のまとめて)
 // **辞書を開いただけでは 1 件も取りに行かない。**
 
-/** いま解決を走らせている行(鍵は `directoryKey`)。**同じ行を多重に走らせない** */
+/**
+ * いま fetch を走らせている行(鍵は `directoryKey`)。**同じ行を多重に走らせない**
+ * (`resolveEntryChannelId` と `fetchAllIcons` の両方がここに足す / F16)。
+ */
 const resolvingKeys = new Set<string>()
+
+/**
+ * いま**チャンネル ID を**解決している行(鍵は `directoryKey`)。**表示専用**で、
+ * `resolvingKeys` とは別に持つ(F17)。
+ *
+ * ⚠️ **`resolvingKeys` をそのまま「解決中…」の表示に使わない。**`fetchAllIcons` は
+ *    `want.channelId: false` でも `resolvingKeys` に足すので、それをそのまま使うと
+ *    「アイコンだけ取りに行っている行」にまで「チャンネル ID を解決中…」と出て、
+ *    既に持っている `channelId` の表示を隠してしまう(この塊が作った退行)。
+ */
+const resolvingChannelIdKeys = new Set<string>()
 
 /**
  * 直近の失敗の理由(鍵は `directoryKey`)。**保存しない。**
@@ -337,6 +379,12 @@ const channelIdErrors = new Map<string, string>()
 
 /** 「まとめて再試行」が走っているか。**重ねて押させない** */
 let bulkResolving = false
+
+/**
+ * 「アイコンと表記名を取得」が走っているか。**`bulkResolving` とは別のフラグ**
+ * (引き金も対象も別なので、片方が走っている間にもう片方を止める必要が無い / plan.md 確定値)
+ */
+let bulkIconFetching = false
 
 // --- テスト送信 (006 / T9) ---------------------------------------------------
 //
@@ -414,22 +462,33 @@ function renderChannelIdRetryAll(): void {
 }
 
 /**
- * 1 行ぶんの解決 (AC17)。**例外を投げない**(`resolveChannelId` が理由を返す形で握っている)。
+ * 1 行ぶんの解決 (AC17 / 007 AC14)。**例外を投げない**(`resolveChannelPage` が理由を返す形で握っている)。
  *
  * - **既に `channelId` がある行は取りに行かない** — 「一度解決した ID は自動で解決し直さない」。
  *   ON にしただけで取り直す形にすると、フラグを触るたびに通信が走る
  * - **同じ行を多重に走らせない** — ON / OFF を素早く往復されても 1 本だけ
- * - **待っている間に行が消えていたら書かない** — `upsertChannelId` は登録が無ければ**行を作る**ので、
- *   削除した行がここで復活する
+ * - **待っている間に行が消えていたら書かない** — `upsertChannelId` / `upsertChannelIcon` は
+ *   登録が無ければ**行を作る**ので、削除した行がここで復活する
+ * - **アイコンも同じチャンネルページの取得に畳む**(`resolveChannelPage` / plan.md「通信の約束を変えない」)。
+ *   `wantIcon` は呼び出し元の経路ごとに渡される(「まとめて再試行」は `false`、それ以外は `true`)。
+ *   すでに控えている行はここでも取り直さない(`entry.iconDataUrl === ''` のときだけ要求する)
+ * - **チャンネル ID とアイコンは独立に成否を扱う**(AC19)。片方が失敗してももう片方は保存する
  */
-async function resolveEntryChannelId(url: string): Promise<void> {
+async function resolveEntryChannelId(url: string, wantIcon: boolean): Promise<void> {
   const key = directoryKey(url)
   if (resolvingKeys.has(key)) return
   const before = findEntry(directory, url)
-  if (!before || !needsChannelIdResolution(before)) return
+  if (!before) return
+  const want = {
+    channelId: needsChannelIdResolution(before),
+    icon: wantIcon && before.iconDataUrl === '',
+  }
+  if (!want.channelId && !want.icon) return
 
   const handle = displayHandle(before)
   resolvingKeys.add(key)
+  // 表示用(F17)。「チャンネル ID を解決中…」は、実際にチャンネル ID を要求しているときだけ出す
+  if (want.channelId) resolvingChannelIdKeys.add(key)
 
   // ⚠️ **`add` の直後から `try` を開ける。**この鍵は `finally` だけが消す設計なので、
   //    **`add` と `try` の間で throw されると鍵が永久に残る。**そうなるとその行は
@@ -441,20 +500,49 @@ async function resolveEntryChannelId(url: string): Promise<void> {
     // 前回の失敗は消してから走る(古い理由が「解決中」の行に残らないように)
     channelIdErrors.delete(key)
     renderDirectory()
-    setDirectoryStatus(`${handle} のチャンネル ID を取りに行っている…`)
+    setDirectoryStatus(`${handle} のチャンネル情報を取りに行っている…`)
 
-    const result = await resolveChannelId(url)
+    const result = await resolveChannelPage(url, want)
     // **待っている間に消えた / 別タブで変わった行には書かない**
     if (!findEntry(directory, url)) return
-    if (result.status === 'failed') {
-      channelIdErrors.set(key, result.reason)
-      setDirectoryStatus(`${handle}: チャンネル ID を取得できなかった (${result.reason})`)
-      return
+
+    let changed = false
+    const parts: string[] = []
+    if (result.channelId) {
+      if (result.channelId.status === 'failed') {
+        channelIdErrors.set(key, result.channelId.reason)
+        parts.push(`チャンネル ID を取得できなかった (${result.channelId.reason})`)
+      } else {
+        directory = upsertChannelId(directory, url, result.channelId.channelId)
+        changed = true
+        parts.push(`チャンネル ID を保存した (${result.channelId.channelId})`)
+      }
     }
-    directory = upsertChannelId(directory, url, result.channelId)
-    await persistDirectory(`${handle} のチャンネル ID を保存した (${result.channelId})`)
+    if (result.icon) {
+      if (result.icon.status === 'resolved') {
+        directory = upsertChannelIcon(directory, url, result.icon.dataUrl)
+        changed = true
+        parts.push('アイコンを保存した')
+      } else {
+        parts.push(`アイコンを取得できなかった (${result.icon.reason})`)
+      }
+    }
+    // **HTML を取ったなら常に表記名も控える (007)。**`want` に名前用のフラグは無いので、
+    // `channelId` / `icon` のどちらかを要求していれば `result.name` が入りうる。
+    // 空なら「取れなかった」ではなく「HTML を取らなかった」の可能性もあるため、状態表示には出さない
+    if (result.name) {
+      directory = upsertChannelName(directory, url, result.name)
+      changed = true
+    }
+
+    if (changed) {
+      await persistDirectory(`${handle}: ${parts.join(' / ')}`)
+    } else {
+      setDirectoryStatus(`${handle}: ${parts.join(' / ')}`)
+    }
   } finally {
     resolvingKeys.delete(key)
+    resolvingChannelIdKeys.delete(key)
     // 「解決中…」の表示と、失敗の理由を反映する。**成否に関わらず必ず描き直す**
     renderDirectory()
   }
@@ -473,7 +561,9 @@ async function retryUnresolvedChannelIds(): Promise<void> {
   try {
     // 走っている間に `directory` は差し替わるので、対象は**先に確定させる**
     for (const entry of [...unresolvedChannelIdEntries(directory)]) {
-      await resolveEntryChannelId(entry.url)
+      // **アイコンは要求しない**(plan.md「通信の約束を変えない」の表)。
+      // 対象は「コメントに反応する」が ON で未解決の行だけで、アイコンの対象(全行)とは別
+      await resolveEntryChannelId(entry.url, false)
     }
   } finally {
     bulkResolving = false
@@ -489,30 +579,544 @@ retryChannelIds.addEventListener('click', () => {
   void retryUnresolvedChannelIds()
 })
 
+// --- アイコンのまとめて取得 (007 / AC15 / AC20) -------------------------------
+//
+// 対象は「まとめて再試行」と違い、**辞書の全行のうちアイコンを控えていないもの**(AC15)。
+// 通常数件の `unresolvedChannelIdEntries` と桁が違いうる(辞書 100 件なら 100 件)ので、
+// 押す前に**対象件数と通信量の目安**をボタン文言に出す(plan.md 確定値)。
+
+/** 1 件あたりの通信量の目安 (MB)。チャンネルページ実測 1.3〜1.9MB に画像ぶんを足した見積もり */
+const ICON_FETCH_MB_PER_ENTRY = 1.5
+
+/**
+ * アイコンか表記名のどちらかを控えていない行(AC15 の対象。`/channel/UC…` 形も含む / AC20)。
+ *
+ * ⚠️ **`iconDataUrl === ''` だけを見ない (007)。**それだと、既にアイコンを控えてある行は
+ *    永久に表記名が埋まらない(アイコン取得済みの行はこの対象から一生外れたまま)。
+ */
+function iconFetchTargets(): Directory {
+  return directory.filter((entry) => entry.iconDataUrl === '' || entry.channelName === '')
+}
+
+/**
+ * 「アイコンと表記名を取得」ボタンと状態表示。**0 件なら隠す**(`retryChannelIds` と同じ流儀)
+ *
+ * ボタンの中は**ラベル(1 行目)と対象件数・通信量の目安(2 行目・小さいグレー)の 2 子要素**に分ける
+ * (320px でもラベルを 1 行に収めるため)。`textContent` はこの 2 つを連結した値になるので、
+ * `N 件` を含むことを見ている既存テスト (AC15) はそのままで通る。
+ */
+function renderFetchAllIcons(): void {
+  const count = iconFetchTargets().length
+  fetchAllIconsButton.hidden = count === 0
+  fetchAllIconsButton.disabled = bulkIconFetching
+  fetchAllIconsButton.textContent = ''
+  if (bulkIconFetching) {
+    fetchAllIconsButton.textContent = '取得中…'
+    return
+  }
+  const label = document.createElement('span')
+  label.textContent = 'アイコンと表記名を取得'
+  const detail = document.createElement('span')
+  detail.className = 'fetch-all-icons-detail'
+  // ラベルと隙間無く並ぶと読み上げが「アイコンと表記名を取得2 件 / 約1MB」に連結されるので、
+  // 詳細側は読み上げから外す(見た目の件数・通信量は視覚で分かれば足りる)
+  detail.setAttribute('aria-hidden', 'true')
+  detail.textContent = `${count} 件 / 約${Math.round(count * ICON_FETCH_MB_PER_ENTRY)}MB`
+  fetchAllIconsButton.append(label, detail)
+}
+
+/**
+ * **1 件ずつ順に取りに行く**(既存の「まとめて再試行」と同じ / plan.md 確定値)。
+ * `bulkResolving` とは別のフラグで二度押しを止める(引き金も対象も別)。
+ *
+ * - **`resolvingKeys` を通す (F16)。**`resolveEntryChannelId` の排他機構をここでも使わないと、
+ *   まとめて取得が処理中の行を、個別の「コメントに反応する」ON / まとめて再試行と
+ *   同時に走らせてしまい、同じチャンネルページ(1.3〜1.9MB)を二重に取りに行く。
+ * - **upsert の直前に、行がまだ辞書にあるかを確かめる (F14 / Critical)。**`upsertChannelIcon` は
+ *   登録が無ければ行を作る。ガード無しだと、取得を待っている間に削除された行(別タブでの削除も含む)
+ *   が**空行として復活し**、ループ末尾の保存でその復活が永続化されてしまう。
+ * - **1 件ごとに保存する (F15)。**ループの最後にしか保存しないと、100 件のような大きい辞書では
+ *   分オーダーで掛かり、その間に画面を閉じる・他所の保存(`onDirectoryChanged` の差し替え)が
+ *   起きるだけで、それまでに取れたアイコンが丸ごと失われる。`resolveEntryChannelId` と同じ約束にそろえる。
+ * - **保存が失敗しても(chrome.storage のクォータ等)状態表示が固まったままにしない。**
+ *   `void fetchAllIcons()` で呼ばれるので、ここで握らないと unhandled rejection として黙って消える。
+ */
+async function fetchAllIcons(): Promise<void> {
+  if (bulkIconFetching) return
+  const targets = [...iconFetchTargets()]
+  if (targets.length === 0) return
+
+  bulkIconFetching = true
+  renderFetchAllIcons()
+  let success = 0
+  try {
+    for (let i = 0; i < targets.length; i++) {
+      const key = directoryKey(targets[i].url)
+      // 個別の解決やまとめて再試行と同じ行を同時に取りに行かせない (F16)
+      if (resolvingKeys.has(key)) continue
+      resolvingKeys.add(key)
+      try {
+        fetchAllIconsStatus.textContent = `取得中… (${i + 1}/${targets.length})`
+        // **チャンネル ID は要求しない**(plan.md の表: この経路は `{ channelId: false, icon: true }`)。
+        // **表記名は `want` に無い**ので、HTML を取れば ID を要求しなくても常に返る (007)
+        const result = await resolveChannelPage(targets[i].url, { channelId: false, icon: true })
+        // **待っている間に削除された行には書かない**(復活させない / F14)
+        if (!findEntry(directory, targets[i].url)) continue
+        let entryChanged = false
+        if (result.icon?.status === 'resolved') {
+          directory = upsertChannelIcon(directory, targets[i].url, result.icon.dataUrl)
+          entryChanged = true
+        }
+        if (result.name) {
+          directory = upsertChannelName(directory, targets[i].url, result.name)
+          entryChanged = true
+        }
+        if (entryChanged) {
+          success++
+          // 1 件ごとに保存する(F15)。ここで保存しておけば、途中で画面を閉じても取れた分は残る
+          await saveDirectory(directory)
+          renderDirectory()
+        }
+      } finally {
+        resolvingKeys.delete(key)
+      }
+    }
+    fetchAllIconsStatus.textContent =
+      success === targets.length
+        ? `${targets.length} 件取得しました`
+        : `${targets.length} 件中 ${success} 件取得しました(${targets.length - success} 件は失敗)`
+  } catch (err) {
+    // saveDirectory の失敗(クォータ超過等)をここで握る。**状態表示を「取得中…」のまま固めない** (F15)
+    log.error('アイコンのまとめて取得で保存に失敗した:', err)
+    fetchAllIconsStatus.textContent = `保存に失敗しました(${success} 件は取得済み)`
+  } finally {
+    bulkIconFetching = false
+    renderDirectory()
+  }
+}
+
+fetchAllIconsButton.addEventListener('click', () => {
+  void fetchAllIcons()
+})
+
+/**
+ * 絞り込み(`dirFilter`)に呼び名か表記名かハンドルが当たるか。空文字は「絞らない」= 全件通す (AC11)
+ *
+ * **`channelName`(表記名)も見る (A1)。**画面に表記名で出ている行を、その文字で探せないのは
+ * 半端なので、呼び名・ハンドルに加えて表記名にも当たるようにする。大小無視は変わらない。
+ */
+function matchesDirectoryFilter(entry: DirectoryEntry): boolean {
+  const filter = dirFilter.trim().toLowerCase()
+  if (!filter) return true
+  return (
+    entry.nickname.toLowerCase().includes(filter) ||
+    entry.channelName.toLowerCase().includes(filter) ||
+    displayHandle(entry).toLowerCase().includes(filter)
+  )
+}
+
+/**
+ * 右ペインの先頭ヘッダ(アバター + 呼び名 + ハンドル)。**`#dirDetail` の外に置く**(B9)。
+ *
+ * ⚠️ `#dirDetail` の子要素にしない。AC9 は「⚠ の理由 / ハンドル / 呼び名 / … / 削除」の
+ *    DOM 順を `#dirDetail` の子要素で固定しており(既存テスト)、ここへヘッダを差し込むと
+ *    その順序判定が壊れる。**見た目上の先頭**は `#dirDetailHeader` を `#dirDetail` の直前に
+ *    置くことで作る(CSS のみで足りる。JS 側は独立した要素として描く)。
+ */
+function renderDirDetailHeader(entry: DirectoryEntry | null): void {
+  dirDetailHeader.textContent = ''
+  if (!entry) {
+    dirDetailHeader.hidden = true
+    return
+  }
+  dirDetailHeader.hidden = false
+
+  if (entry.iconDataUrl) {
+    const avatar = document.createElement('img')
+    avatar.className = 'avatar avatar-lg'
+    avatar.src = entry.iconDataUrl
+    avatar.alt = ''
+    avatar.addEventListener(
+      'error',
+      () => {
+        const monogram = document.createElement('span')
+        monogram.className = 'monogram monogram-lg'
+        monogram.textContent = initialForAvatar(entry)
+        avatar.replaceWith(monogram)
+      },
+      { once: true },
+    )
+    dirDetailHeader.appendChild(avatar)
+  } else {
+    const monogram = document.createElement('span')
+    monogram.className = 'monogram monogram-lg'
+    monogram.textContent = initialForAvatar(entry)
+    dirDetailHeader.appendChild(monogram)
+  }
+
+  const main = document.createElement('div')
+  main.className = 'dir-detail-header-main'
+  const nameResult = displayNameFor(entry)
+  if (nameResult.source !== 'handle') {
+    const nameSpan = document.createElement('span')
+    nameSpan.className = 'dir-detail-header-name'
+    nameSpan.textContent = nameResult.text
+    main.appendChild(nameSpan)
+  }
+  const handleSpan = document.createElement('span')
+  handleSpan.className = 'dir-detail-header-handle'
+  handleSpan.textContent = displayHandle(entry)
+  main.appendChild(handleSpan)
+  dirDetailHeader.appendChild(main)
+}
+
+/**
+ * 右ペインを描く。**選んでいなければ案内文だけ** (AC8)。
+ * 選んでいる行の入力欄はここにしか無い(左は表示専用 / AC9)ので、`liveRows` への push も
+ * ここで行う(左の表示専用の行ぶんは `renderDirectory` 側で push する)。
+ */
+function renderDirDetail(entry: DirectoryEntry | null, anyTestSendBusy = false): void {
+  renderDirDetailHeader(entry)
+  dirDetail.textContent = ''
+  if (!entry) {
+    dirDetail.textContent = '← 左の一覧から選んでください'
+    return
+  }
+
+  const key = directoryKey(entry.url)
+  const savedDraft = rowDrafts.get(key)
+  const shown = rowDraftValues(entry, savedDraft)
+  const commentSaved = { nickname: entry.nickname, message: entry.commentMessage }
+  const commentSavedDraft = commentDrafts.get(key)
+  const commentShown = rowDraftValues(commentSaved, commentSavedDraft)
+
+  /** AC6 で弾かれたまま直っていない理由。再描画をまたいで持ち回る */
+  let invalidReason: string | null = shown.invalid ? shown.reason : null
+  let commentInvalidReason: string | null = commentShown.invalid ? commentShown.reason : null
+
+  // --- ⚠ の理由(効かない行のときだけ・先頭) (AC9 / AC10) -----------------
+  const reasons = ineffectiveReasons(entry, shown.message, commentShown.message, {
+    template: currentTemplate(),
+    commentTemplate: currentCommentTemplate(),
+    // **失敗の理由は行ごとに出す** (AC17)
+    channelIdError: channelIdErrors.get(key) ?? null,
+    duplicateChannelId: hasDuplicateChannelId(directory, entry.channelId),
+  })
+  if (reasons.length > 0) {
+    const reasonBlock = document.createElement('p')
+    reasonBlock.className = 'dir-detail-reason'
+    reasonBlock.textContent = reasons.join('\n')
+    dirDetail.appendChild(reasonBlock)
+  }
+
+  // --- ハンドル ------------------------------------------------------------
+  const handleLine = document.createElement('p')
+  handleLine.className = 'dir-detail-handle'
+  handleLine.textContent = entry.url
+  // 走っている間の表示 (AC17)。**チャンネル ID を要求しているときだけ**(F17)
+  if (resolvingChannelIdKeys.has(key)) {
+    const busy = document.createElement('span')
+    busy.className = 'resolving'
+    busy.textContent = 'チャンネル ID を解決中…'
+    handleLine.appendChild(busy)
+  }
+  dirDetail.appendChild(handleLine)
+
+  // --- 呼び名(**編集はここだけ** / AC9) ------------------------------------
+  const nicknameLabel = document.createElement('label')
+  nicknameLabel.className = 'dir-detail-nickname'
+  nicknameLabel.textContent = '呼び名'
+  const nicknameInput = document.createElement('input')
+  nicknameInput.type = 'text'
+  nicknameInput.value = shown.nickname
+  nicknameInput.placeholder = '(未設定 — ハンドルのまま)'
+  registerFocusable(nicknameInput, key, 'nickname')
+  nicknameInput.addEventListener('change', () => {
+    directory = upsertNickname(directory, entry.url, nicknameInput.value.trim())
+    void persistDirectory(`${displayHandle(entry)} の呼び名を保存した`)
+  })
+  nicknameLabel.appendChild(nicknameInput)
+  dirDetail.appendChild(nicknameLabel)
+
+  // --- チャンネル ID の状態と再試行 (AC17 / T14 の決定 3) ---------------------
+  const idStatus = channelIdRowStatus({
+    channelId: entry.channelId,
+    replyToComment: entry.replyToComment,
+    resolving: resolvingChannelIdKeys.has(key),
+    error: channelIdErrors.get(key) ?? null,
+  })
+  const idRow = document.createElement('p')
+  idRow.className = idStatus.failed ? 'channel-id failed' : 'channel-id'
+  idRow.textContent = idStatus.text
+  if (idStatus.canRetry) {
+    const retry = document.createElement('button')
+    retry.type = 'button'
+    retry.textContent = idStatus.retryLabel
+    retry.title = 'この行のチャンネル URL を 1 回だけ見に行って、照合用の ID を控える'
+    retry.addEventListener('click', () => {
+      void resolveEntryChannelId(entry.url, true)
+    })
+    idRow.appendChild(retry)
+  }
+  dirDetail.appendChild(idRow)
+
+  /** 自由文 1 本ぶんの欄を作る。**リダイレクト用とコメント用で同じ規則を使う** (AC16) */
+  const makeMessageField = (
+    /** どちらの自由文か。**フォーカスを戻す先の同定に使う**(取り違えると別の欄に戻る) */
+    fieldName: RowField,
+    labelText: string,
+    value: string,
+    placeholder: string,
+    initialInvalid: string | null,
+    getTemplate: () => string,
+    save: (text: string) => void,
+    setInvalid: (reason: string | null) => void,
+  ): HTMLInputElement => {
+    const label = document.createElement('label')
+    label.className = 'detail-field'
+    label.textContent = labelText
+    const field = document.createElement('input')
+    field.type = 'text'
+    field.value = value
+    field.placeholder = placeholder
+    registerFocusable(field, key, fieldName)
+    if (initialInvalid !== null) {
+      field.classList.add('invalid')
+      field.title = initialInvalid
+    }
+    const remaining = document.createElement('span')
+    remaining.className = 'remaining'
+
+    // 残りは**投稿文全体**に対して出す (AC8)。テンプレートは組ごとに違う
+    const updateRemaining = (): void => {
+      const left = entryRemainingLength(
+        getTemplate(),
+        { url: entry.url, nickname: nicknameInput.value },
+        field.value.trim(),
+      )
+      remaining.textContent = formatRemaining(left)
+      remaining.classList.toggle('over', left < 0)
+      remaining.title =
+        left < 0
+          ? '投稿時に 自由文 → 表示名 → 末尾 の順で削られます(保存はできます)'
+          : '投稿文全体 (200 字) に対する残り'
+    }
+    updateRemaining()
+    field.addEventListener('input', updateRemaining)
+    nicknameInput.addEventListener('input', updateRemaining)
+    templateDependents.push(updateRemaining)
+
+    field.addEventListener('change', () => {
+      const checked = validateEntryMessage(field.value)
+      if (!checked.ok) {
+        // **切り詰めて黙って保存しない** (AC6)。入力はそのまま残し、その場で直せるようにする
+        setInvalid(checked.reason)
+        field.classList.add('invalid')
+        field.title = checked.reason
+        setDirectoryStatus(`${displayHandle(entry)}: ${checked.reason}`)
+        return
+      }
+      setInvalid(null)
+      field.classList.remove('invalid')
+      field.title = ''
+      save(checked.value)
+    })
+
+    label.append(field, remaining)
+    dirDetail.appendChild(label)
+    // **`read` は返さない。**下書きの読み取りは `liveRows` 側が組み立てる。
+    // ここでも返すと `invalid` 固定の版が紛れ、うっかり使うと下書きが壊れる
+    return field
+  }
+
+  const messageField = makeMessageField(
+    'message',
+    '自由文(リダイレクト返礼 / {msg})',
+    shown.message,
+    '(未設定 — {msg} は消える)',
+    invalidReason,
+    currentTemplate,
+    (text) => {
+      directory = upsertMessage(directory, entry.url, text)
+      void persistDirectory(`${displayHandle(entry)} の自由文を保存した`)
+    },
+    (reason) => {
+      invalidReason = reason
+    },
+  )
+
+  const commentField = makeMessageField(
+    'commentMessage',
+    '自由文(コメント返し / {msg})',
+    commentShown.message,
+    '(未設定 — {msg} は消える)',
+    commentInvalidReason,
+    currentCommentTemplate,
+    (text) => {
+      directory = upsertCommentMessage(directory, entry.url, text)
+      void persistDirectory(`${displayHandle(entry)} のコメント返し用の自由文を保存した`)
+    },
+    (reason) => {
+      commentInvalidReason = reason
+    },
+  )
+
+  // --- 「コメントに反応する」(即保存 / AC13) --------------------------------
+  // コメント返し関連が 1 か所にまとまるよう、コメント返しの自由文の下に置く (007 D3)
+  const flagRow = document.createElement('div')
+  flagRow.className = 'row'
+  const flag = document.createElement('input')
+  flag.type = 'checkbox'
+  flag.checked = entry.replyToComment
+  const flagLabel = document.createElement('label')
+  flagLabel.style.margin = '0'
+  flagLabel.textContent = 'コメントに反応する'
+  flag.addEventListener('change', () => {
+    directory = setReplyToComment(directory, entry.url, flag.checked)
+    void (async () => {
+      await persistDirectory(
+        `${displayHandle(entry)} のコメント返しを${flag.checked ? 'ON' : 'OFF'}にした`,
+      )
+      // **ON にしたときが解決の引き金** (AC17)。既に解決済みの行は取りに行かない
+      // (判定は `resolveEntryChannelId` の中。3 経路で条件をずらさない)。
+      // **アイコンも同じ取得に畳む**(007 AC14。取得は 1 回のまま増やさない)
+      if (flag.checked) await resolveEntryChannelId(entry.url, true)
+    })()
+  })
+  flagLabel.prepend(flag)
+  flagRow.appendChild(flagLabel)
+  dirDetail.appendChild(flagRow)
+
+  // --- テスト送信 (T9 / AC7 / AC9 / AC10 / AC13) -----------------------------
+  // **選んだ行だけに出す**(確定値 A)。保存済みの内容で、履歴を残さず実際に投稿する。
+  const testSendState = testSendStates.get(key) ?? { busy: false, message: null }
+  const availability = testSendAvailability(entry)
+
+  const runTestSend = (kind: TestSendKind): void => {
+    if (testSendStates.get(key)?.busy) return
+    testSendStates.set(key, { busy: true, message: testSendState.message })
+    renderDirectory()
+    const finish = (message: string): void => {
+      // **応答が返る前にこの行が削除されていたら書き戻さない** — `captureRowDrafts` が
+      // 既に掃除した後に書き戻すと、以後 `liveRows` に無いので二度と掃除されず、
+      // 同じ URL を登録し直すと前の行の結果がそのまま出る(006 レビュー #9)
+      if (!findEntry(directory, entry.url)) return
+      testSendStates.set(key, { busy: false, message })
+      renderDirectory()
+    }
+    void sendTestSend(kind, entry.url).then(
+      (result) => finish(testSendResultMessage(result)),
+      (err) => {
+        // `sendTestSend` 内で握っているのは `chrome.tabs.sendMessage` の reject(応答フレームが
+        // 無いタブを飛ばすため)だけで、`chrome.tabs.query` など他の失敗はここまで抜けてくる。
+        // 無防備だと `.then` の成功側が走らず、この行のボタンが `busy: true` の
+        // まま固まる(006 レビュー #3)。**必ず busy を戻す**
+        log.error('テスト送信で例外が起きた:', err)
+        finish('テスト送信に失敗しました')
+      },
+    )
+  }
+
+  const testSendRow = document.createElement('div')
+  testSendRow.className = 'row test-send'
+
+  const testSendRedirect = document.createElement('button')
+  testSendRedirect.type = 'button'
+  testSendRedirect.textContent = 'リダイレクト返礼文をテスト送信'
+  // ⚠️ 押し間違いの実害があるので、**実際に投稿される**ことが分かる文言にする(配信中は視聴者に見える)
+  testSendRedirect.title =
+    '保存済みの返礼文を、開いているライブチャットへ実際に投稿します(履歴には残りません)'
+  testSendRedirect.disabled = anyTestSendBusy
+  testSendRedirect.addEventListener('click', () => runTestSend('redirect'))
+  testSendRow.appendChild(testSendRedirect)
+
+  const commentAvailability = availability.comment
+  const testSendComment = document.createElement('button')
+  testSendComment.type = 'button'
+  testSendComment.textContent = 'コメント返しをテスト送信'
+  testSendComment.disabled = anyTestSendBusy || !commentAvailability.enabled
+  testSendComment.title = commentAvailability.enabled
+    ? '保存済みのコメント返しを、開いているライブチャットへ実際に投稿します(履歴には残りません)'
+    : commentAvailability.reason
+  testSendComment.addEventListener('click', () => runTestSend('comment'))
+  testSendRow.appendChild(testSendComment)
+
+  dirDetail.appendChild(testSendRow)
+
+  if (testSendState.message) {
+    const testSendResult = document.createElement('p')
+    testSendResult.className = 'test-send-result'
+    testSendResult.textContent = testSendState.message
+    dirDetail.appendChild(testSendResult)
+  }
+
+  // --- 削除 (AC13) -----------------------------------------------------------
+  const remove = document.createElement('button')
+  remove.type = 'button'
+  remove.textContent = '削除'
+  remove.title = '一覧から削除する'
+  remove.addEventListener('click', () => {
+    directory = removeEntry(directory, entry.url)
+    selectedKey = null
+    void persistDirectory(`${displayHandle(entry)} を削除した`)
+  })
+  dirDetail.appendChild(remove)
+
+  liveRows.push({
+    key,
+    url: entry.url,
+    shown: { nickname: shown.nickname, message: shown.message },
+    shownFromDraft: savedDraft !== undefined,
+    read: () => ({
+      nickname: nicknameInput.value,
+      message: messageField.value,
+      invalid: invalidReason !== null,
+      reason: invalidReason,
+    }),
+    comment: {
+      shown: { nickname: shown.nickname, message: commentShown.message },
+      shownFromDraft: commentSavedDraft !== undefined,
+      read: () => ({
+        nickname: nicknameInput.value,
+        message: commentField.value,
+        invalid: commentInvalidReason !== null,
+        reason: commentInvalidReason,
+      }),
+    },
+  })
+}
+
 function renderDirectory(): void {
   // **行を消す前に**編集中の値を退避する。ここを飛ばすと未保存の入力がそのまま消える
   captureRowDrafts()
   // 値だけでは足りない。**打っている最中の欄とキャレットも覚える** (T17)
   const focusTarget = captureFocusTarget()
-  directoryRows.textContent = ''
+  // ⚠️ **`textContent = ''` は `scrollTop` を 0 に戻す。**左右のペインは独立してスクロールする
+  //    (AC6b) ので、控えておいて描画のあとに書き戻す(007 レビュー: 再描画のたびに先頭へ飛ぶ)
+  const dirListScrollTop = dirList.scrollTop
+  const dirDetailScrollTop = dirDetail.scrollTop
+  dirList.textContent = ''
   // 行を作り直すので、前の行に紐づいた更新関数と入力欄の参照は捨てる
   templateDependents.length = 0
   focusables.clear()
 
   if (directory.length === 0) {
-    const row = document.createElement('tr')
-    const cell = document.createElement('td')
-    cell.colSpan = 4
-    cell.className = 'empty'
-    cell.textContent = 'まだ登録がありません。リダイレクトを受けると自動で追加されます。'
-    row.appendChild(cell)
-    directoryRows.appendChild(row)
+    const empty = document.createElement('p')
+    empty.className = 'empty'
+    empty.textContent = 'まだ登録がありません。リダイレクトを受けると自動で追加されます。'
+    dirList.appendChild(empty)
+    // AC12: 右は案内文のまま
+    renderDirDetail(null)
     // ⚠️ **早期 return でも常時表示を描き直す。**飛ばすと「最後の 1 件を削除した」遷移で
     //    AC13 の常時表示と AC16 の警告が**古い内容のまま残る**(次の描画でも同じ経路を通るので
     //    自己回復しない)。常時表示は「いつ見ても正しい」ことが要件
     renderAlwaysOnNotices()
+    renderFetchAllIcons()
     // 行が 1 つも無いので戻す先も無い。**それでも呼ぶ**(出口ごとに約束が変わらないように)
     restoreFocusTarget(focusTarget)
+    // フォーカス復帰(`preventScroll: true`)のあとに戻す。0 件でもペインの外枠は残っているので書き戻す
+    dirList.scrollTop = dirListScrollTop
+    dirDetail.scrollTop = dirDetailScrollTop
     return
   }
 
@@ -521,9 +1125,15 @@ function renderDirectory(): void {
   // 1 つしかない入力欄を奪い合う(`inFlight` は main.ts 側の枠取りで、options 側でも押させない)
   const anyTestSendBusy = [...testSendStates.values()].some((state) => state.busy)
 
+  /** 選んでいる行のエントリ。**絞り込みで左に無くても探す**(AC11: 右は残す) */
+  let selectedEntry: DirectoryEntry | null = null
+
   for (const entry of sortForDisplay(directory)) {
     const key = directoryKey(entry.url)
-    const expanded = expandedRows.has(key)
+    const isSelected = key === selectedKey
+    if (isSelected) selectedEntry = entry
+    // **絞り込みで外れた行は `#dirList` に作らない**(AC11。選択中でも左からは消える)
+    if (!matchesDirectoryFilter(entry)) continue
 
     // 未保存の入力があればそれを出す。無ければ保存済みの値(field ごとに持つ)
     const savedDraft = rowDrafts.get(key)
@@ -532,352 +1142,112 @@ function renderDirectory(): void {
     const commentSavedDraft = commentDrafts.get(key)
     const commentShown = rowDraftValues(commentSaved, commentSavedDraft)
 
-    /** AC6 で弾かれたまま直っていない理由。再描画をまたいで持ち回る */
-    let invalidReason: string | null = shown.invalid ? shown.reason : null
-    let commentInvalidReason: string | null = commentShown.invalid ? commentShown.reason : null
-
-    const row = document.createElement('tr')
-
-    // --- 展開の操作子 (T14 で確定: 左端の ▸) ------------------------------
-    const caretCell = document.createElement('td')
-    caretCell.className = 'caret'
-    const caret = document.createElement('button')
-    caret.type = 'button'
-    caret.className = 'caret'
-    caret.textContent = expanded ? '▾' : '▸'
-    caret.title = expanded ? '閉じる' : '自由文とフラグを開く'
-    caret.setAttribute('aria-expanded', String(expanded))
-    caret.addEventListener('click', () => {
-      if (expandedRows.has(key)) expandedRows.delete(key)
-      else expandedRows.add(key)
+    // --- 左の 1 行(**表示専用**。入力欄は置かない / AC9) ----------------------
+    const row = document.createElement('div')
+    row.className = entry.lastSeenAt ? 'dir-row' : 'dir-row unseen'
+    if (isSelected) row.classList.add('selected')
+    row.title = entry.lastSeenAt ? entry.url : `${entry.url}(まだリダイレクトを受けていない)`
+    // 右の詳細ペインが呼び名・自由文・削除の唯一の編集口なので、マウス無しでも到達できるようにする (F4)
+    row.tabIndex = 0
+    row.setAttribute('role', 'button')
+    const selectRow = (): void => {
+      selectedKey = key
       renderDirectory()
+    }
+    row.addEventListener('click', selectRow)
+    row.addEventListener('keydown', (ev) => {
+      if (ev.key !== 'Enter' && ev.key !== ' ') return
+      ev.preventDefault()
+      selectRow()
     })
-    caretCell.appendChild(caret)
 
-    // --- ハンドル + 「効かない行」の印 -------------------------------------
-    const handleCell = document.createElement('td')
-    handleCell.className = entry.lastSeenAt ? 'handle' : 'handle unseen'
-    handleCell.textContent = displayHandle(entry)
-    handleCell.title = entry.lastSeenAt ? entry.url : `${entry.url}(まだリダイレクトを受けていない)`
-
-    // 走っている間の表示 (AC17)。**畳んだ行でも分かるように**ハンドルの横に出す
-    if (resolvingKeys.has(key)) {
-      const busy = document.createElement('span')
-      busy.className = 'resolving'
-      busy.textContent = 'チャンネル ID を解決中…'
-      handleCell.appendChild(busy)
+    // --- アイコン(丸)/ 未取得ならモノグラム (AC18) -----------------------------
+    if (entry.iconDataUrl) {
+      const avatar = document.createElement('img')
+      avatar.className = 'avatar'
+      avatar.src = entry.iconDataUrl
+      avatar.alt = ''
+      // **読み込みに失敗したらモノグラムへ差し替える (F19)。**`normalizeDirectory` は
+      // `data:image/` 前置と 64KB 以下しか見ないので、非画像本文が素通りすることがある。
+      // 見えなくても `iconDataUrl` は空でないため通常の取得対象にも二度と乗らず、
+      // このままだと UI から復旧する手段が無い(削除して登録し直すしかない)
+      avatar.addEventListener(
+        'error',
+        () => {
+          const monogram = document.createElement('span')
+          monogram.className = 'monogram'
+          monogram.textContent = initialForAvatar(entry)
+          avatar.replaceWith(monogram)
+        },
+        { once: true },
+      )
+      row.appendChild(avatar)
+    } else {
+      const monogram = document.createElement('span')
+      monogram.className = 'monogram'
+      monogram.textContent = initialForAvatar(entry)
+      row.appendChild(monogram)
     }
 
+    const main = document.createElement('div')
+    main.className = 'dir-row-main'
+    const handleText = displayHandle(entry)
+    // AC7: 呼び名があればそれを、無ければ控えてあるチャンネルの表記名をグレーで出す
+    // (`.placeholder`)。どちらも無ければ**ハンドルだけを 1 段**(2 段にすると同じ文字列が並ぶだけ)
+    const nameResult = displayNameFor(entry)
+    if (nameResult.source !== 'handle') {
+      const nicknameSpan = document.createElement('span')
+      nicknameSpan.className =
+        nameResult.source === 'channelName' ? 'dir-row-nickname placeholder' : 'dir-row-nickname'
+      nicknameSpan.textContent = nameResult.text
+      main.appendChild(nicknameSpan)
+    }
+    const handleSpan = document.createElement('span')
+    handleSpan.className = 'dir-row-handle'
+    handleSpan.textContent = handleText
+    main.appendChild(handleSpan)
+    row.appendChild(main)
+
+    // --- 「効かない行」の印(左は印だけ。理由は選ぶと右へ / AC10) ---------------
     const reasons = ineffectiveReasons(entry, shown.message, commentShown.message, {
       template: currentTemplate(),
       commentTemplate: currentCommentTemplate(),
-      // **失敗の理由は行ごとに出す** (AC17)。畳んだままでも印の title で読める
       channelIdError: channelIdErrors.get(key) ?? null,
       duplicateChannelId: hasDuplicateChannelId(directory, entry.channelId),
     })
     if (reasons.length > 0) {
-      // T14 で確定: **アイコン + 行の背景色の両方**。理由はアイコンの title に出す
       row.classList.add('ineffective')
       const mark = document.createElement('span')
       mark.className = 'mark'
       mark.textContent = '⚠'
       mark.title = reasons.join('\n')
-      handleCell.appendChild(mark)
+      row.appendChild(mark)
     }
 
-    // --- 呼び名 -----------------------------------------------------------
-    const nicknameCell = document.createElement('td')
-    const input = document.createElement('input')
-    input.type = 'text'
-    input.value = shown.nickname
-    input.placeholder = '(未設定 — ハンドルのまま)'
-    registerFocusable(input, key, 'nickname')
-    input.addEventListener('change', () => {
-      directory = upsertNickname(directory, entry.url, input.value.trim())
-      void persistDirectory(`${displayHandle(entry)} の呼び名を保存した`)
-    })
-    nicknameCell.appendChild(input)
+    dirList.appendChild(row)
 
-    // --- 削除(**畳んだ状態でも押せる** / AC13) ---------------------------
-    const actionCell = document.createElement('td')
-    const remove = document.createElement('button')
-    remove.type = 'button'
-    remove.textContent = '削除'
-    remove.title = '一覧から削除する'
-    remove.addEventListener('click', () => {
-      directory = removeEntry(directory, entry.url)
-      expandedRows.delete(key)
-      void persistDirectory(`${displayHandle(entry)} を削除した`)
-    })
-    actionCell.appendChild(remove)
-
-    row.append(caretCell, handleCell, nicknameCell, actionCell)
-    directoryRows.appendChild(row)
-
-    if (!expanded) {
-      // 畳んだ行でも下書きは拾う(呼び名は畳んだ状態でも編集できる)
+    // 選んでいる行は `renderDirDetail` が実物の入力欄付きで push する。二重に push しない
+    if (!isSelected) {
       liveRows.push({
         key,
         url: entry.url,
         shown: { nickname: shown.nickname, message: shown.message },
         shownFromDraft: savedDraft !== undefined,
-        read: () => ({
-          nickname: input.value,
-          message: shown.message,
-          invalid: invalidReason !== null,
-          reason: invalidReason,
-        }),
+        // **入力欄が無いので人が触りようがない。** `shown` をそのまま返す
+        read: () => shown,
       })
-      continue
     }
-
-    // --- 展開したときだけ出すもの -----------------------------------------
-    const detailRow = document.createElement('tr')
-    const detailCell = document.createElement('td')
-    detailCell.className = 'detail'
-    detailCell.colSpan = 4
-
-    // 「コメントに反応する」(行編集で即保存 / AC13)
-    const flagRow = document.createElement('div')
-    flagRow.className = 'row'
-    const flag = document.createElement('input')
-    flag.type = 'checkbox'
-    flag.checked = entry.replyToComment
-    const flagLabel = document.createElement('label')
-    flagLabel.style.margin = '0'
-    flagLabel.textContent = 'コメントに反応する'
-    flag.addEventListener('change', () => {
-      directory = setReplyToComment(directory, entry.url, flag.checked)
-      void (async () => {
-        await persistDirectory(
-          `${displayHandle(entry)} のコメント返しを${flag.checked ? 'ON' : 'OFF'}にした`,
-        )
-        // **ON にしたときが解決の引き金** (AC17)。既に解決済みの行は取りに行かない
-        // (判定は `resolveEntryChannelId` の中。3 経路で条件をずらさない)
-        if (flag.checked) await resolveEntryChannelId(entry.url)
-      })()
-    })
-    flagLabel.prepend(flag)
-    flagRow.appendChild(flagLabel)
-    detailCell.appendChild(flagRow)
-
-    // --- チャンネル ID の状態と個別の再試行 (AC17 / T14 の決定 3) -----------
-    // **畳んだ行には再試行を置かない**(ボタンが 3 つ並ぶため / T14)。ここと「まとめて」の 2 つ
-    const idStatus = channelIdRowStatus({
-      channelId: entry.channelId,
-      replyToComment: entry.replyToComment,
-      resolving: resolvingKeys.has(key),
-      error: channelIdErrors.get(key) ?? null,
-    })
-    const idRow = document.createElement('p')
-    idRow.className = idStatus.failed ? 'channel-id failed' : 'channel-id'
-    idRow.textContent = idStatus.text
-    if (idStatus.canRetry) {
-      const retry = document.createElement('button')
-      retry.type = 'button'
-      retry.textContent = idStatus.retryLabel
-      retry.title = 'この行のチャンネル URL を 1 回だけ見に行って、照合用の ID を控える'
-      retry.addEventListener('click', () => {
-        void resolveEntryChannelId(entry.url)
-      })
-      idRow.appendChild(retry)
-    }
-    detailCell.appendChild(idRow)
-
-    /** 自由文 1 本ぶんの欄を作る。**リダイレクト用とコメント用で同じ規則を使う** (AC16) */
-    const makeMessageField = (
-      /** どちらの自由文か。**フォーカスを戻す先の同定に使う**(取り違えると別の欄に戻る) */
-      fieldName: RowField,
-      labelText: string,
-      value: string,
-      placeholder: string,
-      initialInvalid: string | null,
-      getTemplate: () => string,
-      save: (text: string) => void,
-      setInvalid: (reason: string | null) => void,
-    ): HTMLInputElement => {
-      const label = document.createElement('label')
-      label.className = 'detail-field'
-      label.textContent = labelText
-      const field = document.createElement('input')
-      field.type = 'text'
-      field.value = value
-      field.placeholder = placeholder
-      registerFocusable(field, key, fieldName)
-      if (initialInvalid !== null) {
-        field.classList.add('invalid')
-        field.title = initialInvalid
-      }
-      const remaining = document.createElement('span')
-      remaining.className = 'remaining'
-
-      // 残りは**展開後の投稿文全体**に対して出す (AC8)。テンプレートは組ごとに違う
-      const updateRemaining = (): void => {
-        const left = entryRemainingLength(
-          getTemplate(),
-          { url: entry.url, nickname: input.value },
-          field.value.trim(),
-        )
-        remaining.textContent = formatRemaining(left)
-        remaining.classList.toggle('over', left < 0)
-        remaining.title =
-          left < 0
-            ? '投稿時に 自由文 → 表示名 → 末尾 の順で削られます(保存はできます)'
-            : '投稿文全体 (200 字) に対する残り'
-      }
-      updateRemaining()
-      field.addEventListener('input', updateRemaining)
-      input.addEventListener('input', updateRemaining)
-      templateDependents.push(updateRemaining)
-
-      field.addEventListener('change', () => {
-        const checked = validateEntryMessage(field.value)
-        if (!checked.ok) {
-          // **切り詰めて黙って保存しない** (AC6)。入力はそのまま残し、その場で直せるようにする
-          setInvalid(checked.reason)
-          field.classList.add('invalid')
-          field.title = checked.reason
-          setDirectoryStatus(`${displayHandle(entry)}: ${checked.reason}`)
-          return
-        }
-        setInvalid(null)
-        field.classList.remove('invalid')
-        field.title = ''
-        save(checked.value)
-      })
-
-      label.append(field, remaining)
-      detailCell.appendChild(label)
-      // **`read` は返さない。**下書きの読み取りは `liveRows` 側が組み立てる。
-      // ここでも返すと `invalid` 固定の版が紛れ、うっかり使うと下書きが壊れる
-      return field
-    }
-
-    const messageField = makeMessageField(
-      'message',
-      '自由文(リダイレクト返礼 / {msg})',
-      shown.message,
-      '(未設定 — {msg} は消える)',
-      invalidReason,
-      currentTemplate,
-      (text) => {
-        directory = upsertMessage(directory, entry.url, text)
-        void persistDirectory(`${displayHandle(entry)} の自由文を保存した`)
-      },
-      (reason) => {
-        invalidReason = reason
-      },
-    )
-
-    const commentField = makeMessageField(
-      'commentMessage',
-      '自由文(コメント返し / {msg})',
-      commentShown.message,
-      '(未設定 — {msg} は消える)',
-      commentInvalidReason,
-      currentCommentTemplate,
-      (text) => {
-        directory = upsertCommentMessage(directory, entry.url, text)
-        void persistDirectory(`${displayHandle(entry)} のコメント返し用の自由文を保存した`)
-      },
-      (reason) => {
-        commentInvalidReason = reason
-      },
-    )
-
-    // --- テスト送信 (T9 / AC7 / AC9 / AC10 / AC13) ---------------------------
-    // **展開したときだけ出す**(確定値 A)。保存済みの内容で、履歴を残さず実際に投稿する。
-    const testSendState = testSendStates.get(key) ?? { busy: false, message: null }
-    const availability = testSendAvailability(entry)
-
-    const runTestSend = (kind: TestSendKind): void => {
-      if (testSendStates.get(key)?.busy) return
-      testSendStates.set(key, { busy: true, message: testSendState.message })
-      renderDirectory()
-      const finish = (message: string): void => {
-        // **応答が返る前にこの行が削除されていたら書き戻さない** — `captureRowDrafts` が
-        // 既に掃除した後に書き戻すと、以後 `liveRows` に無いので二度と掃除されず、
-        // 同じ URL を登録し直すと前の行の結果がそのまま出る(006 レビュー #9)
-        if (!findEntry(directory, entry.url)) return
-        testSendStates.set(key, { busy: false, message })
-        renderDirectory()
-      }
-      void sendTestSend(kind, entry.url).then(
-        (result) => finish(testSendResultMessage(result)),
-        (err) => {
-          // `sendTestSend` 内で握っているのは `chrome.tabs.sendMessage` の reject(応答フレームが
-          // 無いタブを飛ばすため)だけで、`chrome.tabs.query` など他の失敗はここまで抜けてくる。
-          // 無防備だと `.then` の成功側が走らず、この行のボタンが `busy: true` の
-          // まま固まる(006 レビュー #3)。**必ず busy を戻す**
-          log.error('テスト送信で例外が起きた:', err)
-          finish('テスト送信に失敗しました')
-        },
-      )
-    }
-
-    const testSendRow = document.createElement('div')
-    testSendRow.className = 'row test-send'
-
-    const testSendRedirect = document.createElement('button')
-    testSendRedirect.type = 'button'
-    testSendRedirect.textContent = '返礼文をテスト送信'
-    // ⚠️ 押し間違いの実害があるので、**実際に投稿される**ことが分かる文言にする(配信中は視聴者に見える)
-    testSendRedirect.title =
-      '保存済みの返礼文を、開いているライブチャットへ実際に投稿します(履歴には残りません)'
-    testSendRedirect.disabled = anyTestSendBusy
-    testSendRedirect.addEventListener('click', () => runTestSend('redirect'))
-    testSendRow.appendChild(testSendRedirect)
-
-    const commentAvailability = availability.comment
-    const testSendComment = document.createElement('button')
-    testSendComment.type = 'button'
-    testSendComment.textContent = 'コメント返しをテスト送信'
-    testSendComment.disabled = anyTestSendBusy || !commentAvailability.enabled
-    testSendComment.title = commentAvailability.enabled
-      ? '保存済みのコメント返しを、開いているライブチャットへ実際に投稿します(履歴には残りません)'
-      : commentAvailability.reason
-    testSendComment.addEventListener('click', () => runTestSend('comment'))
-    testSendRow.appendChild(testSendComment)
-
-    detailCell.appendChild(testSendRow)
-
-    if (testSendState.message) {
-      const testSendResult = document.createElement('p')
-      testSendResult.className = 'test-send-result'
-      testSendResult.textContent = testSendState.message
-      detailCell.appendChild(testSendResult)
-    }
-
-    detailRow.appendChild(detailCell)
-    directoryRows.appendChild(detailRow)
-
-    liveRows.push({
-      key,
-      url: entry.url,
-      shown: { nickname: shown.nickname, message: shown.message },
-      shownFromDraft: savedDraft !== undefined,
-      read: () => ({
-        nickname: input.value,
-        message: messageField.value,
-        invalid: invalidReason !== null,
-        reason: invalidReason,
-      }),
-      comment: {
-        shown: { nickname: shown.nickname, message: commentShown.message },
-        shownFromDraft: commentSavedDraft !== undefined,
-        read: () => ({
-          nickname: input.value,
-          message: commentField.value,
-          invalid: commentInvalidReason !== null,
-          reason: commentInvalidReason,
-        }),
-      },
-    })
   }
 
+  renderDirDetail(selectedEntry, anyTestSendBusy)
+
   renderAlwaysOnNotices()
+  renderFetchAllIcons()
   // **作り直したあとに戻す。**打っている最中に `channelId` の解決が返っても打鍵を落とさない (T17)
   restoreFocusTarget(focusTarget)
+  // フォーカス復帰(`preventScroll: true`)のあとに戻す(007 レビュー: 再描画のたびに先頭へ飛ぶ)
+  dirList.scrollTop = dirListScrollTop
+  dirDetail.scrollTop = dirDetailScrollTop
 }
 
 addEntry.addEventListener('click', () => {
@@ -886,14 +1256,14 @@ addEntry.addEventListener('click', () => {
     setDirectoryStatus('チャンネルの @ハンドル または URL を入れてください')
     return
   }
-  // **自由文は ＋ の欄から入れない** — 行を畳む表示にしたので、登録してから ▸ で開いて書く。
+  // **自由文は ＋ の欄から入れない** — 登録してから右ペインを選んで書く。
   // 「空欄で保存済みの自由文を消さない」ための分岐(003 の `shouldUpsertMessage`)も、
   // 入口が無くなったので要らない
   directory = upsertNickname(directory, url, newNickname.value.trim())
   newHandle.value = ''
   newNickname.value = ''
-  // 新しく登録した行はすぐ書けるように開いておく
-  expandedRows.add(directoryKey(url))
+  // 新しく登録した行はすぐ書けるように選んでおく
+  selectedKey = directoryKey(url)
   void persistDirectory('登録した')
 })
 
@@ -903,15 +1273,32 @@ for (const input of [newHandle, newNickname]) {
   })
 }
 
-void loadDirectory().then((loaded) => {
-  directory = loaded
+// 絞り込み (AC11)。呼び名・表記名・ハンドルに当たる。空にすると全件に戻る
+dirFilterInput.addEventListener('input', () => {
+  dirFilter = dirFilterInput.value
   renderDirectory()
 })
 
-onDirectoryChanged((next) => {
+const stopDirectoryChanged = onDirectoryChanged((next) => {
   directory = next
   renderDirectory()
 })
+
+const tabButtons = [...document.querySelectorAll<HTMLButtonElement>('#tabs [data-tab]')]
+const panels: Record<OptionsTab, HTMLElement> = {
+  basic: el<HTMLElement>('panel-basic'),
+  directory: el<HTMLElement>('panel-directory'),
+  history: el<HTMLElement>('panel-history'),
+  dev: el<HTMLElement>('panel-dev'),
+}
+let currentTab: OptionsTab = 'basic'
+const selectTab = (tab: OptionsTab): void => {
+  currentTab = tab
+  for (const [name, panel] of Object.entries(panels)) panel.hidden = name !== tab
+  for (const button of tabButtons) button.setAttribute('aria-selected', String(button.dataset.tab === tab))
+}
+for (const button of tabButtons) button.addEventListener('click', () => selectTab(button.dataset.tab as OptionsTab))
+selectTab(currentTab)
 
 // --- 投稿履歴 -------------------------------------------------------------
 // 再投稿を止めている根拠を人が見られるようにする。消せば同じ配信でももう一度投稿できる。
@@ -964,7 +1351,6 @@ clearPostLogButton.addEventListener('click', () => {
   })()
 })
 
-void loadPostLog().then(renderPostLog)
 const preview = el<HTMLElement>('preview')
 const commentPreview = el<HTMLElement>('commentPreview')
 const status = el<HTMLElement>('status')
@@ -1028,4 +1414,14 @@ save.addEventListener('click', () => {
   })()
 })
 
-void loadConfig().then(apply)
+const ready = Promise.all([
+  loadDirectory().then((loaded) => {
+    directory = loaded
+    renderDirectory()
+  }),
+  loadPostLog().then(renderPostLog),
+  loadConfig().then(apply),
+]).then(() => undefined)
+
+return { ready, dispose: stopDirectoryChanged }
+}

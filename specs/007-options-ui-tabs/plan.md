@@ -86,6 +86,18 @@ README.md:154 と docs/privacy-policy.md:14 が「**本拡張が自分で通信�
 | `README.md` (139, 154-157) | 「チャンネル ID を控える」の説明に**アイコンも同時に控える**ことと**「アイコンをまとめて取得」**の引き金を追記 |
 | `docs/privacy-policy.md` (14-25) | 同上。**取得先ホスト `yt3.googleusercontent.com`** も明記 |
 | `docs/install.md` (131, 188) / `docs/setup-and-verify.md` (80, 237) / `docs/for-testers.md` (284, 329, 341, 385) | `▸` を押して展開する前提の記述を、**左の一覧から選ぶ**操作に書き換える。**`install.md:131` と `setup-and-verify.md:80` は設定画面の構成そのものを説明する表**なので、`▸` の置換だけでなく **4 タブの構成にも書き換える** |
+| `public/options.html` `.dir-row` | **B7(追加の塊): `justify-content: space-between` を `flex-start` にする**(または宣言ごと削除)。子が 2 個/3 個で入れ替わり、名前が右端に張り付いていた実機の見え方を直す(AC7) |
+| `public/options.html` `.dir-row-main` | **B7**: `flex: 1;` を足す(`min-width: 0` は維持)。`.dir-row .mark` を `margin-left: auto` に変え、⚠ を常に右端に固定する |
+| `src/channel-id.ts` `MAX_ICON_DATA_URL_LENGTH` の隣 | **B7**: `extractChannelName(html: string): string` を足す(`og:title` の `content` を実体参照デコードして返す。`MAX_CHANNEL_NAME_LENGTH` 超は空文字。例外を投げない) |
+| `src/channel-id.ts` `resolveChannelPage()` | **B7**: 戻り値に `name: string` を足す。**`want` に名前用のフラグは足さない** — HTML を取った経路では `want` に関わらず常に `extractChannelName` を呼ぶ(同じ HTML から追加コスト 0) |
+| `src/directory.ts` `DirectoryEntry` | **B7**: `channelName: string` を足す(空文字 = 未取得。`iconDataUrl` と同じ流儀。表示専用) |
+| `src/directory.ts` `blankEntry()` / `normalizeDirectory()` | **B7**: `channelName: ''` の既定値と、`MAX_CHANNEL_NAME_LENGTH` 超・非文字列を空文字に落とす正規化を足す |
+| `src/directory.ts` `upsertChannelIcon()` の隣 | **B7**: `upsertChannelName()` を足す(同じ形。アイコンとは独立して保存する) |
+| `src/directory.ts` `initialForAvatar()` / `displayHandle()` の隣 | **B7**: `initialForAvatar` の優先順を「呼び名 → 表記名 → ハンドル」に広げる(`channelName` は省略可能な追加引数として受ける。既存呼び出しを壊さない)。表示名を決める純関数 `displayNameFor()` を新設し、`{ text, source: 'nickname' \| 'channelName' \| 'handle' }` を返す |
+| `src/options/options.ts` `resolveEntryChannelId()` | **B7**: `resolveChannelPage` の戻りの `name` が空でなければ `upsertChannelName` で控える(`channelId` / `iconDataUrl` と独立) |
+| `src/options/options.ts` `fetchAllIcons()` | **B7**: 取得した `name` も同様に控える。対象条件を `iconDataUrl === '' \|\| channelName === ''` に広げる(アイコンだけ済んでいる行が永久に表記名を取らない退行を防ぐ)。ボタン文言を「アイコンと表記名を取得」に変える(B8 で 320px の左ペインに収まるよう「まとめて」を落とした。`#fetchAllIcons` の id は変えない) |
+| `src/options/options.ts` `renderDirectory()` の左の行 | **B7**: `displayNameFor(entry)` で 1 段目を決める。`source === 'channelName'` のときだけ `.placeholder` クラスを付けてグレーにする。`source === 'handle'`(=どちらも空)なら 1 段目は出さず、今までどおりハンドルだけ |
+| `public/options.html` CSS | **B7**: `.dir-row-nickname.placeholder { color: #777; }` を足す(ハンドルの `#666` とは別の色にして、呼び名/表記名/ハンドルが見分けられるようにする) |
 
 ## 新規インターフェース
 
@@ -269,6 +281,53 @@ export function stubChrome(options?: {
 }): ChromeStub
 ```
 
+```ts
+// src/channel-id.ts — B7(追加の塊): 表記名(og:title)の取得
+
+/** 表記名として控えてよい長さの上限。超えたら空文字(切り詰めない)。directory.ts で定義し、
+ *  channel-id.ts / directory.ts の両方から参照する(MAX_ICON_DATA_URL_LENGTH と同じ置き場の作法) */
+export const MAX_CHANNEL_NAME_LENGTH = 100 // src/directory.ts 側
+
+/**
+ * チャンネルページの HTML から `og:title`(= チャンネルの表記名)を取り出す純関数。
+ * 例外は投げない。取れなければ空文字。`extractChannelId` のような
+ * 「複数の出所を突き合わせて食い違ったら失敗」はしない(誤表示の実害が無いため)。
+ */
+export function extractChannelName(html: string): string
+
+// resolveChannelPage の戻り値に `name` を追加(want に名前用のフラグは無い)
+export async function resolveChannelPage(
+  url: string,
+  want: { channelId: boolean; icon: boolean },
+  options?: ResolveOptions & { maxBytes?: number },
+): Promise<{ channelId: ChannelIdResult | null; icon: ChannelIconResult | null; name: string }>
+```
+
+```ts
+// src/directory.ts — B7: DirectoryEntry に足すフィールド
+export type DirectoryEntry = {
+  // …既存…
+  /**
+   * チャンネルの表記名。**空文字は「未取得」**(`iconDataUrl` と同じ流儀)。
+   * チャンネルページの `og:title` から取って控える。**表示専用。照合・投稿文には一切使わない。**
+   * 呼び名が空の行に、ハンドルの代わりにグレーで出す(AC7)。
+   */
+  channelName: string
+}
+
+/** `upsertChannelIcon` と同じ形。アイコンとは独立して保存する */
+export function upsertChannelName(directory: Directory, url: string, name: string): Directory
+
+export type DisplayName = { text: string; source: 'nickname' | 'channelName' | 'handle' }
+
+/**
+ * 左ペインの行に出す表示名を決める純関数(AC7)。
+ * 呼び名 → 表記名 → ハンドルの順。**どれを返したかも分かる形**にして、
+ * 呼び出し側が「表記名で埋めているときだけグレーにする」判定に使う。
+ */
+export function displayNameFor(entry: Pick<DirectoryEntry, 'nickname' | 'channelName' | 'url'>): DisplayName
+```
+
 ## 採らない案
 
 - **`iconFetchedAt` のような「いつ取ったか」のフィールドを持たない。** 足すと「失敗した行を
@@ -331,21 +390,21 @@ export function stubChrome(options?: {
 | **履歴タブの中身** | **投稿履歴のみ**(独立したタブにする) |
 | 開発タブの中身 | **診断ログのみ** |
 | **辞書タブのスクロール** | **左の一覧と右の詳細がそれぞれ独立してスクロールする**(モックの確定 2026-09-09 の備考)。両方に `overflow-y: auto` と高さの上限を付け、ページ全体は縦に伸ばさない |
-| タブの外(常時表示) | studio 限定の警告バナー(上) / 保存バー(下・sticky) |
+| タブの外(常時表示) | **保存バー(下・sticky)だけ。** studio 限定の警告バナーは **基本設定タブの中**(2026-09-10 に AC4 を変更。全タブに常駐すると、一番使う辞書タブの左右ペインの背をそのぶん削るため) |
 | 保存の単位 | Config 7 項目をまとめて 1 回(現行のまま)。タブをまたいだ変更も 1 回で保存される |
-| 辞書の左右比 | 左 280px 固定 / 右は残り。全体の最大幅 1000px・中央寄せ |
-| 左ペインの並び | 絞り込み欄 → 「アイコンをまとめて取得」→ 一覧 → ＋ 追加欄 |
-| 左の 1 行 | アイコン(丸 32px) + 呼び名(1 段目) + ハンドル(2 段目・小さく) + ⚠(効かない行) |
-| **左の 1 行(呼び名が空のとき)** | **1 段だけにして、そこにハンドルを出す**(2 段目は出さない)。⚠ モックは 2 段ともハンドルを出しているが**採らない** — 同じ文字列が 2 回並ぶだけで情報が増えない。spec.md AC7 が正 |
+| 辞書の左右比 | 左 320px 固定 / 右は残り。全体の最大幅 1000px・中央寄せ |
+| 左ペインの並び | 絞り込み欄 → 「アイコンと表記名を取得」(2 行ボタン) → 一覧 → 登録欄(縦積み・「追加」ボタン) |
+| 左の 1 行 | アイコン(丸 22px) + 呼び名(あれば。無ければ控えてある表記名をグレーで)+ ハンドル、横に並べて 1 行(実装時に 2 段案から変更。それぞれ ellipsis で省略) + ⚠(効かない行) |
+| **左の 1 行(呼び名も表記名も無いとき)** | **ハンドルだけを 1 段**(2 段目は出さない)。⚠ モックは 2 段ともハンドルを出しているが**採らない** — 同じ文字列が 2 回並ぶだけで情報が増えない。spec.md AC7 が正 |
 | **左ペインは表示専用** | 入力欄を置かない。呼び名の編集は右ペインだけ(現行は一覧に呼び名の `<input>` があったが、左右分割で右へ移す) |
 | 未取得アイコン | 頭文字 1 文字を描いた丸。文字は `initialForAvatar` |
 | 選択の見せ方 | 行の背景色。選択は 1 件のみ |
-| 右ペインの並び | **⚠ の理由(効かない行のときだけ)** → ハンドル → 呼び名 → コメントに反応する → チャンネル ID の状態と再試行 → 自由文(リダイレクト返礼) → 自由文(コメント返し) → テスト送信 2 ボタンと結果 → 削除 |
+| 右ペインの並び | **⚠ の理由(効かない行のときだけ)** → ハンドル → 呼び名 → チャンネル ID の状態と再試行 → 自由文(リダイレクト返礼) → 自由文(コメント返し) → コメントに反応する → テスト送信 2 ボタンと結果 → 削除(007 D3: コメント返し関連が 1 か所にまとまるよう「コメントに反応する」をコメント返しの自由文の下に移した) |
 | 未選択のときの右ペイン | `← 左の一覧から選んでください`(モックの文言にそろえる) |
 | ⚠ の理由の出し方 | 左は印だけ(`title` に理由)。**選ぶと右ペインの先頭に理由を文で出す** |
-| 絞り込みの対象 | 呼び名 と ハンドル。大文字小文字を区別しない |
+| 絞り込みの対象 | 呼び名 と 表記名 と ハンドル。大文字小文字を区別しない |
 | **絞り込みで外れた行** | **`#dirList` に作らない(行数が減る)。** ⚠ モックは `style.display = 'none'` で行数を保つが**採らない** — jsdom で表示状態を判定できず、テストが行数で書けなくなる |
-| **「アイコンをまとめて取得」のボタン文言** | **対象件数と通信量の目安を出す**: `アイコンをまとめて取得 (23 件 / 約 35MB)`。件数は `iconDataUrl === ''` の行数、目安は 件数 × 1.5MB。**0 件のときはボタンごと隠す**(`retryChannelIds` / `renderChannelIdRetryAll` と同じ流儀 / options.ts:407-415) |
+| **「アイコンと表記名を取得」のボタン文言** | **対象件数と通信量の目安を出す**。**ボタンの中を 2 行にする**: 1 行目がラベル `アイコンと表記名を取得`、2 行目が小さいグレーで `23 件 / 約 35MB`(B8。320px の左ペインで 1 行に収まらないため)。件数は **`iconDataUrl === '' || channelName === ''`** の行数(B7 で広げた)、目安は 件数 × 1.5MB。**0 件のときはボタンごと隠す**(`retryChannelIds` / `renderChannelIdRetryAll` と同じ流儀) |
 | **まとめて取得の実行中** | ボタンを `disabled` にし、隣の `#fetchAllIconsStatus` に `取得中… (3/23)` を出す。**中断はできない**(既存の「まとめて再試行」と同じ) |
 | **まとめて取得の完了メッセージ** | `#fetchAllIconsStatus` に `23 件中 21 件取得しました(2 件は失敗)`。全部成功なら `23 件取得しました` |
 | **まとめて取得の直列 / 並列** | **直列(1 件ずつ順に)。** 既存の `retryUnresolvedChannelIds` と同じ。1 件 1.3〜1.9MB を並列に投げない |
@@ -368,7 +427,7 @@ export function stubChrome(options?: {
 - **`#dirList` と `#dirDetail` の両方に `overflow-y: auto` の指定がある**(AC6b)。
   ⚠ これは**CSS の規則が存在することだけ**を見る検査で、実際にスクロールが分かれて見えるかは
   人手(spec.md 降りる箇所)。規則を誤って消したときに気付ける
-- 警告バナー(`#studioWarning`)と保存バーは、どのタブでも `hidden` にならない
+- 保存バーは、どのタブでも `hidden` にならない。**警告バナー(`#studioWarning`)は基本設定タブでだけ見える**(AC4)
 - **タブを切り替えても、入力中の未保存の値が消えない**(切り替えはパネルの `hidden` の
   付け外しだけで、DOM を作り直さない)
 - 開発タブで `#debug` を切り替え → 基本設定タブへ移動 → `#save` を押すと、
@@ -401,8 +460,8 @@ export function stubChrome(options?: {
   絵文字の呼び名でサロゲートペアを割らない / 取れなければ `'?'`
 - 左の一覧で、`iconDataUrl` がある行は `<img>`、無い行は頭文字の丸(AC18)
 - **辞書タブを開いただけでは fetch が 1 回も呼ばれない**(AC16)
-- 「アイコンをまとめて取得」を押すと、`iconDataUrl` が空の行の数だけチャンネルページが取られる(AC15)。
-  **ボタンの文言に対象件数が出る。0 件なら隠れる**
+- 「アイコンと表記名を取得」を押すと、`iconDataUrl` が空の行の数だけチャンネルページが取られる(AC15)。
+  **ボタンの 2 行目に対象件数と通信量の目安が出る。0 件なら隠れる**
 - 「コメントに反応する」を ON にすると、**チャンネルページの取得は 1 回のまま**で
   `channelId` と `iconDataUrl` の両方が入る(AC14)
 - `iconDataUrl` が入っている辞書で起動すると、**fetch が 1 回も呼ばれずにアイコンが出る**(AC17)
@@ -461,15 +520,17 @@ afterEach(() => {
 | `左右のペインに独立スクロールの指定がある (AC6b)` | `tests/docs.test.ts` | `import.meta.glob('../public/**/*.html', ?raw)` | `public/options.html` の `<style>` に `#dirList` と `#dirDetail` の両方を対象にした `overflow-y: auto` の規則がある |
 | `初期表示では基本設定タブだけが見える (AC1)` | `tests/options-dom.test.ts` | `options.html` を流し込んで `initOptions()` | `#panel-basic.hidden === false` / `#panel-directory` `#panel-history` `#panel-dev` がすべて `hidden === true` |
 | `タブを押すとそのタブだけが見える (AC2)` | `tests/options-dom.test.ts` | 「辞書」ボタンを `click()` | `#panel-directory` だけ `hidden === false` |
-| `警告バナーと保存バーはどのタブでも消えない (AC4)` | `tests/options-dom.test.ts` | 4 タブを順に `click()` | 毎回 `#studioWarning` と `.actions` が `hidden === false` |
+| `警告バナーは基本設定タブにだけ出る (AC4)` | `tests/options-dom.test.ts` | 4 タブを順に `click()` | 基本設定タブのときだけ `#studioWarning` の祖先に `[hidden]` が無い。他の 3 タブでは祖先が `[hidden]` になる |
+| `保存バーはどのタブでも消えない (AC5)` | `tests/options-dom.test.ts` | 4 タブを順に `click()` | 毎回 `.actions` が `hidden === false` |
 | `別タブで変えた診断ログも保存される (AC5)` | `tests/options-dom.test.ts` | 開発タブで `#debug` を `click()` → 基本設定タブへ → `#save` を `click()` | `chrome.storage.sync` に書かれた `debug` が `true` |
 | `左に全行が出て caret が無い (AC6)` | `tests/options-dom.test.ts` | 辞書 2 件(`FAKE_CHANNEL` / `FAKE_OTHER_CHANNEL`) | `#dirList` の行が 2 / `button.caret` が 0 件 |
 | `未選択なら右は案内文 (AC8)` | `tests/options-dom.test.ts` | 辞書 2 件、何も押さない | `#dirDetail` の `textContent` に `左の一覧から選んでください` |
-| `行を選ぶと右に詳細が出る (AC9)` | `tests/options-dom.test.ts` | 1 行目を `click()` | `#dirDetail` に ハンドル / 呼び名の `input` / `コメントに反応する` / チャンネル ID の行 / 自由文 2 欄 / テスト送信 2 ボタン / 削除 が、この DOM 順で存在 |
+| `行を選ぶと右に詳細が出る (AC9)` | `tests/options-dom.test.ts` | 1 行目を `click()` | `#dirDetail` に ハンドル / 呼び名の `input` / チャンネル ID の行 / 自由文 2 欄 / `コメントに反応する` / テスト送信 2 ボタン / 削除 が、この DOM 順で存在 |
 | `左の一覧に入力欄が無い (AC9)` | `tests/options-dom.test.ts` | 辞書 2 件 | `#dirList` の中に `input` が 0 個(＋ 追加欄は `#dirList` の外) |
 | `呼び名が空ならハンドルだけ出る (AC7)` | `tests/options-dom.test.ts` | `nickname: ''` の 1 件 | 左の行の `textContent` に現れる `@example-channel` が 1 回だけ(2 段にしない) |
 | `効かない行の理由は選ぶと右に出る (AC10)` | `tests/options-dom.test.ts` | `replyToComment: true` かつ `channelId: ''` の 1 件 | 左に `⚠` / 選ぶと `#dirDetail` に `ineffectiveReasons` の文言 |
 | `絞り込みは呼び名とハンドルに当たる (AC11)` | `tests/options-dom.test.ts` | 2 件、`#dirFilter` に片方のハンドルの一部を `input` | 左の行が 1 / 空に戻すと 2 |
+| `絞り込みは表記名にも当たる (AC11)` | `tests/options-dom.test.ts` | 呼び名が空で表記名だけがある行を、`#dirFilter` に表記名の一部を `input`(B9 / A1) | 左の行が 1 のまま残る |
 | `絞り込みで消えても選択は外れない (AC11)` | `tests/options-dom.test.ts` | 1 行目を選んだ後、2 行目だけに当たる語で絞る | `#dirDetail` は 1 行目のまま |
 | `辞書 0 件の左右 (AC12)` | `tests/options-dom.test.ts` | 辞書 0 件 | 左に `まだ登録がありません` / 右に `左の一覧から選んでください` |
 | `選択中の行を削除すると右が戻る (AC13)` | `tests/options-dom.test.ts` | 1 行目を選び「削除」を `click()` | `#dirDetail` に `左の一覧から選んでください` |
@@ -505,6 +566,16 @@ afterEach(() => {
 | `頭文字は呼び名を優先する` | `tests/directory.test.ts` | `{ nickname: 'まっくす', url: '…/@example-channel' }` | `'ま'` |
 | `呼び名が空ならハンドルの先頭` | `tests/directory.test.ts` | `{ nickname: '', url: '…/@example-channel' }` | `'e'` |
 | `絵文字の呼び名を割らない` | `tests/directory.test.ts` | `{ nickname: '🎉ぱーてぃ', url: … }` | `'🎉'`(長さ 2 の文字列 1 文字ぶん) |
+| `og:title から表記名を取り出す` | `tests/channel-id.test.ts` | `<meta property="og:title" content="YouTube">` | `'YouTube'` |
+| `実体参照をデコードする` | `tests/channel-id.test.ts` | `content="Tom &amp; Jerry"` | `'Tom & Jerry'` |
+| `長すぎる表記名は控えない` | `tests/channel-id.test.ts` | `content` が 101 文字 | `''` |
+| `og:title が無ければ空文字` | `tests/channel-id.test.ts` | meta の無い HTML | `''` |
+| `ページを取ったときは表記名も返す` | `tests/channel-id.test.ts` | `want: { channelId: true, icon: false }` で `og:title` を含む HTML を返す `fetchImpl` | `result.name === 'YouTube'`(`want` に名前の指定は無いが常に返る) |
+| `呼び名が空なら表記名をグレーで出す (AC7)` | `tests/options-dom.test.ts` | `nickname: ''`, `channelName: 'YouTube'` の 1 件 | 左の行に `.dir-row-nickname.placeholder` があり `textContent` が `'YouTube'` |
+| `呼び名も表記名も空ならハンドルだけ (AC7)` | `tests/options-dom.test.ts` | `nickname: ''`, `channelName: ''` の 1 件 | `.dir-row-nickname` が 0 個、ハンドルだけが出る(既存 `呼び名が空ならハンドルだけ出る` と同じ観点を表記名にも広げる) |
+| `まとめて取得は表記名だけ未取得の行も対象にする (AC15)` | `tests/options-dom.test.ts` | `iconDataUrl` あり・`channelName: ''` の行を含む 2 件で `#fetchAllIcons` を `click()` | その行ぶんも `www.youtube.com` への呼び出しに含まれる(アイコン済みでも対象から漏れない) |
+| `頭文字は呼び名 → 表記名 → ハンドルの順 (AC18)` | `tests/directory.test.ts` | `{ nickname: '', channelName: 'YouTube', url: … }` | `'Y'` |
+| `左の行は左寄せになっている` | `tests/docs.test.ts` | `public/options.html` の `<style>` | `.dir-row { … }` の規則に `justify-content: space-between` が無い |
 
 ## 実装ブロック
 

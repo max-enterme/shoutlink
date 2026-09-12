@@ -31,7 +31,7 @@
 
 | 観点 | 結果 |
 |---|---|
-| 外部通信 | **点検時は無し。**`fetch` / `XMLHttpRequest` / `WebSocket` / `sendBeacon` / 動的 `import()` の使用箇所ゼロ。<br>⚠️ **2026-08-15 に変わった (004 / S10)** — [channel-id.ts](../src/channel-id.ts) が **`fetch` を 1 か所使う**(設定画面から、辞書に登録されたチャンネルのページを取得 / `credentials: 'omit'`)。**開発者のサーバは無いまま**だが、「通信を一切行わない」ではなくなったので、**for-testers.md / privacy-policy.md の文言を T10 で書き換えた** |
+| 外部通信 | **点検時は無し。**`fetch` / `XMLHttpRequest` / `WebSocket` / `sendBeacon` / 動的 `import()` の使用箇所ゼロ。<br>⚠️ **2026-08-15 に変わった (004 / S10)** — [channel-id.ts](../src/channel-id.ts) が **`fetch` を 1 か所使う**(設定画面から、辞書に登録されたチャンネルのページを取得 / `credentials: 'omit'`)。**開発者のサーバは無いまま**だが、「通信を一切行わない」ではなくなったので、**for-testers.md / privacy-policy.md の文言を T10 で書き換えた**<br>⚠️ **2026-09-10 にさらに変わった (007)** — `channel-id.ts` の `fetch` 呼び出しは `resolveChannelId` / `fetchIconAsDataUrl` / `resolveChannelPage` の 3 か所(`resolveChannelId` は `resolveChannelPage` の薄いラッパ)、宛先は **`www.youtube.com`(チャンネルページ)と `yt3.googleusercontent.com`(チャンネルアイコン画像)の 2 つ**になった。新たな引き金は**辞書タブの「アイコンと表記名を取得」**。開発者のサーバは無いまま<br>⚠️ **訂正 (2026-09-10 / 007):** ボタン名が旧のまま(「アイコンをまとめて取得」→「アイコンと表記名を取得」)だった上、`resolveChannelPage` は同じ取得でチャンネルページの `og:title` から**チャンネルの表記名も読み取り**、`upsertChannelName` 経由で `chrome.storage.local` に控えることに触れていなかった。読み取り・保存の対象に**チャンネルの表記名**を追記する |
 | リモートコード実行 | `eval` / `new Function` / 文字列 `setTimeout` 無し。MV3 なので既定 CSP のまま |
 | DOM インジェクション | `src/` の `innerHTML` は `manual-trigger.ts:119` の 1 箇所のみで**静的文字列**。動的な値は全て `textContent` / `dataset` 経由。options ページも `createElement` + `textContent` |
 | 権限 | `permissions: ["storage"]` のみ。`web_accessible_resources` 無し・background 無し |

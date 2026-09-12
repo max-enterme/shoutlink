@@ -33,6 +33,8 @@ function entry(over: Partial<DirectoryEntry> = {}): DirectoryEntry {
     commentMessage: 'コメントもありがとう',
     channelId: CHANNEL_ID,
     lastSeenAt: 0,
+    iconDataUrl: '',
+    channelName: '',
     ...over,
   }
 }

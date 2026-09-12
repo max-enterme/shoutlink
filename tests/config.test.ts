@@ -32,8 +32,8 @@ describe('normalizeConfig', () => {
     expect(normalizeConfig({})).toEqual(DEFAULT_CONFIG)
   })
 
-  it('既定の固定モードは ifEmpty (AC8)', () => {
-    expect(DEFAULT_CONFIG.pinMode).toBe('ifEmpty')
+  it('既定の固定モードは off (007 D1)', () => {
+    expect(DEFAULT_CONFIG.pinMode).toBe('off')
   })
 
   it('有効な値はそのまま通す', () => {
@@ -122,9 +122,11 @@ describe('normalizeConfig', () => {
     )
   })
 
-  it('004 の設定を足しても 001 の既定は変わらない (AC15)', () => {
-    expect(DEFAULT_CONFIG.enabled).toBe(true)
-    expect(DEFAULT_CONFIG.pinMode).toBe('ifEmpty')
+  it('004 の設定を足しても showManualTrigger の既定は変わらない (AC15)', () => {
+    // enabled / pinMode の既定は 007 D1 で false / off に変更済み。この AC15 が守りたいのは
+    // 「004 の設定追加が既存の既定に影響しないこと」なので、007 で変わった 2 項目とは別に確かめる
+    expect(DEFAULT_CONFIG.enabled).toBe(false)
+    expect(DEFAULT_CONFIG.pinMode).toBe('off')
     expect(DEFAULT_CONFIG.showManualTrigger).toBe(false)
   })
 })

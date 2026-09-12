@@ -1,5 +1,14 @@
 import { describe, expect, it } from 'vitest'
-import { channelIdFromUrl, extractChannelId, resolveChannelId } from '../src/channel-id'
+import {
+  channelIdFromUrl,
+  extractChannelId,
+  extractChannelIconUrl,
+  extractChannelName,
+  fetchIconAsDataUrl,
+  iconUrlAtSize,
+  resolveChannelId,
+  resolveChannelPage,
+} from '../src/channel-id'
 
 const ID = 'UCaaaaaaaaaaaaaaaaaaaaaa'
 const OTHER = 'UCbbbbbbbbbbbbbbbbbbbbbb'
@@ -9,6 +18,8 @@ const canonical = (id: string) =>
 const ogUrl = (id: string) =>
   `<meta property="og:url" content="https://www.youtube.com/channel/${id}">`
 const itemprop = (id: string) => `<meta itemprop="identifier" content="${id}">`
+const ogImage = (url: string) => `<meta property="og:image" content="${url}">`
+const ogTitle = (name: string) => `<meta property="og:title" content="${name}">`
 
 /** 実際のチャンネルページには**他人の `UC…` が大量に載っている**ことの再現 */
 const NOISE = `
@@ -224,5 +235,280 @@ describe('resolveChannelId (AC17)', () => {
   it('URL として壊れていても落ちない', async () => {
     const { impl } = fakeFetch('')
     expect((await resolveChannelId('not a url', { fetchImpl: impl })).status).toBe('failed')
+  })
+})
+
+// --- 007: アイコン (AC14 / AC19 / AC20) -------------------------------------
+
+const ICON_URL_900 = 'https://yt3.googleusercontent.com/x=s900-c-k-c0x00ffffff-no-rj'
+const ICON_URL_88 = 'https://yt3.googleusercontent.com/x=s88-c-k-c0x00ffffff-no-rj'
+
+describe('extractChannelIconUrl', () => {
+  it('og:image を取り出す', () => {
+    const html = `<html><head>${ogImage(ICON_URL_900)}</head></html>`
+    expect(extractChannelIconUrl(html)).toEqual({ ok: true, url: ICON_URL_900 })
+  })
+
+  it('og:image が無ければ失敗', () => {
+    expect(extractChannelIconUrl('<html><head></head></html>').ok).toBe(false)
+  })
+
+  it('知らないホストの og:image は採らない', () => {
+    const html = `<html><head>${ogImage('https://example.com/a.jpg')}</head></html>`
+    expect(extractChannelIconUrl(html).ok).toBe(false)
+  })
+})
+
+describe('extractChannelName (007)', () => {
+  it('og:title から表記名を取り出す', () => {
+    const html = `<html><head>${ogTitle('YouTube')}</head></html>`
+    expect(extractChannelName(html)).toBe('YouTube')
+  })
+
+  it('実体参照をデコードする', () => {
+    const html = `<html><head>${ogTitle('Tom &amp; Jerry')}</head></html>`
+    expect(extractChannelName(html)).toBe('Tom & Jerry')
+  })
+
+  it('長すぎる表記名は控えない', () => {
+    const html = `<html><head>${ogTitle('あ'.repeat(101))}</head></html>`
+    expect(extractChannelName(html)).toBe('')
+  })
+
+  it('og:title が無ければ空文字', () => {
+    expect(extractChannelName('<html><head></head></html>')).toBe('')
+  })
+
+  it('og:title が空白だけなら空文字を返す (X1)', () => {
+    const html = `<html><head>${ogTitle('   ')}</head></html>`
+    expect(extractChannelName(html)).toBe('')
+  })
+})
+
+describe('iconUrlAtSize', () => {
+  it('サイズ指定を 88 に差し替える', () => {
+    expect(iconUrlAtSize(ICON_URL_900, 88)).toBe(ICON_URL_88)
+  })
+
+  it('サイズ指定が無い URL はそのまま', () => {
+    const url = 'https://yt3.googleusercontent.com/x'
+    expect(iconUrlAtSize(url, 88)).toBe(url)
+  })
+})
+
+/** 画像取得用の偽 fetch。**実際のネットワークには触らない**。既定の content-type は `image/jpeg` */
+function fakeImageFetch(
+  bytes: number,
+  init: { ok?: boolean; status?: number; contentType?: string | null } = {},
+) {
+  const calls: string[] = []
+  const contentType = init.contentType === undefined ? 'image/jpeg' : init.contentType
+  const impl = (async (input: RequestInfo | URL) => {
+    calls.push(String(input))
+    return {
+      ok: init.ok ?? true,
+      status: init.status ?? 200,
+      headers: { get: (name: string) => (name === 'content-type' ? contentType : null) },
+      arrayBuffer: async () => new ArrayBuffer(bytes),
+    } as unknown as Response
+  }) as typeof fetch
+  return { impl, calls }
+}
+
+describe('fetchIconAsDataUrl', () => {
+  it('上限を超える画像は控えない', async () => {
+    const maxBytes = 100
+    const { impl } = fakeImageFetch(maxBytes + 1)
+    const result = await fetchIconAsDataUrl(ICON_URL_88, { fetchImpl: impl, maxBytes })
+    expect(result.ok).toBe(false)
+    expect(result.ok === false && result.reason).toBeTruthy()
+  })
+
+  // --- F8: 取得時点で保存できる大きさかを確かめる -----------------------------
+
+  it('保存の上限(64KB)を超える画像は、取得時点で理由つきの失敗にする (F8)', async () => {
+    // 元バイト長が 49,135〜1,048,576 バイトだと、旧仕様(既定 1MB)では ok: true を返し、
+    // 保存直前の normalizeDirectory が黙って空文字に落としていた
+    const { impl } = fakeImageFetch(100_000)
+    const result = await fetchIconAsDataUrl(ICON_URL_88, { fetchImpl: impl })
+    expect(result.ok).toBe(false)
+  })
+
+  // --- F13: 「取得成功」の判定を厳しくする -------------------------------------
+
+  it('content-type が image/ で始まらないレスポンスは失敗にする (F13)', async () => {
+    const { impl } = fakeImageFetch(100, { contentType: 'text/html' })
+    const result = await fetchIconAsDataUrl(ICON_URL_88, { fetchImpl: impl })
+    expect(result.ok).toBe(false)
+  })
+
+  it('0 バイトの応答は失敗にする (F13)', async () => {
+    const { impl } = fakeImageFetch(0)
+    const result = await fetchIconAsDataUrl(ICON_URL_88, { fetchImpl: impl })
+    expect(result.ok).toBe(false)
+  })
+
+  // --- F9: data URL の中身と、未検証だった経路 ---------------------------------
+
+  it('既知のバイト列を正しく base64 化する', async () => {
+    const impl = (async () => ({
+      ok: true,
+      status: 200,
+      headers: { get: (name: string) => (name === 'content-type' ? 'image/jpeg' : null) },
+      arrayBuffer: async () => new Uint8Array([0xff, 0xd8, 0xff]).buffer,
+    })) as unknown as typeof fetch
+    const result = await fetchIconAsDataUrl(ICON_URL_88, { fetchImpl: impl })
+    expect(result).toEqual({ ok: true, dataUrl: 'data:image/jpeg;base64,/9j/' })
+  })
+
+  it('非 200 は失敗として返す', async () => {
+    const { impl } = fakeImageFetch(100, { ok: false, status: 500 })
+    const result = await fetchIconAsDataUrl(ICON_URL_88, { fetchImpl: impl })
+    expect(result.ok).toBe(false)
+  })
+
+  it('通信が例外を投げても握って理由を返す', async () => {
+    const impl = (async () => {
+      throw new Error('ネットワークが死んだ')
+    }) as unknown as typeof fetch
+    const result = await fetchIconAsDataUrl(ICON_URL_88, { fetchImpl: impl })
+    expect(result.ok).toBe(false)
+    expect(result.ok === false && result.reason).toContain('ネットワークが死んだ')
+  })
+
+  it('Content-Length が上限を超えていれば、本文を読まずに失敗にする', async () => {
+    let bodyRead = false
+    const impl = (async () => ({
+      ok: true,
+      status: 200,
+      headers: { get: (name: string) => (name === 'content-length' ? '999999' : null) },
+      arrayBuffer: async () => {
+        bodyRead = true
+        return new ArrayBuffer(10)
+      },
+    })) as unknown as typeof fetch
+    const result = await fetchIconAsDataUrl(ICON_URL_88, { fetchImpl: impl, maxBytes: 100 })
+    expect(result.ok).toBe(false)
+    expect(bodyRead).toBe(false)
+  })
+})
+
+/**
+ * `resolveChannelPage` 用の偽 fetch。チャンネルページ(`www.youtube.com`)と
+ * 画像(それ以外のホスト)を URL で振り分けて返す。`pageCalls` は
+ * `www.youtube.com` への呼び出しだけを数える。
+ */
+function fakePageAndIconFetch(html: string, imageBytes = 100) {
+  const pageCalls: string[] = []
+  const allCalls: string[] = []
+  const impl = (async (input: RequestInfo | URL) => {
+    const url = String(input)
+    allCalls.push(url)
+    if (url.includes('www.youtube.com')) {
+      pageCalls.push(url)
+      return { ok: true, status: 200, text: async () => html } as Response
+    }
+    return {
+      ok: true,
+      status: 200,
+      headers: { get: (name: string) => (name === 'content-type' ? 'image/jpeg' : null) },
+      arrayBuffer: async () => new ArrayBuffer(imageBytes),
+    } as unknown as Response
+  }) as typeof fetch
+  return { impl, pageCalls, allCalls }
+}
+
+describe('resolveChannelPage (AC19 / AC20)', () => {
+  it('ページの取得は 1 回だけ', async () => {
+    const html = `<html><head>${canonical(ID)}${ogImage(ICON_URL_900)}</head></html>`
+    const { impl, pageCalls } = fakePageAndIconFetch(html)
+    await resolveChannelPage('https://www.youtube.com/@example', { channelId: true, icon: true }, {
+      fetchImpl: impl,
+    })
+    expect(pageCalls).toHaveLength(1)
+  })
+
+  it('アイコンだけ要求しても取りに行く', async () => {
+    const html = `<html><head>${canonical(ID)}${ogImage(ICON_URL_900)}</head></html>`
+    const { impl, pageCalls } = fakePageAndIconFetch(html)
+    const result = await resolveChannelPage(
+      'https://www.youtube.com/@example',
+      { channelId: false, icon: true },
+      { fetchImpl: impl },
+    )
+    expect(pageCalls).toHaveLength(1)
+    expect(result.channelId).toBeNull()
+    expect(result.icon?.status).toBe('resolved')
+  })
+
+  it('アイコンの data URL の中身を検証する (F9)', async () => {
+    const html = `<html><head>${canonical(ID)}${ogImage(ICON_URL_900)}</head></html>`
+    // 既知のバイト列([0,0,0])= base64 で "AAAA" になることを確かめる
+    const { impl } = fakePageAndIconFetch(html, 3)
+    const result = await resolveChannelPage(
+      'https://www.youtube.com/@example',
+      { channelId: false, icon: true },
+      { fetchImpl: impl },
+    )
+    expect(result.icon).toEqual({ status: 'resolved', dataUrl: 'data:image/jpeg;base64,AAAA' })
+  })
+
+  it('/channel/UC… でもアイコンが要るなら取りに行く', async () => {
+    const html = `<html><head>${ogImage(ICON_URL_900)}</head></html>`
+    const { impl, pageCalls } = fakePageAndIconFetch(html)
+    const result = await resolveChannelPage(
+      `https://www.youtube.com/channel/${ID}`,
+      { channelId: false, icon: true },
+      { fetchImpl: impl },
+    )
+    expect(pageCalls).toHaveLength(1)
+    expect(result.icon?.status).toBe('resolved')
+  })
+
+  it('アイコンが失敗しても channelId は成功', async () => {
+    const html = `<html><head>${canonical(ID)}</head></html>`
+    const { impl } = fakePageAndIconFetch(html)
+    const result = await resolveChannelPage(
+      'https://www.youtube.com/@example',
+      { channelId: true, icon: true },
+      { fetchImpl: impl },
+    )
+    expect(result.channelId).toEqual({ status: 'resolved', channelId: ID })
+    expect(result.icon?.status).toBe('failed')
+  })
+
+  it('channelId が失敗してもアイコンは成功', async () => {
+    const html = `<html><head>${canonical(ID)}${ogUrl(OTHER)}${ogImage(ICON_URL_900)}</head></html>`
+    const { impl } = fakePageAndIconFetch(html)
+    const result = await resolveChannelPage(
+      'https://www.youtube.com/@example',
+      { channelId: true, icon: true },
+      { fetchImpl: impl },
+    )
+    expect(result.channelId?.status).toBe('failed')
+    expect(result.icon?.status).toBe('resolved')
+  })
+
+  it('/channel/UC… でアイコン不要なら取りに行かない', async () => {
+    const { impl, allCalls } = fakePageAndIconFetch('')
+    const result = await resolveChannelPage(
+      `https://www.youtube.com/channel/${ID}`,
+      { channelId: true, icon: false },
+      { fetchImpl: impl },
+    )
+    expect(allCalls).toHaveLength(0)
+    expect(result.channelId).toEqual({ status: 'already', channelId: ID })
+  })
+
+  it('ページを取ったときは表記名も返す (007)', async () => {
+    const html = `<html><head>${canonical(ID)}${ogImage(ICON_URL_900)}${ogTitle('YouTube')}</head></html>`
+    const { impl } = fakePageAndIconFetch(html)
+    // `want` に名前の指定は無い。channelId だけを要求してもページを取れば名前は返る
+    const result = await resolveChannelPage(
+      'https://www.youtube.com/@example',
+      { channelId: true, icon: false },
+      { fetchImpl: impl },
+    )
+    expect(result.name).toBe('YouTube')
   })
 })

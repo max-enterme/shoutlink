@@ -1,6 +1,6 @@
 // dist/ に Chrome 拡張 (MV3) の読み込み可能な形を吐く。
 //   src/main.ts            -> dist/content.js  (content script / IIFE)
-//   src/options/options.ts -> dist/options.js  (options page)
+//   src/options/main.ts    -> dist/options.js  (options page)
 //   public/*               -> dist/*           (manifest.json, options.html, icons/)
 //
 // --release を付けると配布用のビルドになる (sourcemap を出さない)。
@@ -21,7 +21,7 @@ await mkdir(outdir, { recursive: true })
 await build({
   entryPoints: {
     content: path.join(root, 'src', 'main.ts'),
-    options: path.join(root, 'src', 'options', 'options.ts'),
+    options: path.join(root, 'src', 'options', 'main.ts'),
   },
   bundle: true,
   format: 'iife',
