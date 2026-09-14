@@ -61,10 +61,22 @@ await writeFile(path.join(dist, '_site-ogp.html'), PROMO)
 
 // chrome.* が無い環境でも options.js は既定値で動くが、辞書が空だと画面が寂しいので
 // 見本の登録を入れておく。実在するチャンネルは使わない。
+// 辞書の一覧に出す丸いアイコンの見本 (007)。**実在するチャンネルのアイコンは使わない。**
+// 生成した SVG を data URL にする(normalizeDirectory は data:image/ で始まり 64KB 以下なら通す)
+const svgIcon = (bg, fg, glyph) =>
+  'data:image/svg+xml;base64,' +
+  Buffer.from(
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 88 88"><rect width="88" height="88" fill="${bg}"/>` +
+      `<circle cx="44" cy="36" r="16" fill="${fg}"/><rect x="18" y="58" width="52" height="30" rx="15" fill="${fg}"/>` +
+      `<text x="44" y="42" font-size="0">${glyph}</text></svg>`,
+  ).toString('base64')
+const ICON_LIVE = svgIcon('#dbe7ff', '#5b7fd6', 'L')
+const ICON_CASTER = svgIcon('#ffe6d5', '#d9824a', 'C')
+
 const MOCK = `
     <style>
-      /* 1280x800 に対して本文 640px は余白が目立つので、撮影用に拡大する */
-      body { zoom: 1.55; }
+      /* 1280x800 に対して本文 960px (007 で 640px から広げた) は少し余白が出るので、撮影用に拡大する */
+      body { zoom: 1.25; }
     </style>
     <script>
       const sample = {
@@ -73,7 +85,7 @@ const MOCK = `
           // **見本のテンプレートには {msg} を入れる。** 見本の辞書に自由文が入っているので、
           // {msg} が無いと設定画面が AC7 の警告を出し、撮影版下が「警告が出ている画面」になる
           template: '{name}さん {msg} リダイレクトありがとうございます! {url}',
-          pinMode: 'ifEmpty',
+          pinMode: 'off',
           debug: false,
           // **コメント返しは ON にする** (004 / T13)。OFF のままだと、辞書側でフラグを付けた
           // 見本と食い違って設定画面が AC13 の不整合表示を常時出し、版下が「警告の出ている画面」になる。
@@ -97,6 +109,8 @@ const MOCK = `
             replyToComment: true,
             commentMessage: 'コメントありがとう!',
             channelId: 'UCexample0000000000000a',
+            iconDataUrl: '${ICON_LIVE}',
+            channelName: 'Example Live',
             lastSeenAt: 1,
           },
           {
@@ -106,6 +120,9 @@ const MOCK = `
             replyToComment: false,
             commentMessage: '',
             channelId: '',
+            // 呼び名が空で表記名だけある行 (007 / AC7)。一覧ではグレーの表記名が出る
+            iconDataUrl: '',
+            channelName: 'サンプルチャンネル',
             lastSeenAt: 2,
           },
           {
@@ -115,7 +132,20 @@ const MOCK = `
             replyToComment: true,
             commentMessage: '',
             channelId: '',
+            iconDataUrl: '',
+            channelName: '',
             lastSeenAt: 0,
+          },
+          {
+            url: 'https://www.youtube.com/@test-caster',
+            nickname: 'かすたー',
+            message: '',
+            replyToComment: false,
+            commentMessage: '',
+            channelId: '',
+            iconDataUrl: '${ICON_CASTER}',
+            channelName: 'Test Caster',
+            lastSeenAt: 3,
           },
         ],
         // 投稿履歴にも見本を入れる。**種別の列 (004 / AC13) が空の絵にならないように**、
@@ -140,7 +170,12 @@ const MOCK = `
         ],
       }
       // 辞書の保存先は local。local が無ければ sync に落ちる作りなので、両方に同じ見本を返させる
-      const area = { get: async (key) => ({ [key]: sample[key] }), set: async () => {} }
+      // get は文字列 1 つと配列の両方で呼ばれる (辞書の移行が [STORAGE_KEY, MIGRATED_KEY] で読む)
+      const area = {
+        get: async (key) =>
+          Object.fromEntries((Array.isArray(key) ? key : [key]).filter((k) => k in sample).map((k) => [k, sample[k]])),
+        set: async () => {},
+      }
       globalThis.chrome = {
         storage: {
           sync: area,
