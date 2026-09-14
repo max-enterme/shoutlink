@@ -1,6 +1,6 @@
 {
   "name": "shoutlink",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "private": true,
   "description": "返礼リンク — ライブリダイレクトの受信や登録者のコメントを検知して、相手のチャンネル URL をライブチャットへ投稿する Chrome 拡張 (MV3)",
   "type": "module",
