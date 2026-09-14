@@ -279,7 +279,7 @@ export function onPostLogChanged(handler: (log: PostLog) => void): () => void
 | 決定 | 確定 | 実装への落とし方 |
 |---|---|---|
 | A. テスト送信ボタンの配置 | **展開したときだけ出す** | `renderDirectory` の `detailRow`(`options.ts:565-609` のブロック)に置く。畳んだ行(`actionCell`)には**出さない** |
-| C. 送信する種別 | **ボタン 2 つ**「返礼文をテスト送信」「コメント返しをテスト送信」 | それぞれ `kind: 'redirect'` / `'comment'` を送る |
+| C. 送信する種別 | **ボタン 2 つ**「リダイレクト返礼文をテスト送信」「コメント返しをテスト送信」(前者は 007 で「返礼文をテスト送信」から改名) | それぞれ `kind: 'redirect'` / `'comment'` を送る |
 | B4. チャンネル ID 未解決の行 | **押す前からボタンを無効化**し、`title` に理由を出す | `testSendAvailability` が返すのは**コメント側だけ** `enabled: false`。**返礼文側は常に押せる**(URL で照合するため) |
 | D. 投稿履歴のヒント文 | **案 1** | 下記の実文をそのまま入れる |
 | 二度押し | **応答が返るまでその行の 2 ボタンとも無効**(AC13) | 行ごとの状態 `testSendStates` で持つ。⚠ `captureRowDrafts` の掃除に足すこと |
