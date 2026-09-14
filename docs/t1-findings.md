@@ -38,7 +38,7 @@ yt-live-chat-pinned-message-renderer
   display: none / size 0x0 / 子要素なし / textLen 0
 ```
 
-`getPinnedBanner` が要素の有無だけを見ていたため、**`ifEmpty`(既定モード)が常に
+`getPinnedBanner` が要素の有無だけを見ていたため、**`ifEmpty`(当時の既定モード)が常に
 「既に固定済み」と誤判定し、一度も固定しない**状態だった。
 
 → 表示されていて (`hidden` / `aria-hidden` / `display:none` を除外) かつ中身があるものだけを
@@ -306,7 +306,7 @@ Q&A メニューの項目が最初の候補に当たっていたため、**実�
 
 | # | 内容 | 影響 |
 |---|---|---|
-| C | **実際に固定した状態のバナーを `getPinnedBanner` が拾うか** | `ifEmpty`(既定)の成否。plan.md R4 |
+| C | **実際に固定した状態のバナーを `getPinnedBanner` が拾うか** | `ifEmpty`(当時の既定)の成否。plan.md R4 |
 | D | 受信から投稿までの所要時間 | AC1(10 秒以内)。計測していない |
 | E | 通知が **www ポップアウト**にも出るか | 確認できたのは Studio 管制室の埋め込みチャット。plan.md C1 |
 | F | 最小化・非前面での `MutationObserver` の発火 | plan.md C3 |

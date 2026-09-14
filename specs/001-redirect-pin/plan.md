@@ -99,7 +99,7 @@ type RedirectEvent = {
 /** 固定モード (AC8) */
 type PinMode =
   | 'off'      // 固定しない(投稿のみ)
-  | 'ifEmpty'  // 既存の固定が無いときだけ固定する(既定)
+  | 'ifEmpty'  // 既存の固定が無いときだけ固定する(007 までは既定。2026-09-11 に既定は 'off' へ)
   | 'always'   // 既存の固定があっても上書きする
 
 type Config = {
