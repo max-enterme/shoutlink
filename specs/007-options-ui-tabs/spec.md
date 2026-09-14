@@ -3,7 +3,7 @@ feature: options-ui-tabs
 issue: 129
 release: r2
 priority: must
-status: レビュー
+status: 完了
 ---
 
 # 007 設定画面をタブに分け、辞書を左右分割にする
