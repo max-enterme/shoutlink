@@ -65,6 +65,12 @@ describe('extractHandleFromText', () => {
     )
   })
 
+  it('通知文に @ が 2 つあると最初のハンドルを拾う', () => {
+    expect(
+      extractHandleFromText('@first-channel とその視聴者が参加しました。@second-channel に挨拶しましょう。'),
+    ).toBe('@first-channel')
+  })
+
   it('ハンドルが無ければ null', () => {
     expect(extractHandleFromText('視聴者が参加しました')).toBeNull()
   })
