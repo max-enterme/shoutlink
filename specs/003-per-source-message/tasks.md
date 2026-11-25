@@ -24,6 +24,7 @@ feature: per-source-message
 
 - [x] T1: 辞書の保存先を `chrome.storage.local` へ移す。**`local` にキーが存在しないときだけ** `sync` から片方向コピーし、移行済みフラグで 1 度きりにする。`sync` 側は消さない。`getLocalStorageAreaName()` を足して `onDirectoryChanged` をそのエリアで絞る。移行の成否を起動ログに出す (AC5 / plan.md R3 / security-review S7)  <!-- #15 -->
 - [x] T2: `DirectoryEntry.message` を足す。`resolveMessage` を `resolveDisplayName` と同じ形で実装し、`normalizeDirectory` は欠損・非文字列を `''`、`MAX_ENTRY_MESSAGE_LENGTH` 超を切り詰めて受ける (AC6 の正規化側 / AC10)  <!-- #16 -->
+<!-- check-links:ignore-next docs/003-findings.md -- 過去の未作成予定・不在説明を記録として保持する -->
 - [x] T3: `composer.ts` に `{msg}` を足し、削り順を 自由文 → 表示名 → 末尾 にする。切り出しはコードポイント単位、残せる長さが 10 字未満なら自由文ごと落とす。`main.ts` から `resolveMessage` の結果を渡す。**`{msg}` を含まないテンプレートの出力が変わらないこと**と**自由文が再展開されないこと**を回帰テストで固定。あわせて `composer.ts` の `MAX_MESSAGE_LENGTH` のコメントを更新する(参照先が **001 の T8** のままで、しかも「実配信で弾かれないかを見る」という内容が「拡張経由では 200 字超を投稿しないので観測できない」という結論と食い違っている → 003 の T6 と `docs/003-findings.md` を指す形に直す) (AC1 / AC2 / AC3 / AC4 / AC9 / AC11)  <!-- #17 -->
 - [x] T4: 設定画面 — 辞書テーブルに自由文の欄、**展開後基準の残り文字数**、200 字超は保存せず理由を出す、**自由文があるのにテンプレートに `{msg}` が無いときの警告**、プレビューのサンプルに自由文を含める。テンプレート説明と辞書セクションの説明文を更新 (AC6 / AC7 / AC8)。**辞書セクションに T9 の決定に基づく開示**(「送信元の検知は推測を含みます。取り違えると、その人に宛てて書いた一文がそのまま別の相手への投稿に載ります。」)を出す。**T7 決着済み(2026-08-13)につき着手可。文言はベタ書きの日本語で足す**(`data-i18n` 化しない)。
       **あわせて T5 から回ってきた記述を書く**(実装結果に依存するため T5 の PR では入れなかった) — **`docs/for-testers.md` のテスト F(自由文の操作手順)**と、**`docs/index.html` の機能表・スクリーンショットの alt**  <!-- #18 -->
@@ -34,6 +35,7 @@ feature: per-source-message
 
 ## 人手・実機が要るもの(SPEC-OPS §08 — `/spec-implement` に投げても止まる)
 
+<!-- check-links:ignore-next docs/003-findings.md -- 過去の未作成予定・不在説明を記録として保持する -->
 - [x] T6: **実配信で自由文入りの通し確認**(検知 → 投稿 → 固定)。手順は ①自由文入りの文面が投稿・固定まで通ること ②**展開後ちょうど 200 字**の文面が通ること の 2 点。**「200 字超が弾かれるか」は拡張経由では観測できない**(`compose` が必ず切り詰めるため / plan.md R1)。上限の実値を見たい場合はチャット入力欄へ直接貼って確かめ、分かったことを `docs/003-findings.md` に残す (spec.md D1 / plan.md R4)  <!-- #20 -->
 - [x] T8: **スクリーンショットの撮り直し** — 辞書テーブルの列が増えるため `docs/assets/screenshot-3-directory.png` を撮り直す。`scripts/make-site-assets.mjs` は撮影用 HTML を `dist/` に吐くだけで**画像は生成しない**ので、ブラウザで撮って置く手作業(SPEC-OPS §08 非コード成果物 / plan.md R5)。**T5 の見本データ更新が入った後に撮る**  <!-- #22 -->
 

@@ -6,12 +6,13 @@
 //   node scripts/check-links.mjs [走査ルート]   # 省略時は repo ルート。テストは一時フィクスチャを渡す
 //
 // 検査は 4 種:
-//   ① 相対リンクの実在        — md は Markdown 記法 `](…)` のみ、index.html は href/src/<meta content>
+//   ① 相対リンクの実在        — Markdown リンク・裸の docs パス、index.html は href/src/<meta content>
 //   ② 自リポジトリ絶対 URL の還元 — blob/main URL と GitHub Pages 絶対 URL を repo 内パスへ戻して実在確認
 //   ③ md の見出しアンカー      — `…install.md#上限が効かない場合` の形
 //   ④ 孤立検出               — docs/**/*.md のうち README.md から (他の md 経由も含め) 辿れないもの
 //
-// いずれもコードフェンス内は対象外。`data:` と `mailto:` は除外。新規依存は足さない (node: 組み込みのみ)。
+// Markdown のコードフェンス内は対象外。ソースはコメントと文字列も検査する。
+// `data:` と `mailto:` は除外。新規依存は足さない (node: 組み込みのみ)。
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -69,12 +70,12 @@ function reduceAbsoluteUrl(url) {
   return null
 }
 
-/**
- * `absPath` (root 配下であることが前提) が、大小文字を区別してディスク上に実在するかを見る。
- * `existsSync` は Windows では大小文字を区別しないため、`docs/CaseTest.md` のようなリンクが
- * 実体 `docs/casetest.md` に対して Linux (CI) では違反、Windows (ローカル) では通過という
- * 食い違いを生む。親ディレクトリを readdirSync してエントリ名の完全一致を見ることで揃える。
- */
+// `absPath` (root 配下であることが前提) が、大小文字を区別してディスク上に実在するかを見る。
+// check-links:ignore-next docs/CaseTest.md -- 大小文字の検査を説明する架空のパス
+// `existsSync` は Windows では大小文字を区別しないため、`docs/CaseTest.md` のようなリンクが
+// check-links:ignore-next docs/casetest.md -- 大小文字の検査を説明する架空のパス
+// 実体 `docs/casetest.md` に対して Linux (CI) では違反、Windows (ローカル) では通過という
+// 食い違いを生む。親ディレクトリを readdirSync してエントリ名の完全一致を見ることで揃える。
 function existsCaseSensitive(absPath) {
   const rel = path.relative(root, absPath)
   const segments = rel.split(path.sep).filter(Boolean)
@@ -217,32 +218,101 @@ function checkLink(rawUrl, ctx) {
   }
 }
 
-/** md 中の `](…)` を、コードフェンス内を除いて抽出する */
-function extractMdLinks(absPath) {
-  const links = []
+/**
+ * Markdown リンク → 裸 URL → 裸パスの順で、重複する範囲を除いて抽出する。
+ * @param {string} absPath
+ * @param {'markdown' | 'source'} kind
+ * @returns {Array<{raw: string, lineNo: number, base: 'root' | 'source', syntax: 'markdown' | 'bare' | 'url'}>}
+ */
+function extractDocReferences(absPath, kind) {
+  const references = []
   let inFence = false
-  const linkRe = /\]\(([^)]+)\)/g
+  let pendingIgnore = null
+  const extension = path.extname(absPath)
+  const markerRe = kind === 'markdown'
+    ? /^\s*<!-- check-links:ignore-next (\S+) -- (.+?) -->\s*$/
+    : /\.ya?ml$/.test(extension)
+      ? /^\s*# check-links:ignore-next (\S+) -- (.+?)\s*$/
+      : /^\s*\/\/ check-links:ignore-next (\S+) -- (.+?)\s*$/
+
+  function ignoreViolation(lineNo, reason) {
+    violations.push(`[局所除外] ${path.relative(root, absPath)}:${lineNo}: ${reason}`)
+  }
+
   readFileSync(absPath, 'utf8')
     .split('\n')
     .forEach((line, i) => {
-      if (isFenceLine(line, inFence)) {
+      // マーカーの有効範囲は直後の物理1行だけ。空行やフェンスも飛び越えない。
+      const ignore = pendingIgnore
+      pendingIgnore = null
+      const isFence = kind === 'markdown' && isFenceLine(line, inFence)
+      if (isFence) {
         inFence = !inFence
-        return
       }
-      if (inFence) return
-      linkRe.lastIndex = 0
-      let m
-      while ((m = linkRe.exec(line))) {
-        links.push({ raw: m[1], lineNo: i + 1 })
+      const skipped = kind === 'markdown' && (isFence || inFence)
+      const isMarker = !skipped && /^\s*(?:<!--|\/\/|#)\s*check-links:ignore-next\b/.test(line)
+      const candidates = []
+      if (isMarker) {
+        const marker = markerRe.exec(line)
+        if (!marker || !marker[2].trim()) {
+          ignoreViolation(i + 1, 'マーカーの形式が不正、または理由が空です')
+        } else {
+          pendingIgnore = { raw: marker[1], lineNo: i + 1 }
+        }
+      } else if (!skipped) {
+        // 先に抽出した範囲を空白に置き換え、URL 内部のパスを二重に拾わない。
+        let rest = line.replace(/!?\[[^\]]*\]\(([^)]+)\)/g, (whole, raw) => {
+          candidates.push({ raw, lineNo: i + 1, base: 'source', syntax: 'markdown' })
+          return ' '.repeat(whole.length)
+        })
+        rest = rest.replace(/https?:\/\/[^\s'"`<>()[\]{}\\、。]+/g, (raw) => {
+          candidates.push({ raw, lineNo: i + 1, base: 'root', syntax: 'url' })
+          return ' '.repeat(raw.length)
+        })
+        const bareRe = /(?<![\p{L}\p{N}_./-])(?:\.{1,2}\/)*docs\/[^\s'"`<>()[\]{}\\,;|、。・「」『』【】]+/gu
+        for (const match of rest.matchAll(bareRe)) {
+          const raw = match[0].replace(/[.!]+$/, '')
+          if (/[*?]/.test(raw) || !/\.md(?:#[^:]+)?(?::\d+)?$/.test(raw)) continue
+          candidates.push({
+            raw, lineNo: i + 1,
+            base: raw.startsWith('.') ? 'source' : 'root', syntax: 'bare',
+          })
+        }
       }
+      if (ignore && !candidates.some(({ raw }) => raw === ignore.raw)) {
+        ignoreViolation(ignore.lineNo, `直後の行に一致する参照がありません — ${ignore.raw}`)
+      }
+      references.push(...candidates.filter(({ raw }) => raw !== ignore?.raw))
     })
-  return links
+  if (pendingIgnore) {
+    ignoreViolation(pendingIgnore.lineNo, `直後の行に一致する参照がありません — ${pendingIgnore.raw}`)
+  }
+  return references
 }
 
-function checkMdFile(absPath) {
-  const baseDir = path.dirname(absPath)
-  for (const { raw, lineNo } of extractMdLinks(absPath)) {
-    checkLink(raw, { sourceFile: absPath, baseDir, trackGraph: true, lineNo })
+/** 追加範囲では、解決先が docs 内の md になる参照だけを検査する。 */
+function pointsToDocsMd(raw, baseDir) {
+  let target = raw.trim().split(/\s/)[0].replace(/^['"]|['"]$/g, '')
+  if (/^https?:\/\//i.test(target)) {
+    target = reduceAbsoluteUrl(target)
+    if (target === null) return false
+    baseDir = root
+  }
+  const { pathPart } = splitAnchor(target)
+  const relative = path.relative(docsDir, path.resolve(baseDir, pathPart))
+  return relative !== '' && !relative.startsWith('..') && !path.isAbsolute(relative)
+    && path.extname(relative).toLowerCase() === '.md'
+}
+
+function checkDocFile(absPath, kind, primary = false) {
+  for (const { raw, lineNo, base, syntax } of extractDocReferences(absPath, kind)) {
+    const baseDir = base === 'root' ? root : path.dirname(absPath)
+    const target = syntax === 'bare' ? raw.replace(/:\d+$/, '') : raw
+    if (!primary && !pointsToDocsMd(target, baseDir)) continue
+    checkLink(target, {
+      sourceFile: absPath, baseDir, lineNo,
+      trackGraph: primary && syntax === 'markdown',
+    })
   }
 }
 
@@ -267,21 +337,35 @@ function checkIndexHtml() {
   }
 }
 
-function listDocsMdRecursive(dir) {
+function listFilesRecursive(dir, extensions) {
   const out = []
   if (!existsSync(dir)) return out
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
     const p = path.join(dir, entry.name)
-    if (entry.isDirectory()) out.push(...listDocsMdRecursive(p))
-    else if (entry.isFile() && entry.name.endsWith('.md')) out.push(p)
+    if (entry.name.startsWith('.') || entry.name === 'node_modules') continue
+    if (entry.isDirectory()) out.push(...listFilesRecursive(p, extensions))
+    else if (entry.isFile() && extensions.includes(path.extname(entry.name))) out.push(p)
   }
   return out.sort()
 }
 
-const docsMdFiles = listDocsMdRecursive(docsDir)
+const docsMdFiles = listFilesRecursive(docsDir, ['.md'])
 
-checkMdFile(readmePath) // 存在は冒頭で検証済み
-for (const f of docsMdFiles) checkMdFile(f)
+checkDocFile(readmePath, 'markdown', true) // 存在は冒頭で検証済み
+for (const f of docsMdFiles) checkDocFile(f, 'markdown', true)
+for (const [directory, extensions, kind] of [
+  ['specs', ['.md'], 'markdown'],
+  ['src', ['.ts'], 'source'],
+  ['tests', ['.ts'], 'source'],
+  ['scripts', ['.js', '.mjs'], 'source'],
+  ['.github', ['.yml', '.yaml'], 'source'],
+]) {
+  for (const f of listFilesRecursive(path.join(root, directory), extensions)) {
+    checkDocFile(f, kind)
+  }
+}
+const changelogPath = path.join(root, 'CHANGELOG.md')
+if (existsSync(changelogPath)) checkDocFile(changelogPath, 'markdown')
 checkIndexHtml()
 
 // ④ 孤立検出: README.md を根に、md → md の参照グラフを辿って届く範囲を求める
