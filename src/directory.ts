@@ -562,7 +562,7 @@ function logMigration(result: DirectoryMigration): void {
 export async function loadDirectory(): Promise<Directory> {
   const area = getLocalStorageArea()
   if (!area) return []
-  // **設定画面から先に開かれる導線がある**(docs/install.md)ので、読み込みの度に通す。
+  // **設定画面から先に開かれる導線がある**(docs/users/install.md)ので、読み込みの度に通す。
   // 2 回目以降はフラグを見て何もしない
   await migrateDirectoryToLocal()
   const stored = await area.get(STORAGE_KEY)

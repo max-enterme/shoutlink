@@ -43,7 +43,7 @@ favicon の `data:` URI **1 本**だけである。
 
 ### 被参照 0 のファイルがある
 
-[docs/stability-research.md](../../docs/stability-research.md)(12,648 B)は、
+[docs/developers/stability-research.md](../../docs/developers/stability-research.md)(12,648 B)は、
 README・他の md・index.html のいずれからも参照されていない。
 残り 8 本はいずれも被参照がある。
 
@@ -57,7 +57,7 @@ README・他の md・index.html のいずれからも参照されていない。
 
 | 罠 | 実測 |
 |---|---|
-| `docs/security-review.md` の**コードフェンス内**に HTML アンカー | `href="/@sender"` 等が **4 本**(L87 / L141 / L143 / L145)。HTML 属性を md に当てると初日から誤検出 |
+| `docs/developers/security-review.md` の**コードフェンス内**に HTML アンカー | `href="/@sender"` 等が **4 本**(L87 / L141 / L143 / L145)。HTML 属性を md に当てると初日から誤検出 |
 | Markdown 記法 `](…)` はフェンス内に | **0 本**。md は Markdown 記法だけ見れば誤検出しない |
 | `docs/index.html` の og:url / og:image | **`<meta content="…">` にある**(L18 / L21)。`href` / `src` には Pages URL が **0 本**なので、抽出面に `content` を足さないと還元規則ごと死ぬ。`og:url` は `…/shoutlink/` = **ディレクトリ**なので還元対象から外す |
 | favicon | `href="data:image/svg+xml,…"`。相対パスとして扱うと誤検出 |
@@ -67,6 +67,7 @@ README・他の md・index.html のいずれからも参照されていない。
 
 `.github/ISSUE_TEMPLATE/config.yml` に絶対 URL 2 本、`specs/001`〜`004` に 6 / 1 / 22 / 41 本、
 `src/*.ts` と `tests/*.ts` に Markdown リンクと**裸のパス**が混在。
+<!-- check-links:ignore-next docs/003-findings.md -- 過去の未作成予定・不在説明を記録として保持する -->
 `src/composer.ts:15` の `docs/003-findings.md` は**既に不在**。
 
 **これらは md を動かさない限り壊れない。**動かすかは 006 の管掌なので、ここでは検査しない(→ D2)。
@@ -155,13 +156,14 @@ README・他の md・index.html のいずれからも参照されていない。
   > **plan.md の「新規依存を足さない」は `check-links.mjs` の実行時依存の話であり、
   > 型定義の devDependency 追加は別。**`scripts/check-links.mjs` 自体は Node 標準のみで書く。
 - **検査対象ファイルの中にも、検査されない裸のパスがある(006 へ申し送り)。**
-  `docs/security-review.md` の **L104 / L236 / L241 / L248 / L286** に、Markdown リンクではなく
-  バッククォート付きの裸パスで `docs/for-testers.md` / `docs/setup-and-verify.md` /
-  `docs/install.md` を指す記述が **5 本**ある。検査①は Markdown 記法のみなので拾わない。
+  `docs/developers/security-review.md` の **L104 / L236 / L241 / L248 / L286** に、Markdown リンクではなく
+  バッククォート付きの裸パスで `docs/testers/for-testers.md` / `docs/developers/setup-and-verify.md` /
+  `docs/users/install.md` を指す記述が **5 本**ある。検査①は Markdown 記法のみなので拾わない。
   **005 では範囲を広げない**(誤検出が増える)が、**006 で md を移動・改名すると黙って壊れる。**
 - **006 が「公開サイト専用の md」を作ると検査④で落ちる。**
   被参照元を README に一本化したため。意図した挙動だが、006 側で踏むので記録しておく。
 - **他の feature が docs に md を足すと、README への追記も必須になる。**
+<!-- check-links:ignore-next docs/003-findings.md -- 過去の未作成予定・不在説明を記録として保持する -->
   例: **003 T6**(issue #20, open)は `docs/003-findings.md` を新設する予定で、
   README に足さないと**検査④で CI が落ちる**。意図した挙動だが、理由が分からないと踏む。
 - **GUI 要件は無い。**`docs/index.html` の**見た目を一切変えない**ため §10 は該当しない。

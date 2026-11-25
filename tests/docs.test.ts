@@ -69,9 +69,9 @@ describe('docs / cooldownSec の残存', () => {
     expect(hits).toEqual([])
   })
 
-  it('README.md と docs/* に「クールダウン」の出現が無い(docs/t1-findings.md は除外)', () => {
+  it('README.md と docs/* に「クールダウン」の出現が無い(docs/developers/t1-findings.md は除外)', () => {
     const files = Object.fromEntries(
-      Object.entries({ ...readmeFiles, ...docFiles }).filter(([path]) => key(path) !== 'docs/t1-findings.md'),
+      Object.entries({ ...readmeFiles, ...docFiles }).filter(([path]) => key(path) !== 'docs/developers/t1-findings.md'),
     )
     const hits = findMatches(files, /クールダウン/)
     expect(hits).toEqual([])
@@ -172,5 +172,30 @@ describe('007: 辞書の左右分割 / 20 件上限の取りこぼし', () => {
     // ⚠ 否定形だけだとラベルを消しても緑になる。新ラベルが実在することも見る
     expect(html).toContain('リダイレクト返礼を使う')
     expect(html).toContain('コメント返しを使う')
+  })
+})
+
+describe('008: history exclusions', () => {
+  it('history exclusions: 全 docs glob が移動後の 3 ディレクトリを含む', () => {
+    const paths = Object.keys(docFiles).map(key)
+    expect(paths).toContain('docs/users/install.md')
+    expect(paths).toContain('docs/developers/setup-and-verify.md')
+    expect(paths).toContain('docs/testers/for-testers.md')
+    expect(paths).toContain('docs/developers/t1-findings.md')
+  })
+
+  it('history exclusions: 移動後の履歴だけを除き、一般文書の禁止語を検出する', () => {
+    const generalPath = '../docs/users/install.md'
+    const historyPath = '../docs/developers/t1-findings.md'
+    expect(docFiles[generalPath]).toBeDefined()
+    expect(docFiles[historyPath]).toContain('クールダウン')
+    const files = Object.fromEntries(
+      Object.entries({ ...docFiles, [generalPath]: `${docFiles[generalPath]}\nクールダウン` })
+        .filter(([path]) => key(path) !== 'docs/developers/t1-findings.md'),
+    )
+    const hits = findMatches(files, /クールダウン/)
+    expect(hits).toHaveLength(1)
+    expect(hits[0].file).toBe('docs/users/install.md')
+    expect(hits[0].text).toBe('クールダウン')
   })
 })

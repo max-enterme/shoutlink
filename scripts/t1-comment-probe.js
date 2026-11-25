@@ -2,7 +2,7 @@
  * shoutlink — 004 T1 採取スニペット(ブラウザの DevTools コンソールに貼る)
  *
  * ⚠️ **node スクリプトではない。**`scripts/` の他のファイル (*.mjs) はビルド用で、これだけは
- *    ブラウザのコンソールに貼って使う。手順は docs/004-t1-collect.md。
+ *    ブラウザのコンソールに貼って使う。手順は docs/developers/004-t1-collect.md。
  *
  * 採るのは 3 点(004 tasks.md T1 / #25):
  *   ① コメント要素から投稿者のチャンネルが取れるか
@@ -14,7 +14,7 @@
  *
  * ⚠️ **出力は既定で匿名化する。**ハンドル・表示名・チャンネル ID・本文は伏せ、
  *    「取れたか / どの形か / 何文字か」だけを出す。この repo は public で、
- *    docs/t1-findings.md も「構造だけを記録する」方針で書かれている。
+ *    docs/developers/t1-findings.md も「構造だけを記録する」方針で書かれている。
  *    生の値を見たいときだけ `YTRP.raw(i)`(**出力を貼らないこと**)。
  *
  * ⚠️ **ワールドの区別が本題。**コンソールはページと同じ「メインワールド」で動くが、
@@ -435,7 +435,7 @@
     if (!list) {
       console.warn(
         '[YTRP] チャット項目リストが見つからない。' +
-          'Studio の管制室ならフレームを live_chat に切り替えてから実行する(docs/004-t1-collect.md)。',
+          'Studio の管制室ならフレームを live_chat に切り替えてから実行する(docs/developers/004-t1-collect.md)。',
       )
       return null
     }

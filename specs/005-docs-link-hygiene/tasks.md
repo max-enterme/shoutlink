@@ -13,7 +13,7 @@ feature: docs-link-hygiene
       指せるようにするため。**Node 標準のみ**(新規依存なし)。検査は 4 種。
 
       ① **相対リンクの実在** — md は **Markdown 記法 `](…)` のみ**、`docs/index.html` は
-      **`href` / `src` / `<meta content>`**。**コードフェンス内は対象外**(`docs/security-review.md` の
+      **`href` / `src` / `<meta content>`**。**コードフェンス内は対象外**(`docs/developers/security-review.md` の
       フェンス内に HTML アンカーが 4 本ある)。**`data:` と `mailto:` は除外**
       (favicon が `data:`)
       ② **自リポジトリ絶対 URL の還元** — `…/blob/main/…` と

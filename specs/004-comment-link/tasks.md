@@ -15,7 +15,7 @@ feature: comment-link
       見分ける手掛かり**(バッジ・`author-type` 等)と、**メッセージのタイムスタンプ**が取れるか。
       結果を `docs/` に残し、`selectors.ts` に入れる形を確定する。
       **取れなかった場合は spec.md D1 / D2 を人間が決める**(エージェントは降りない / plan.md R1・R2)
-  - **2026-08-15 完了。**採取結果は [docs/004-t1-collect.md](../../docs/004-t1-collect.md)
+  - **2026-08-15 完了。**採取結果は [docs/developers/004-t1-collect.md](../../docs/developers/004-t1-collect.md)
     (手順と結果を兼ねる)。プローブは [scripts/t1-comment-probe.js](../../scripts/t1-comment-probe.js)
     (DevTools のコンソールに貼るスニペット。**読み取りのみ / 出力は匿名化**)
   - **① 投稿者は DOM 属性から取れる** — `whole-message-clickable` の `params` を 2 段(各段ともパーセントデコード + base64)。
@@ -37,7 +37,7 @@ feature: comment-link
 ## T1 の後にしか書けないもの(**T1 は完了。着手可**)
 
 - [x] T15: **`@handle` → `UC…` の解決** (AC17) — `src/channel-id.ts`(新規)。`https://www.youtube.com/@handle` を取得して `UC…` を取り出す。**取得と抽出を分け、抽出は純関数**にして単体テストする。`DirectoryEntry.channelId`(既定 `''`)と `findEntryByChannelId` を足し、`normalizeDirectory` は **`UC` で始まる妥当な形だけを受ける**(それ以外は空文字 / AC14)。**登録が `/channel/UC…` 形なら取得せずその場で決まる**。**失敗しても壊れない**(空のままにして理由を返す)。**チャット側からは呼ばない**  <!-- #51 -->
-- [x] T16: **`host_permissions` に `https://www.youtube.com/*` を足す**(fetch 用 / AC17)。**`content_scripts` は増やさない**(注入範囲は `studio.youtube.com/live_chat*` のまま)。`docs/security-review.md` に項を足し、**事故 1(`www` で content script が動いた)との違い**——注入ではなく設定画面からの 1 回の取得で、**ライブチャットの画面では通信しない**——を明記する (plan.md R11)。**あわせて `content_scripts.matches` が増えていないことを `test` で固定する** — 事故 1 の再発防止は現状 `docs/security-review.md` の記述と `tests/scope.test.ts` だけで、**manifest の中身そのものを固定する回帰テストが無い。**権限を足すこの PR でこそ置く価値がある。**権限を広げる唯一のタスクなので、レビュー後に人が確認してからマージする**(T8 と同じ扱い / plan.md R11 は「降りる箇所」に置いてある)  <!-- #52 -->
+- [x] T16: **`host_permissions` に `https://www.youtube.com/*` を足す**(fetch 用 / AC17)。**`content_scripts` は増やさない**(注入範囲は `studio.youtube.com/live_chat*` のまま)。`docs/developers/security-review.md` に項を足し、**事故 1(`www` で content script が動いた)との違い**——注入ではなく設定画面からの 1 回の取得で、**ライブチャットの画面では通信しない**——を明記する (plan.md R11)。**あわせて `content_scripts.matches` が増えていないことを `test` で固定する** — 事故 1 の再発防止は現状 `docs/developers/security-review.md` の記述と `tests/scope.test.ts` だけで、**manifest の中身そのものを固定する回帰テストが無い。**権限を足すこの PR でこそ置く価値がある。**権限を広げる唯一のタスクなので、レビュー後に人が確認してからマージする**(T8 と同じ扱い / plan.md R11 は「降りる箇所」に置いてある)  <!-- #52 -->
 - [x] T7: `src/comment-detector.ts` と `selectors.ts` のコメント用定数・アクセサ。**通常のテキストメッセージだけを対象にする**(`SELECTORS.chatTextMessage` を流用しない)。**追加ノードだけを見る**(`scanExisting` を作らない)。**投稿者は `whole-message-clickable` の `params` を 2 段(各段ともパーセントデコード + base64)解いて取る** — **動画 ID と隣り合う ID(配信の持ち主)を除いた残りが 1 つに絞れたときだけ採り、絞れなければ捨てる**(位置頼みで推測しない)。**取れなかったことは診断ログに出す**(無言で捨てない / plan.md R10)。**`#timestamp`(`5:17 PM` 形式・分単位)と監視開始から 10 秒の猶予**で、監視開始より前のコメントを切る (AC3 / AC4 / AC9 / plan.md R3・R10)  <!-- #31 -->
 - [x] T8: `main.ts` への配線 — 照合 → キュー → 投稿(**固定はしない**)、自己ループ遮断 3 枚、有効化スイッチの切り替え追従、起動ログへの追加 (AC6 / AC10 / AC12)。**plan.md R2(降りる箇所)に触れるため、レビュー後に人が確認してからマージする**  <!-- #32 -->
   - **コメント返しでは `selfEcho.remember` を呼ばない**(T2–T6 のレビューで判明 / plan.md 6.)。
@@ -49,7 +49,7 @@ feature: comment-link
 
 - [x] T9: 設定画面 — 有効化スイッチ / コメント用テンプレート + プレビュー / 辞書テーブルの**フラグ列とコメント返し用の自由文列**(**どちらも行編集で即保存**)/ **行を畳む表示**(既定は現状の 3 列 = ハンドル・呼び名・削除ボタンだけ。**削除は畳んだ状態でも押せる**。**畳んだ状態でも「設定したのに効かない」行が分かる** — 自由文があるのにフラグが false / テンプレートに `{msg}` が無い。**フラグ ON で自由文が空は正常なので撃たない**)/ スイッチとフラグ件数の不整合の常時表示 / **投稿履歴の表に種別列**。自由文の 200 字検証・残り文字数・`{msg}` 不在の警告は **`commentTemplate` × `commentMessage` の組**で判定する(組を跨がない) (AC13 / AC16)。**文言はベタ書きの日本語**(003 spec.md D2 の決定により 002 は後に載るため、`_locales/` 化はしない)。**T14 のモックが確定してから着手する**(SPEC-OPS §10 / plan.md R9)  <!-- #33 -->
 - [x] T17: 設定画面の **`channelId` 解決まわり**(AC17)— 「コメントに反応する」を ON にしたときに解決を走らせる / **未解決の行が畳んだ状態でも分かる**(ON なのに `channelId` が空 = コメントに反応しない)/ **失敗の理由を出す** / **未解決の行を再試行できる** / **同じ `channelId` の行が 2 件以上あるときの警告**(AC17 でその状態は「何もしない」と決めたので、画面で気づけないと直せない)。**T15 が土台、T9 の後**(同じ辞書テーブルを触るため)  <!-- #54 -->
-- [x] T10: ドキュメント — README / `docs/install.md` / `docs/index.html` / `docs/for-testers.md` / `docs/privacy-policy.md` / `docs/setup-and-verify.md` に、**引き金が増えたこと・既定 OFF・保存項目の追加**(`replyToComment` / `commentMessage` / `channelId`)を反映する。**あわせて `host_permissions` が増えたことを説明する**(AC17 / plan.md R11)— **インストール時の許可表示が変わる**こと、**注入ではなく設定画面からの 1 回の取得**であること、**ライブチャットの画面では通信しない**こと、**事故 1(`www` で content script が動いた)とは別物**であること。`docs/privacy-policy.md` には**どこへ何のために通信するか**を書く。`scripts/make-site-assets.mjs` の見本データに**フラグと自由文**を足す。**T11 は決着済み(2026-08-13)** — 書くのは「**引き金が増えても 001 D3 の結論は変わらない**」という判断と、**D5 の決定に基づく未検証の明記**(README / `docs/install.md` / **`docs/index.html`(公開ページ)/ `docs/for-testers.md`** に「実配信での通し確認は未実施」。T12 が済んだら外す)。<br>⚠️ **`scripts/package.mjs` の `INSTALL.txt` を必ず直す** — **ZIP を展開した人がまず読むのはこれ**で、現在「**YouTube Studio のライブ管制室のチャットでのみ動きます (www.youtube.com では動きません)**」と書いてある。T16 で許可表示に `www.youtube.com` が出るようになるので、**このままだと同梱文書と許可表示が正面から矛盾する**(#48 で直したばかりの場所)。**注入はしない / チャット画面では通信しない / 設定画面から 1 回取りに行くだけ**を書き分ける。<br>⚠️ **`docs/for-testers.md` は ZIP に同梱されていない**(`scripts/package.mjs` が入れるのは `dist/` と `INSTALL.txt` だけ)。従来ここにあった「ZIP に START-HERE として同梱される唯一の説明」という記述は**事実と違う**ので落とした  <!-- #34 -->
+- [x] T10: ドキュメント — README / `docs/users/install.md` / `docs/index.html` / `docs/testers/for-testers.md` / `docs/privacy-policy.md` / `docs/developers/setup-and-verify.md` に、**引き金が増えたこと・既定 OFF・保存項目の追加**(`replyToComment` / `commentMessage` / `channelId`)を反映する。**あわせて `host_permissions` が増えたことを説明する**(AC17 / plan.md R11)— **インストール時の許可表示が変わる**こと、**注入ではなく設定画面からの 1 回の取得**であること、**ライブチャットの画面では通信しない**こと、**事故 1(`www` で content script が動いた)とは別物**であること。`docs/privacy-policy.md` には**どこへ何のために通信するか**を書く。`scripts/make-site-assets.mjs` の見本データに**フラグと自由文**を足す。**T11 は決着済み(2026-08-13)** — 書くのは「**引き金が増えても 001 D3 の結論は変わらない**」という判断と、**D5 の決定に基づく未検証の明記**(README / `docs/users/install.md` / **`docs/index.html`(公開ページ)/ `docs/testers/for-testers.md`** に「実配信での通し確認は未実施」。T12 が済んだら外す)。<br>⚠️ **`scripts/package.mjs` の `INSTALL.txt` を必ず直す** — **ZIP を展開した人がまず読むのはこれ**で、現在「**YouTube Studio のライブ管制室のチャットでのみ動きます (www.youtube.com では動きません)**」と書いてある。T16 で許可表示に `www.youtube.com` が出るようになるので、**このままだと同梱文書と許可表示が正面から矛盾する**(#48 で直したばかりの場所)。**注入はしない / チャット画面では通信しない / 設定画面から 1 回取りに行くだけ**を書き分ける。<br>⚠️ **`docs/testers/for-testers.md` は ZIP に同梱されていない**(`scripts/package.mjs` が入れるのは `dist/` と `INSTALL.txt` だけ)。従来ここにあった「ZIP に START-HERE として同梱される唯一の説明」という記述は**事実と違う**ので落とした  <!-- #34 -->
   - **2026-08-16 完了。**上記 6 文書 + **`scripts/package.mjs` の `INSTALL.txt`** に、
     引き金が 2 種類になったこと / **既定 OFF はスイッチと辞書のフラグの両方**であること /
     保存項目の追加(`replyToComment` / `commentMessage` / `channelId`)/ 投稿履歴の**種別** /
@@ -59,30 +59,30 @@ feature: comment-link
   - **`docs/privacy-policy.md` は「ネットワーク通信を一切行いません」と書いていたので、
     そのままでは嘘になる。**「いつ・どこへ・何のために・何を送るか」の表に書き換えた
     (**利用者のデータは送らない / `credentials: 'omit'` / チャット画面では通信しない**)
-  - `docs/security-review.md` は S10 と重複させず、**変わった前提だけを追記**した
+  - `docs/developers/security-review.md` は S10 と重複させず、**変わった前提だけを追記**した
     (「外部通信は無し」の行 / S5 の「ZIP に同梱される」という**事実誤認の訂正**)
   - `scripts/make-site-assets.mjs` の見本データに `replyToComment` / `commentMessage` /
     `channelId` と**投稿履歴 2 件(種別つき)**を足した。**`channelId` は解決済みと未解決を混ぜてある** —
     T13 の絵で「**設定したのに効かない行**」の ⚠ と再試行の導線が見えるようにするため
-  - **`docs/for-testers.md` にテスト H(コメント返し)を足した。** 配信者自身のコメントには
+  - **`docs/testers/for-testers.md` にテスト H(コメント返し)を足した。** 配信者自身のコメントには
     反応しないので、**別アカウントが要る**ことを明記している
 
 ## 人手・実機が要るもの(SPEC-OPS §08 — `/spec-implement` に投げても止まる)
 
 - [x] T11: **spec.md D3 の判断** — 引き金が増えて投稿頻度が上がることが、001 D3 の結論  <!-- #35 -->
-      ([d3-automation-policy.md](../../docs/d3-automation-policy.md))を変えないか。**人間が決める**
+      ([d3-automation-policy.md](../../docs/developers/d3-automation-policy.md))を変えないか。**人間が決める**
   - **決定(2026-08-13): 結論を維持する。開示した上で自己責任。**
     既定 OFF + 辞書フラグも既定 false なので、**何もしなければ配布先の挙動は 001 と同じ**。
     ON にしても 1 配信 1 人 1 回 / 5 秒間隔 / 20 件上限で、スパムポリシーが撃つ像からは遠いまま。
     争点は 001 と同じく経路(API か DOM か)で、引き金の数はそこを動かさない。
     **頻度を抑える設計は据え置き(緩めない)。** 公式 API へ寄せる案は引き続き未採用・004 のスコープ外
-  - **`docs/d3-automation-policy.md` への追記で閉じる**(004 で前提が変わったことと再判断の結果)
+  - **`docs/developers/d3-automation-policy.md` への追記で閉じる**(004 で前提が変わったことと再判断の結果)
 - [x] T12: **実配信での通し確認。**確認するのは 5 点 — ① 登録者のコメントで投稿されること  <!-- #36 -->
       ② **固定されないこと** ③ 同じ配信で 2 回目が出ないこと ④ **自分の投稿を引き金に再投稿しないこと**
       (plan.md R2) ⑤ **ポップアウトを開き直しても過去のコメントに一斉投稿しないこと**(plan.md R3)。
       あわせて **コメントから投稿までの所要時間**(ユーザーストーリーの「数秒以内」/ 001 でも未計測)、
       **手打ち中に発火したときの入力欄の挙動**(plan.md R6)と、
-      **チャット窓が非前面・最小化のときに発火するか**([t1-findings.md](../../docs/t1-findings.md) ❓F)、
+      **チャット窓が非前面・最小化のときに発火するか**([t1-findings.md](../../docs/developers/t1-findings.md) ❓F)、
       **削除済みメッセージのプレースホルダに反応しないか**(AC3。T1 では出てこなかったので未確認。
       タグごと差し替わるなら外れるが、同じタグのまま属性で表される場合は素通りする)を見る。
       相手が要るので自分では作れない(spec.md D5)
@@ -137,7 +137,7 @@ feature: comment-link
 > 効いているかは実配信でしか分からない)。
 
 > **決定(2026-08-13 / 人間 / spec.md D5): T12 を main マージのブロッカーにしない。**
-> 相手が要るので自分では作れないため。代わりに **T10 で README / docs/install.md に
+> 相手が要るので自分では作れないため。代わりに **T10 で README / docs/users/install.md に
 > 「実配信での通し確認は未実施」と明記**し、**T12 の issue は開けたまま残す**。
 > **D2(歯止めが 1 枚欠けた状態で出すか)は 2026-08-15 に解消した** — T1 で 3 枚目の手段
 > (`author-type="owner"` と「配信の持ち主の ID との一致」)が採れたため(spec.md D2)。

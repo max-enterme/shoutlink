@@ -220,7 +220,7 @@ export type PostRecord = {
 > これは **AC8 の「コメント返し済みでもリダイレクト返礼はする」を破る。**
 > T5 が `post-log` と `dedupe` を種別で分けたのと同じ措置が、この経路にだけ無い。
 > 登録の必要も無い — `self-echo` が想定しているのは**固定バナー**を新しい通知として拾い直す経路
-> ([security-review.md](../../docs/security-review.md) S1)で、**コメント返しは固定しない** (AC6)。
+> ([security-review.md](../../docs/developers/security-review.md) S1)で、**コメント返しは固定しない** (AC6)。
 
 ## 主要コンポーネント / 変更点
 
@@ -241,7 +241,7 @@ export type PostRecord = {
 | `public/options.html` / `src/options/options.ts` | 有効化スイッチ / コメント用テンプレート + プレビュー / 辞書テーブルの**フラグ列とコメント返し用の自由文列** / 不整合の常時表示 / 投稿履歴の種別列 (AC13 / AC16)。**003 の自由文列と合わせて辞書テーブルが 3 → 6 列**になるため**行を畳む表示にする**(R9 / T14 のモックで確定してから) |
 | `scripts/make-site-assets.mjs` | 撮影版下の見本データに**フラグと `commentMessage`** を足す(列が空の絵にしないため) |
 | `tests/comment-detector.test.ts` ほか | 新規 + 既存の回帰(001 の挙動が変わらないこと) |
-| `README.md` / `docs/install.md` / `docs/index.html` / `docs/for-testers.md` / `docs/privacy-policy.md` / `docs/setup-and-verify.md` | 引き金が増えたこと・既定 OFF・保存項目の追加 |
+| `README.md` / `docs/users/install.md` / `docs/index.html` / `docs/testers/for-testers.md` / `docs/privacy-policy.md` / `docs/developers/setup-and-verify.md` | 引き金が増えたこと・既定 OFF・保存項目の追加 |
 
 ## 依存 / 前提
 
@@ -295,12 +295,12 @@ export type PostRecord = {
   - 自分が投稿したメッセージを引き金に再投稿しない (AC10)
 - **合成 DOM を「仕様」にしない。**コメント要素の fixture は T1 で採った構造に合わせて作る。
   T1 の前に書いた fixture をそのまま残さない
-  ([security-review.md](../../docs/security-review.md) の指摘と同じ)。
+  ([security-review.md](../../docs/developers/security-review.md) の指摘と同じ)。
 
 ## リスク / 降りる箇所
 
 - ~~**R1(高): 投稿者の特定手段と鍵の形が未確認。**~~
-  → **2026-08-15 に T1 で解消**([docs/004-t1-collect.md](../../docs/004-t1-collect.md) / spec.md D1)。
+  → **2026-08-15 に T1 で解消**([docs/developers/004-t1-collect.md](../../docs/developers/004-t1-collect.md) / spec.md D1)。
   投稿者は **DOM 属性から取れる**(実配信で全件、正解と一致)。鍵の形は `UC…` なので
   **`channelId` を辞書に足して解決する**(AC17)。**表示名照合には降りていない。**
 
@@ -349,7 +349,7 @@ export type PostRecord = {
   実装で下げられるのは頻度だけで、判断そのものは人間が行う。
   → **2026-08-13 に決着(001 D3 の結論を維持)。** 実装側の前提は変わらない
   (既定 OFF・1 配信 1 人 1 回・5 秒間隔・20 件上限は**すべて据え置き。緩めない**)。
-  T11 は `docs/d3-automation-policy.md` への追記で閉じる。
+  T11 は `docs/developers/d3-automation-policy.md` への追記で閉じる。
 
 - **R6(中): 投稿のたびにチャット入力欄を上書きする。**
   [poster.ts](../../src/poster.ts) の `setInputValue` は入力欄の中身を丸ごと置き換えて送信する。
@@ -358,7 +358,7 @@ export type PostRecord = {
   実装で完全には避けられない(入力欄は 1 つしかない)ので、**T12 の確認項目に入れる。**
 
 - **R7(低): 最小化・非前面での `MutationObserver` の発火が未確認**
-  ([t1-findings.md](../../docs/t1-findings.md) ❓F)。コメント経路はこれを直接受ける。T12 で見る。
+  ([t1-findings.md](../../docs/developers/t1-findings.md) ❓F)。コメント経路はこれを直接受ける。T12 で見る。
 
 - **R8(低): 設定の増加で options 画面が混む。**
   「有効にする」(自動検知)と「コメントに反応する」の 2 つのスイッチができる。

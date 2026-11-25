@@ -27,7 +27,7 @@ const VIDEO = 'fakeVideo01'
  * ```
  *
  * **合成 DOM を仕様にしない**ため、ここは観測した並びから外さない
- * (`docs/004-t1-collect.md`)。
+ * (`docs/developers/004-t1-collect.md`)。
  */
 function buildBinary(
   options: {

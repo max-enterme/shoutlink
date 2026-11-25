@@ -3,7 +3,7 @@ import { DEFAULT_CONFIG, isActionAllowed, normalizeConfig } from '../src/config'
 
 /**
  * ここは**公開ドキュメントの主張を固定するテスト**。
- * README / docs/install.md / docs/index.html は「『有効にする』を外しても
+ * README / docs/users/install.md / docs/index.html は「『有効にする』を外しても
  * 手動の『↩ 返礼』からは実行できる」と説明している。これが崩れたら文書が嘘になる。
  */
 describe('isActionAllowed (AC7)', () => {

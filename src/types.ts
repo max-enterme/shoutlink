@@ -26,7 +26,7 @@ export type Config = {
    * ライブチャット画面の右下に手動トリガー (`↩ 返礼`) を出すか。
    *
    * **既定は false。**配信画面にチャット窓を載せていると常時映り込むため
-   * ([docs/security-review.md](../docs/security-review.md) S8)。自動検知が空振りしたときの
+   * ([docs/developers/security-review.md](../docs/developers/security-review.md) S8)。自動検知が空振りしたときの
    * 逃げ道 (plan.md R1) と、投稿・固定の切り分け経路としては必要なので、機能自体は残す。
    */
   showManualTrigger: boolean
@@ -39,7 +39,7 @@ export type Config = {
    * **辞書で「コメントに反応する」を付けた人のコメントに返す** (004 / AC1)。
    *
    * **既定は false。**これが 004 で投稿の頻度が上がることへの歯止めの 1 枚目
-   * ([docs/d3-automation-policy.md](../docs/d3-automation-policy.md) / spec.md D3)。
+   * ([docs/developers/d3-automation-policy.md](../docs/developers/d3-automation-policy.md) / spec.md D3)。
    * **OFF の間はコメントの検知そのものを走らせない** — 「見てから捨てる」にすると、
    * 捨て漏れが投稿に化ける経路が残る。
    *

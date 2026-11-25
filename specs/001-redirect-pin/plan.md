@@ -61,7 +61,7 @@ test: npm run typecheck && npx vitest run
 - `all_frames: true` は管制室のチャットが iframe のため必須。
 - コード側にも `src/scope.ts` で同じ判定を置き、注入先が増えたときの二重の歯止めとする。
 
-**T1 の結果 (2026-08-05 / 詳細は [docs/t1-findings.md](../../docs/t1-findings.md)):**
+**T1 の結果 (2026-08-05 / 詳細は [docs/developers/t1-findings.md](../../docs/developers/t1-findings.md)):**
 
 - **C1: 通知の出る場所** → **Studio 管制室に埋め込まれたチャットで確認。**`all_frames: true` により
   iframe 内でも content script は動く。**ただし通知はチャット項目リスト (`#items`) の中ではなく

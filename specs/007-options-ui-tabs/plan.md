@@ -64,7 +64,7 @@ README.md:154 と docs/privacy-policy.md:14 が「**本拡張が自分で通信�
 | `src/options/options.ts` 全体 | **状態も関数もすべて `export function initOptions()` の本体へ移す。**「中へ入れるもの」は網羅的に: `el()` の 25 呼び出し / 状態 11 個(`directory` `templateDependents` `rowDrafts` `liveRows` `expandedRows`→`selectedKey` `commentDrafts` `focusables` `resolvingKeys` `channelIdErrors` `bulkResolving` `testSendStates`)と**新規の 3 個(`currentTab` `dirFilter` `bulkIconFetching`)** / それらを閉包する関数すべて(`registerFocusable` `captureFocusTarget` `restoreFocusTarget` `captureRowDrafts` `currentTemplate` `currentCommentTemplate` `setNotice` `renderAlwaysOnNotices` `refreshTemplateDependent` `setDirectoryStatus` `persistDirectory` `resolveEntryChannelId` `retryUnresolvedChannelIds` `renderChannelIdRetryAll` `orderedStudioTabs` `sendTestSend` `renderDirectory` `renderPostLog` `renderPreview` `apply`)/ 全 `addEventListener` / 起動の 3 本(`loadDirectory` 906・`loadPostLog` 967・`loadConfig` 1031)/ `onDirectoryChanged` 911。**トップレベルに残すのは `import` と `SAMPLE_EVENT` `SAMPLE_MESSAGE` `SAMPLE_COMMENT_MESSAGE` の 3 定数、`el()` の定義、型宣言だけ。** 1000 行の入れ子になるが、移動はインデントだけの機械的な変更で、**これによりテストの 1 ケースごとに状態が完全に独立する** |
 | `src/options/main.ts` **(新規)** | `import { initOptions } from './options'` して呼ぶだけの 2 行。ビルドのエントリ |
 | `scripts/build.mjs` (24) | `options` の entryPoint を `src/options/options.ts` → `src/options/main.ts` へ |
-| `public/options.html` (120) | **「1 配信あたり 20 件までです。」の 1 文を消す。** この上限は #127(2026-09-05)で撤廃済みで、README.md:197 相当・docs/install.md:197・docs/for-testers.md:45 は修正されているが**この 1 行だけ取りこぼしている**。節をタブへ移すだけだと古い文言がそのまま残る |
+| `public/options.html` (120) | **「1 配信あたり 20 件までです。」の 1 文を消す。** この上限は #127(2026-09-05)で撤廃済みで、README.md:197 相当・docs/users/install.md:197・docs/testers/for-testers.md:45 は修正されているが**この 1 行だけ取りこぼしている**。節をタブへ移すだけだと古い文言がそのまま残る |
 | `src/options/options.ts` `renderDirectory()` (492-881) | 左右分割へ作り替え。542-555 の caret セル生成を削除。617 の `if (!expanded) … continue` を「左ペインは全行ぶん作り、右ペインは `selectedKey` の行だけ作る」に置き換え。634-876 の詳細生成は `dirDetail` へ出力 |
 | `src/options/options.ts` `expandedRows` (156, 239, 526, 550-554, 609, 896) | `selectedKey: string \| null` に置換。609(削除時)は `selectedKey = null`、896(＋ 登録時)は `selectedKey = directoryKey(url)` |
 | `src/options/options.ts` `liveRows` (131-144, 617-631, 854-875) | **左ペインは表示専用**(呼び名の `<input>` は右ペインだけに置く)。それでも **`liveRows` には表示中の全行を push する** — `read()` は選択中でない行では `shown` をそのまま返す(入力欄が無いので人が触りようがない)。`comment` 付きの完全版は選択中の 1 行だけ。⚠ **選択中の 1 行だけを push する形にしない**: `captureRowDrafts`(213-260)の掃除が 1 行にしか効かず、**別のタブで削除された行の `rowDrafts` / `commentDrafts` / `channelIdErrors` / `testSendStates` が残る**(同じハンドルを ＋ から再登録すると前の行の失敗理由とテスト送信結果が出る = options.ts:220-224 のコメントが「2 度踏んだ」と名指ししている型の再発)。`shownFromDraft` が真なら `captureRowDraft`(message-field.ts:185-204)は 1 つ目の早期 return を飛ばし、`saved` との trim 比較で下書きを残すので、この形で未保存の値も守られる |
@@ -85,7 +85,7 @@ README.md:154 と docs/privacy-policy.md:14 が「**本拡張が自分で通信�
 | `tests/directory.test.ts` | `iconDataUrl` の正規化・`upsertChannelIcon` / `initialForAvatar` のテストを追加 |
 | `README.md` (139, 154-157) | 「チャンネル ID を控える」の説明に**アイコンも同時に控える**ことと**「アイコンをまとめて取得」**の引き金を追記 |
 | `docs/privacy-policy.md` (14-25) | 同上。**取得先ホスト `yt3.googleusercontent.com`** も明記 |
-| `docs/install.md` (131, 188) / `docs/setup-and-verify.md` (80, 237) / `docs/for-testers.md` (284, 329, 341, 385) | `▸` を押して展開する前提の記述を、**左の一覧から選ぶ**操作に書き換える。**`install.md:131` と `setup-and-verify.md:80` は設定画面の構成そのものを説明する表**なので、`▸` の置換だけでなく **4 タブの構成にも書き換える** |
+| `docs/users/install.md` (131, 188) / `docs/developers/setup-and-verify.md` (80, 237) / `docs/testers/for-testers.md` (284, 329, 341, 385) | `▸` を押して展開する前提の記述を、**左の一覧から選ぶ**操作に書き換える。**`install.md:131` と `setup-and-verify.md:80` は設定画面の構成そのものを説明する表**なので、`▸` の置換だけでなく **4 タブの構成にも書き換える** |
 | `public/options.html` `.dir-row` | **B7(追加の塊): `justify-content: space-between` を `flex-start` にする**(または宣言ごと削除)。子が 2 個/3 個で入れ替わり、名前が右端に張り付いていた実機の見え方を直す(AC7) |
 | `public/options.html` `.dir-row-main` | **B7**: `flex: 1;` を足す(`min-width: 0` は維持)。`.dir-row .mark` を `margin-left: auto` に変え、⚠ を常に右端に固定する |
 | `src/channel-id.ts` `MAX_ICON_DATA_URL_LENGTH` の隣 | **B7**: `extractChannelName(html: string): string` を足す(`og:title` の `content` を実体参照デコードして返す。`MAX_CHANNEL_NAME_LENGTH` 超は空文字。例外を投げない) |
@@ -585,7 +585,7 @@ afterEach(() => {
 | B2 | T4, T5, T6 | `src/options/options.ts` / `public/options.html` / `tests/options-dom.test.ts` | `npm run typecheck && npx vitest run tests/options-dom.test.ts` |
 | B3 | T7, T8 | `src/channel-id.ts` / `src/directory.ts` / `tests/channel-id.test.ts` / `tests/directory.test.ts` | `npm run typecheck && npx vitest run tests/channel-id.test.ts tests/directory.test.ts` |
 | B4 | T9, T10 | `src/options/options.ts` / `public/options.html` / `tests/options-dom.test.ts` | `npm run typecheck && npx vitest run` |
-| B5 | T11 | `README.md` / `docs/privacy-policy.md` / `docs/install.md` / `docs/setup-and-verify.md` / `docs/for-testers.md` | `npm run typecheck && npx vitest run` |
+| B5 | T11 | `README.md` / `docs/privacy-policy.md` / `docs/users/install.md` / `docs/developers/setup-and-verify.md` / `docs/testers/for-testers.md` | `npm run typecheck && npx vitest run` |
 
 **順序**: B1 → B2 → B4 → B5。**B3 は B1 / B2 と並行してよい**(純関数だけで画面に触らない)。
 B4 は B2 と B3 の両方が入ってから。**T12(スクリーンショットの撮り直し)は人手なのでブロックに入れない。**
@@ -595,7 +595,7 @@ B4 は B2 と B3 の両方が入ってから。**T12(スクリーンショット
 - 先行して main に入っている必要のある feature は無い。
 - 006(`specs/006-reply-guard-and-test-send`)が入れたテスト送信の 2 ボタンは、
   **右ペインへそのまま移す**。挙動は変えない。
-- `docs/for-testers.md` の手順が `▸` の展開を前提にしているため、B5 で書き換えるまで
+- `docs/testers/for-testers.md` の手順が `▸` の展開を前提にしているため、B5 で書き換えるまで
   **テスターの手順書と実物が食い違う。**B4 と B5 を続けて出す。
 
 ## リスク / 降りる箇所

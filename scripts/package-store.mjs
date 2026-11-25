@@ -114,7 +114,7 @@ if (remote.length > 0) {
 // **`public/manifest.json` からは外さない** (ローカルの ID が動くと開発中に困る)。
 // ここでは ZIP へ入れる分だけを書き換え、`dist/` はそのままにする。
 //
-// → `docs/setup-and-verify.md` 「ストアへ移すと拡張 ID が変わる」
+// → `docs/developers/setup-and-verify.md` 「ストアへ移すと拡張 ID が変わる」
 const { key: _droppedKey, ...storeManifest } = manifest
 if (_droppedKey === undefined) {
   console.warn('注意: dist/manifest.json に `key` が無い。開発用の ID 固定が外れていないか確認すること')
