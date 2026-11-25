@@ -1,7 +1,7 @@
 # 004 T1 — コメントの投稿者を特定できるか実 DOM で採取する
 
-対応: [specs/004-comment-link/tasks.md](../specs/004-comment-link/tasks.md) T1 / issue #25 /
-[spec.md](../specs/004-comment-link/spec.md) の「この feature の成立条件」
+対応: [specs/004-comment-link/tasks.md](../../specs/004-comment-link/tasks.md) T1 / issue #25 /
+[spec.md](../../specs/004-comment-link/spec.md) の「この feature の成立条件」
 
 **この文書は手順書であり、採取結果の置き場でもある。**実施したら末尾の「採取結果」に追記する。
 
@@ -32,7 +32,7 @@
 
 - **スクリプトは読み取りしかしない。**投稿もクリックもメニュー操作もしない。
 - **出力は既定で匿名化される。**ハンドル・表示名・チャンネル ID・本文は「形と文字数」に置き換わる。
-  この repo は public で、[docs/t1-findings.md](t1-findings.md) も
+  この repo は public で、[docs/developers/t1-findings.md](t1-findings.md) も
   「構造(タグ名・id・属性名・要素数)だけを記録する」方針で書かれている。
 - `YTRP.raw(i)` だけは**生の値**を出す。形を自分の目で確かめるためのもので、
   **その出力は docs / issue / PR へ貼らない。**
@@ -61,7 +61,7 @@
 | **管制室に埋め込まれたチャット**<br>`https://studio.youtube.com/video/<動画ID>/livestreaming` | チャットは **iframe**。コンソール左上のフレーム選択(既定 `top`)を **`live_chat`** に切り替える。切り替えないとチャットの DOM が一切見えない |
 
 > ポップアウトで別のログインアカウントに切り替わってしまう場合は `&authuser=N`(0,1,2…)、
-> ブランドアカウントなら `&pageId=UC...` を付ける([docs/t1-findings.md](t1-findings.md) の詰まり所)。
+> ブランドアカウントなら `&pageId=UC...` を付ける([docs/developers/t1-findings.md](t1-findings.md) の詰まり所)。
 
 ---
 
@@ -69,7 +69,7 @@
 
 ### 1. スクリプトを貼る
 
-[scripts/t1-comment-probe.js](../scripts/t1-comment-probe.js) を**丸ごとコピー**して、
+[scripts/t1-comment-probe.js](../../scripts/t1-comment-probe.js) を**丸ごとコピー**して、
 上の画面の DevTools コンソールに貼って実行する。次のように出れば準備完了。
 
 ```
@@ -223,7 +223,7 @@ params → パーセントデコード → base64 → パーセントデコー�
 > **全メッセージが「デコードできない」で落ちる。**
 >
 > **原因は「採取が間違っていた」ではない。**採取に使った
-> [scripts/t1-comment-probe.js](../scripts/t1-comment-probe.js) は最初から正しく、
+> [scripts/t1-comment-probe.js](../../scripts/t1-comment-probe.js) は最初から正しく、
 > `decodeURIComponent` を**無条件で**呼ぶ `decodeBase64` を **2 回**適用していた。
 > **退行は、動いていたプローブから `src/comment-detector.ts` へ移すときに
 > `percentDecode: boolean` のフラグを足して「1 回目だけ」に絞ったところで入った。**
@@ -276,7 +276,7 @@ params → パーセントデコード → base64 → パーセントデコー�
 
 → したがって **`UC…` と辞書の鍵(`@handle`)をつなぐ対応付け(D1 (c))が要る。**
 
-### 決定(spec.md D1 / D2 — 正本は [spec.md](../specs/004-comment-link/spec.md))
+### 決定(spec.md D1 / D2 — 正本は [spec.md](../../specs/004-comment-link/spec.md))
 
 - **投稿者は DOM 属性から取る。メインワールドへの注入はしない。**
   2026-08-14 に一度「注入を許す」と決めたが、**DOM 属性から取れると分かって前提が消えた**

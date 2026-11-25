@@ -33,7 +33,7 @@ status: 完了
 **1 アイテム 8KB 上限**で、自由文が加わると数十件で頭打ちになる。超えると `set` が reject し、
 `guardAsync` が握るため**コンソールに 1 行出るだけで以後の登録が保存されない。**
 
-これは [docs/security-review.md](../../docs/security-review.md) **S7** として既に挙がっていた
+これは [docs/developers/security-review.md](../../docs/developers/security-review.md) **S7** として既に挙がっていた
 未対応の指摘(「件数上限か `local` への退避を検討」)で、自由文はその上限を一気に近づける。
 **このフィーチャーで `local` へ移し、S7 を閉じる**(001 の tasks.md に残っている S7 の行も併せて処理する)。
 
@@ -74,15 +74,15 @@ status: 完了
 - **D1: 実配信での通し確認。**
   自由文入りの文面が実際に投稿・固定されるところまでは、**実機でリダイレクトを受けないと確認できない**
   (SPEC-OPS §08)。しかも受けられるかは送る側に依存する
-  ([security-review.md](../../docs/security-review.md) S8: 送る側に登録者 1,000 人以上の要件)。
+  ([security-review.md](../../docs/developers/security-review.md) S8: 送る側に登録者 1,000 人以上の要件)。
   **これを feature 全体の main マージのブロッカーにすると、集約ブランチが他人待ちで滞留する。**
   T6 を待たずに main へ載せるか、載せるなら README / install.md に未検証である旨を書くかは、
   **人間が決める。エージェントが「確認したことにして」マージしない。**
 
   > **決定(2026-08-13 / 人間): T6 を main マージのブロッカーにしない。**
   > 集約ブランチ `003-per-source-message` は T6 を待たずに main へマージしてよい。
-  > 代わりに **README / docs/install.md / docs/index.html(公開ページ)/ docs/for-testers.md(テスター資料)に
-  > 「実配信での通し確認は未実施」と明記する**(T5 に含める)。**`docs/for-testers.md` は ZIP に
+  > 代わりに **README / docs/users/install.md / docs/index.html(公開ページ)/ docs/testers/for-testers.md(テスター資料)に
+  > 「実配信での通し確認は未実施」と明記する**(T5 に含める)。**`docs/testers/for-testers.md` は ZIP に
   > `START-HERE.md` として同梱される唯一の説明**なので、ここが古いと配布物そのものが嘘になる
   > (security-review S5 と同型)。
   > T6 の issue は開けたまま残し、**実施できた時点でその記述を外す**。
@@ -110,7 +110,7 @@ status: 完了
 - **D3: 誤検知したときの被害が、呼び名とは質が違う。**
   呼び名は取り違えても「誰かの名前」が出るだけだが、**自由文は特定の相手に宛てて書いた一文**で、
   宛先を間違えると内容そのものが事故になる。そして本 repo は送信元の取り違えを
-  **実際に 2 回起こしている**([t1-findings.md](../../docs/t1-findings.md): 配信者自身を送信元と判定 /
+  **実際に 2 回起こしている**([t1-findings.md](../../docs/developers/t1-findings.md): 配信者自身を送信元と判定 /
   送信側バナーに反応して送信先へ返礼)。検知は今も推測を含む抽出に乗っている。
   取りうる方針と、それぞれの効く範囲・代償:
 
@@ -140,8 +140,8 @@ status: 完了
   >
   > したがって **AC1 に追加条件は付けない**(AC1 は決定済みの形へ書き換え済み)。
   > **(c) は「利用者の判断に委ねる」という選択なので、判断の場に情報が無いと開示が機能しない。**
-  > **開示の記述を T5 に含める** — README / docs/install.md / docs/index.html(公開ページ)/
-  > docs/for-testers.md(テスター資料)に加えて、**自由文を入力する設定画面の辞書セクション**
+  > **開示の記述を T5 に含める** — README / docs/users/install.md / docs/index.html(公開ページ)/
+  > docs/testers/for-testers.md(テスター資料)に加えて、**自由文を入力する設定画面の辞書セクション**
   > (`public/options.html`。T4 の PR で入れる)に
   > 「**送信元の検知は推測を含みます。取り違えると、その人に宛てて書いた一文がそのまま
   > 別の相手への投稿に載ります。**」を出す。

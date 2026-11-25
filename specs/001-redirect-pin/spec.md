@@ -76,7 +76,7 @@ issue: 11
   投稿頻度・内容の観点で判断が要る。リダイレクト受信時のみ・低頻度・人間可読の返礼文であれば
   実質リスクは低いと見るが、**判断は人間が行う**。
   → ~~**判断は未了**~~ **確定 (2026-08-10)。**
-  調査は [docs/d3-automation-policy.md](../../docs/d3-automation-policy.md)。要点は、規約の
+  調査は [docs/developers/d3-automation-policy.md](../../docs/developers/d3-automation-policy.md)。要点は、規約の
   「自動化された手段でのアクセス」に文言上は当たりうるが、**チャットへの投稿自体は公式 API で
   認められており (Nightbot 等が利用)、争点は行為ではなく経路**。固定には API が無く経路の
   選択肢がない。公式見解も処分の前例も見つからず、「安全である証拠」ではなく「証拠が無い」状態。
@@ -88,7 +88,7 @@ issue: 11
     **「事情を知らない人にリスクを負わせる」形にはならない。**代わりに**署名され、自動更新が効く**
     (取り違えの修正が古い版の利用者にも届く)。
     **「審査を通った = 規約上セーフ」ではない**ことは変わらないので、README と同じ開示を掲載文にも置く。
-    → [docs/d3-automation-policy.md](../../docs/d3-automation-policy.md) の
+    → [docs/developers/d3-automation-policy.md](../../docs/developers/d3-automation-policy.md) の
     「判断の履歴 / 配布経路の切り替え — 限定公開へ」
   - **GitHub でグレーな点を全部開示した上で配布し、判断できる人が自己責任で使う**形にする
     (**開示は維持。**配布経路が GitHub Releases からストアの限定公開へ移るだけで、

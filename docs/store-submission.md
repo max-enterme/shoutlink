@@ -1,9 +1,9 @@
 # ストア提出用の下書き (限定公開)
 
 Chrome ウェブストアのデベロッパーダッシュボードへ**そのまま貼るための原稿**。
-配布経路の判断は [d3-automation-policy.md](d3-automation-policy.md) の
+配布経路の判断は [d3-automation-policy.md](developers/d3-automation-policy.md) の
 「判断の履歴 / 配布経路の切り替え — 限定公開へ」、提出物の作り方は
-[setup-and-verify.md](setup-and-verify.md) の「ストア提出用の ZIP を作る」。
+[setup-and-verify.md](developers/setup-and-verify.md) の「ストア提出用の ZIP を作る」。
 
 > **公開範囲は「限定公開 (Unlisted)」。** Distribution タブで**公開 (Public) と間違えない。**
 > ここが今回の判断の中身そのもの。
@@ -24,7 +24,7 @@ Chrome ウェブストアのデベロッパーダッシュボードへ**その�
 | デベロッパー登録 | $5 + 本人確認 | **済** (2026-08-23)。公開表示名は `MAX`。アイテム作成済み → §4 |
 | スクリーンショット | 1280x800 × 4 枚 | **済** (2026-08-23 に撮り直し)。順番は §1「画像」 |
 | 実配信での通し確認 | 003 T6 / 004 T12 | **ほぼ済** (2026-08-23)。**残るのは「チャットを開き直したときの一斉投稿」1 点**(#337)と、`ifEmpty` の判定・所要時間(#339)。**掲載文はその 3 点を名指しする形に書き換え済みなので、提出はできる** |
-| 自分の設定・辞書の移行 | DevTools で手作業(2026-08-23 決定) | **掲載の前提ではない** — 掲載後に自分で移す → [setup-and-verify.md](setup-and-verify.md)「ストアへ移すと拡張 ID が変わる」 |
+| 自分の設定・辞書の移行 | DevTools で手作業(2026-08-23 決定) | **掲載の前提ではない** — 掲載後に自分で移す → [setup-and-verify.md](developers/setup-and-verify.md)「ストアへ移すと拡張 ID が変わる」 |
 
 ---
 
@@ -127,7 +127,7 @@ YouTube のライブ配信で他チャンネルからのライブリダイレク
 ```
 
 > **2026-08-23 に現状へ書き換えた**(003 T6 と 004 T12 の 4/5 が通ったため)。
-> README / `docs/index.html` / `docs/install.md` / `docs/for-testers.md` /
+> README / `docs/index.html` / `docs/users/install.md` / `docs/testers/for-testers.md` /
 > `scripts/package.mjs` の `INSTALL.txt` も**同時に**直してある。
 >
 > ⚠️ **残り 3 点が済んだら、この段落をもう一度書き換える**(→ rail #337 の残り 1 / #339)。
@@ -190,11 +190,11 @@ YouTube のライブ配信で他チャンネルからのライブリダイレク
 **利用者はまず README か[説明ページ](https://max-enterme.github.io/shoutlink/)を通る。**
 規約の論点はそこに**そのまま残っている**(README の「⚠️ 使う前に読んでください」/
 説明ページの「ストアに出ても『安全』の裏付けにはなりません」/
-[d3-automation-policy.md](d3-automation-policy.md))。
+[d3-automation-policy.md](developers/d3-automation-policy.md))。
 **掲載文の末尾からも説明ページへ誘導している。**
 
 > ⚠️ **これは d3 §8 の「消すなら掲載文で開示するしかない」を上書きする判断。**
-> 経緯は [d3-automation-policy.md](d3-automation-policy.md) の
+> 経緯は [d3-automation-policy.md](developers/d3-automation-policy.md) の
 > 「判断の履歴 / 配布経路の切り替え — 限定公開へ」にも書いた。
 > **公開 (Public) に切り替えるなら、この判断は成立しなくなる** —
 > 検索から直接来る人は README も説明ページも通らないため。
@@ -292,7 +292,7 @@ www.youtube.com — 設定ページから、利用者が辞書に登録したチ
 
 > ⚠️ **`www.youtube.com` が広すぎるという指摘は想定内。**用途は設定ページからの 1 回の GET だけで、
 > **content script の対象は `studio.youtube.com/live_chat*` のまま**であることを説明する
-> (`tests/manifest.test.ts` が機械で固定している / [security-review.md](security-review.md) S10)。
+> (`tests/manifest.test.ts` が機械で固定している / [security-review.md](developers/security-review.md) S10)。
 
 > **ホスト権限があると審査が長くなる。**フォームに
 > 「ホスト権限が要求されているため、詳しい審査が必要となり、公開が遅れる可能性があります」
@@ -315,7 +315,7 @@ www.youtube.com — 設定ページから、利用者が辞書に登録したチ
 `npm run package:store` が提出物を作るたびに機械で確認している —
 `eval()` / `new Function()` / `importScripts()` / 動的 `import()` / HTML の外部 `src`・`href`
 のいずれかがあれば ZIP を作らずに止まる
-(→ [setup-and-verify.md](setup-and-verify.md) の「ストア提出用の ZIP を作る」)。
+(→ [setup-and-verify.md](developers/setup-and-verify.md) の「ストア提出用の ZIP を作る」)。
 
 ⚠️ **設定ページの `www.youtube.com` への GET は、取得した HTML を読むだけで
 コードとして実行しない。**リモートコードには当たらない。

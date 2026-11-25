@@ -15,7 +15,7 @@ URL をライブチャットへ投稿して固定する Chrome 拡張 (MV3)。**
 ## ⚠️ 使う前に読んでください
 
 **この拡張は Chrome ウェブストアの「限定公開」で出しています** (2026-08-23 に決め、2026-08-29 に掲載されました →
-[docs/d3-automation-policy.md](docs/d3-automation-policy.md) の「判断の履歴」)。
+[docs/developers/d3-automation-policy.md](docs/developers/d3-automation-policy.md) の「判断の履歴」)。
 限定公開はストアの検索・一覧に出ないので、**たどり着く経路はこの README と説明ページのリンクだけ**です。
 署名され、自動更新が効くようになりましたが、**下に書いたリスクは何も変わりません。**
 
@@ -27,7 +27,7 @@ URL をライブチャットへ投稿して固定する Chrome 拡張 (MV3)。**
   利用規約は「自動化された手段を使用して本サービスにアクセスすること」を禁じています。
   本拡張がこれに当たるかは文言からは決まらず、**YouTube の公式見解も、この形での処分の前例も
   見つかっていません。**「安全である証拠」ではなく「証拠が無い」という状態です
-  (→ [docs/d3-automation-policy.md](docs/d3-automation-policy.md))。
+  (→ [docs/developers/d3-automation-policy.md](docs/developers/d3-automation-policy.md))。
 - **投稿はあなた自身のアカウントの名義で行われます。** 何かあったとき失うのはあなたのチャンネルです。
 - **送信元の検知は推測を含みます。取り違えると、その人に宛てて書いた一文 (`{msg}`) が
   そのまま別の相手への投稿に載ります。** 呼び名の取り違えなら「誰かの名前」が出るだけですが、
@@ -62,7 +62,7 @@ URL をライブチャットへ投稿して固定する Chrome 拡張 (MV3)。**
 | 投稿文 | テンプレートで編集できる (`{name}` に表示名、`{url}` にチャンネル URL、`{msg}` に送信元ごとの自由文) |
 | 呼び名・自由文 | 送信元ごとに呼び名と一言 (`{msg}`) を登録できる。リダイレクトを受けた相手は自動で一覧に載る (どちらも空のまま) |
 | 固定モード | `off` (固定しない・既定) / `ifEmpty` (既存の固定が無いときだけ) / `always` (上書き) |
-| 多重発火の抑止 | **同じ配信で同じ相手には 1 回まで**。秒数では判定しない。配信が変われば再び 1 回投稿する。投稿履歴に基づくのでリロードをまたいでも引き継がれる (**配信 ID を取れない画面では、6 時間の窓**で判定します → [docs/install.md](docs/install.md#上限が効かない場合))。**手動トリガー(「↩ 返礼」)はこの抑止の対象外**で、押せば同じ相手でも毎回投稿する (ただし同じ相手への投稿がいま走っている間だけは、その回を見送る) |
+| 多重発火の抑止 | **同じ配信で同じ相手には 1 回まで**。秒数では判定しない。配信が変われば再び 1 回投稿する。投稿履歴に基づくのでリロードをまたいでも引き継がれる (**配信 ID を取れない画面では、6 時間の窓**で判定します → [docs/users/install.md](docs/users/install.md#上限が効かない場合))。**手動トリガー(「↩ 返礼」)はこの抑止の対象外**で、押せば同じ相手でも毎回投稿する (ただし同じ相手への投稿がいま走っている間だけは、その回を見送る) |
 | 設定を試す | 設定画面の辞書の行を開くと「テスト送信」ボタンが出て、**開いている配信のチャットへ実際に投稿できる**。投稿履歴には残らないので何度でも試せる。**固定はしない** |
 | 手動トリガー | チャット右下の「↩ 返礼」。**既定は OFF** (配信画面への映り込み対策)。設定で出せば、自動投稿を切っていても実行できる |
 | 止める | 設定の「リダイレクト返礼を使う」を外せば、自動投稿は即止まる (**コメント返しは別のスイッチ**) |
@@ -83,7 +83,9 @@ URL をライブチャットへ投稿して固定する Chrome 拡張 (MV3)。**
 
 ![設定画面](docs/assets/screenshot-1-options.png)
 
-## 入れかた
+## 利用者
+
+### 入れかた
 
 **Chrome ウェブストア (限定公開) から入れてください。**
 
@@ -94,7 +96,7 @@ URL をライブチャットへ投稿して固定する Chrome 拡張 (MV3)。**
 
 > ⚠️ **デベロッパーモードで前の版を入れている人は、先にそれを削除してください。**
 > **設定・呼び名の辞書・投稿履歴は引き継がれません。**書き出してから入れ替える手順は
-> [docs/install.md](docs/install.md#デベロッパーモード版から入れ替える)。
+> [docs/users/install.md](docs/users/install.md#デベロッパーモード版から入れ替える)。
 > 消さずに並べると、**2 つとも動いて同じ相手へ 2 回投稿することがあります。**
 
 入れると、拡張のカードに **`studio.youtube.com` と `www.youtube.com` の許可**が表示されます。
@@ -102,9 +104,11 @@ URL をライブチャットへ投稿して固定する Chrome 拡張 (MV3)。**
 `www.youtube.com` のほうは**設定画面がチャンネル ID を控えに行く**ためだけの許可です
 (→ [保存されるもの](#保存されるもの))。
 
-詳しい手順・設定・動かないときの切り分けは **[docs/install.md](docs/install.md)**。
+詳しい手順・設定・動かないときの切り分けは **[docs/users/install.md](docs/users/install.md)**。
 
-## 自動投稿を使わない設定
+データの扱いは [プライバシーポリシー](docs/privacy-policy.md) を参照してください。
+
+### 自動投稿を使わない設定
 
 **「リダイレクト返礼を使う」も「コメント返しを使う」も既定 OFF なので、何もしなければ
 自動投稿は起きません。** 手動ボタンからだけ使いたい場合は、設定で
@@ -118,7 +122,7 @@ URL をライブチャットへ投稿して固定する Chrome 拡張 (MV3)。**
 の 3 つを満たすと、**ライブチャットへの投稿は、人が「↩ 返礼」を押したときにしか起きません。**
 迷うならまずこの形で。検知そのものは動き続けるので、**辞書への自動登録は行われます** (一覧に相手が載るだけで、チャットには何も出ません)。
 
-## コメント返し (既定 OFF)
+### コメント返し (既定 OFF)
 
 リダイレクトの受信とは**別の引き金**です。**辞書で「コメントに反応する」を付けた人**が
 ライブチャットにコメントすると、その人のチャンネル URL を投稿します。
@@ -131,16 +135,16 @@ ON にすると**投稿の頻度は上がります**。コメントはリダイ�
 | 有効にする | 設定の**「コメント返しを使う」**(**既定 OFF**) と、**辞書の行ごとのフラグ**(**既定 false**) の両方が要る。リダイレクトを受けて自動で一覧に載った相手にもフラグは付かない |
 | 投稿文 | **リダイレクト返礼とは別のテンプレート** (既定 `{name}さん、来てくれてありがとうございます! {url}`)。`{msg}` に入るのも**コメント返し用の自由文**で、リダイレクト返礼用の自由文とは別のフィールド。`{name}` `{url}` は**辞書に登録されている呼び名と URL**を使う (コメント側の表示名は使わない) |
 | 固定 | **しない。**固定枠は 1 件しかなく、コメントのたびに上書きするとリダイレクト返礼の固定が流れるため |
-| 頻度の上限 | 同じ配信・同じ人には **1 回**まで / 投稿の間隔は**最低 5 秒** (設定ではなく固定値)。**件数の上限はありません。**⚠️ **どちらも無条件ではありません** → [docs/install.md](docs/install.md#上限が効かない場合) |
+| 頻度の上限 | 同じ配信・同じ人には **1 回**まで / 投稿の間隔は**最低 5 秒** (設定ではなく固定値)。**件数の上限はありません。**⚠️ **どちらも無条件ではありません** → [docs/users/install.md](docs/users/install.md#上限が効かない場合) |
 | リダイレクト返礼との関係 | **抑止は非対称です。**同じ配信でその人へ**リダイレクト返礼を投稿済みなら、コメント返しはしません。**逆に、**コメント返し済みでもリダイレクト返礼は投稿します** (そちらが本命のため) |
-| 反応しない相手 | **辞書に載っていない人**・フラグが OFF の人・**配信者自身**・スーパーチャット/メンバー加入/システムメッセージ。**スイッチを入れた時点で既にあるコメント**にも反応しない ([例外](docs/install.md#上限が効かない場合)) |
+| 反応しない相手 | **辞書に載っていない人**・フラグが OFF の人・**配信者自身**・スーパーチャット/メンバー加入/システムメッセージ。**スイッチを入れた時点で既にあるコメント**にも反応しない ([例外](docs/users/install.md#上限が効かない場合)) |
 | 照合のしかた | コメントから取れる投稿者の ID (`UC…`) と、**辞書に控えたチャンネル ID** の一致だけで判定する。**表示名では照合しない** (同名の別人・改名・なりすましで別人のリンクを貼るため) |
 | チャンネル ID を控える | 照合に使う `UC…` は、**まだ控えていない行で、URL から直接 ID を取れないときだけ**、その人のチャンネルページを **1 回**読みに行って控えます (「コメントに反応する」を ON にしたとき / 設定画面で再試行を押したとき)。`.../channel/UC…` の形の URL なら通信せずその場で分かります。これが `www.youtube.com` の許可が要る理由です。**同じ 1 回の取得で、まだ控えていないチャンネルのアイコンと表記名も一緒に控えます**(**チャンネルページの取得回数は増えません**。アイコン画像そのものは別に取得するので、1 行あたりの通信の回数は増えます)。アイコンの画像そのものは `yt3.googleusercontent.com` から取得します。**取得を行うのは設定画面だけで、ライブチャットの画面では行いません。**取得できなかった行は**コメントに反応しません** (設定画面に ⚠ が出ます)。リダイレクト返礼は今までどおり動きます |
 | アイコンと表記名を取得 | 辞書タブの左ペインにある**「アイコンと表記名を取得」**を押すと、アイコンか表記名のどちらかを控えていない行だけを取りに行きます (チャンネル ID は取り直しません)。**辞書タブを開いただけでは何も取りに行きません。**控えたアイコン・表記名は `chrome.storage.local` に保存され、次からは取りに行きません。**呼び名を付けていない行には、辞書タブの一覧で表記名をグレーで出します** (無ければ今までどおりハンドルだけ) |
 
 ✅ **コメント返しは 2026-08-23 の実配信で通しました。** **チャットを開き直したときに過去のコメントへ一斉投稿しないこと**も実配信で確かめています (→ [どこまで確かめたか](#どこまで確かめたか))。
 
-## 保存されるもの
+### 保存されるもの
 
 **開発者のサーバへ送るものはありません** (開発者のサーバ自体がありません。解析も広告もありません /
 詳細 → [docs/privacy-policy.md](docs/privacy-policy.md))。保存先は 2 つに分かれます。
@@ -157,9 +161,9 @@ ON にすると**投稿の頻度は上がります**。コメントはリダイ�
 **ライブチャットの画面から、本拡張が通信することはありません。**投稿と固定は、
 YouTube のページの入力欄とメニューを操作して行っています。
 2026-08-06 に起こした事故 (`www.youtube.com` でも拡張が動いていた) とは別物です
-(→ [docs/security-review.md](docs/security-review.md) S10)。
+(→ [docs/developers/security-review.md](docs/developers/security-review.md) S10)。
 
-## どこまで確かめたか
+### どこまで確かめたか
 
 実配信で **①検知 → ②投稿 → ③固定** が通ることを確認済み (2026-08-05 / 2026-08-07)。
 **AC2・AC3 は確認済み。**投稿された URL から送信元チャンネルへ遷移でき、
@@ -182,9 +186,9 @@ YouTube のページの入力欄とメニューを操作して行っています
 ⚠️ `src/selectors.ts` には**確認済みの定義と推測のままの定義が混在**している。各定義のコメントに
 `✅ 確認済み` / `TODO(T1)` を書き分けてある。`tests/fixtures/live-chat.ts` は依然として合成 DOM。
 
-詳細は [docs/t1-findings.md](docs/t1-findings.md) と [docs/security-review.md](docs/security-review.md)。
+詳細は [docs/developers/t1-findings.md](docs/developers/t1-findings.md) と [docs/developers/security-review.md](docs/developers/security-review.md)。
 
-## 開発
+## 開発者
 
 Node.js **20.1 以上**。
 
@@ -196,29 +200,31 @@ npm run package    # release/shoutlink-<version>.zip
 ```
 
 ソースの構成 (どのファイルが何を持つか) は
-[docs/setup-and-verify.md](docs/setup-and-verify.md#ソースの地図) にあります。
+[docs/developers/setup-and-verify.md](docs/developers/setup-and-verify.md#ソースの地図) にあります。
 
 | ドキュメント | 内容 |
 |---|---|
 | [specs/001-redirect-pin/spec.md](specs/001-redirect-pin/spec.md) | 何を・なぜ / 受け入れ条件 / 降りる箇所 |
 | [specs/001-redirect-pin/plan.md](specs/001-redirect-pin/plan.md) | 構成・テスト戦略・リスク |
 | [specs/004-comment-link/spec.md](specs/004-comment-link/spec.md) | コメント返しの受け入れ条件 (**上の但し書きの出所は AC7 / AC9 / AC11**) |
-| [docs/t1-findings.md](docs/t1-findings.md) | **実 DOM で確認できたこと・外れた推測・実害のある誤動作の記録** |
-| [docs/d3-automation-policy.md](docs/d3-automation-policy.md) | 規約まわりで調べたこと |
-| [docs/setup-and-verify.md](docs/setup-and-verify.md) | 開発者向けの導入・動作確認 |
-| [docs/for-testers.md](docs/for-testers.md) | 他人にテストを頼むときの手順書 |
-| [docs/privacy-policy.md](docs/privacy-policy.md) | データの扱いと、**どこへ何のために通信するか** |
-| [docs/security-review.md](docs/security-review.md) | セキュリティ点検。**`www.youtube.com` の許可が事故 1 と別物である理由は S10** |
-| [docs/install.md](docs/install.md) | 導入・設定・切り分け |
-| [docs/stability-research.md](docs/stability-research.md) | 挙動の安定化に使える資料の調査メモ |
-| [docs/004-t1-collect.md](docs/004-t1-collect.md) | コメントの投稿者を実 DOM で採取した記録 |
+| [docs/developers/t1-findings.md](docs/developers/t1-findings.md) | **実 DOM で確認できたこと・外れた推測・実害のある誤動作の記録** |
+| [docs/developers/d3-automation-policy.md](docs/developers/d3-automation-policy.md) | 規約まわりで調べたこと |
+| [docs/developers/setup-and-verify.md](docs/developers/setup-and-verify.md) | 開発者向けの導入・動作確認 |
+| [docs/store-submission.md](docs/store-submission.md) | ストア掲載文・提出手順 |
+| [docs/developers/security-review.md](docs/developers/security-review.md) | セキュリティ点検。**`www.youtube.com` の許可が事故 1 と別物である理由は S10** |
+| [docs/developers/stability-research.md](docs/developers/stability-research.md) | 挙動の安定化に使える資料の調査メモ |
+| [docs/developers/004-t1-collect.md](docs/developers/004-t1-collect.md) | コメントの投稿者を実 DOM で採取した記録 |
 
 **新しい版はウェブストアへ出します。GitHub Releases へは出しません**
 (過去の Release は消しません)。**`v*` タグを push しても Release は作られません** —
 `release.yml` は手動起動だけにしてあります。
 ストア提出用の ZIP は `npm run package:store`、出しかたは
-[docs/setup-and-verify.md](docs/setup-and-verify.md#9-新しい版をストアへ出す) の「9. 新しい版をストアへ出す」。
+[docs/developers/setup-and-verify.md](docs/developers/setup-and-verify.md#9-新しい版をストアへ出す) の「9. 新しい版をストアへ出す」。
 `npm run package` のほうは**手渡しでテストしてもらうとき**に使う ZIP です。
+
+## テスター
+
+[テストのお願い](docs/testers/for-testers.md) に、配布 ZIP の読み込み・試験前の設定・テスト手順・報告方法があります。
 
 ## ライセンス
 

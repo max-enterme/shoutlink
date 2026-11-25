@@ -35,7 +35,7 @@ function frag(html: string): HTMLElement {
  * ⚠️ 既定の文言は**実配信で確認済みのもの**を使う。以前は `からリダイレクトされました` を
  *    既定にしていたが、これは推測でしかなく、`/リダイレクト/` のパターンが
  *    自動発火から外れた時点で「通知ですらない」文字列になった
- *    (→ [docs/security-review.md](../../docs/security-review.md) S2)。
+ *    (→ [docs/developers/security-review.md](../../docs/developers/security-review.md) S2)。
  */
 export function makeRedirectNotice(
   opts: { name?: string; href?: string; text?: string } = {},

@@ -5,7 +5,7 @@ import manifestJson from '../public/manifest.json'
  * **manifest の中身そのものを固定する回帰テスト。**
  *
  * ⚠️ 2026-08-06 の事故 1: content script が `www.youtube.com` にも注入されていたため、
- *    **他人の配信のチャットを開いているだけで動いた**([docs/security-review.md](../docs/security-review.md))。
+ *    **他人の配信のチャットを開いているだけで動いた**([docs/developers/security-review.md](../docs/developers/security-review.md))。
  *    再発防止はこれまで **`tests/scope.test.ts`(実行時の判定)と文書だけ**で、
  *    **manifest の注入範囲を固定するテストが無かった。**
  *
@@ -113,7 +113,7 @@ describe('manifest.json — 拡張 ID の固定 (更新で設定を消さない)
     // (`bfmfamnekclamfdjbfndmomljgneejgo`) のままだと**ローカルビルドとストア版が別物**になり、
     // **同じ相手へ 2 回投稿する事故**が起きうる。鍵を揃えると Chrome の重複防止
     // (「同じ ID の拡張機能が既にあります」) が効く。
-    // → `docs/setup-and-verify.md` 「ストアへ移すと拡張 ID が変わる」
+    // → `docs/developers/setup-and-verify.md` 「ストアへ移すと拡張 ID が変わる」
     //
     // **これ以降この値を更新しない** — 更新するとストアと切り離され、上の事故が戻ってくる
     expect(manifest.key).toBe(

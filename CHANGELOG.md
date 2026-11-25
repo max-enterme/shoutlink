@@ -16,7 +16,7 @@
   は既定 OFF、`pinMode` は既定 `off` になった(以前はすべて動く側が既定だった)。
   - ⚠️ **設定を一度も保存していない既存ユーザーは、更新後に自動投稿(リダイレクト返礼・コメント返し)が
     止まる。** 移行コードは入れない。**使うにはそれぞれのスイッチを自分で ON にして保存し直す必要がある**
-    (→ `docs/install.md` 「2. 設定する」)
+    (→ `docs/users/install.md` 「2. 設定する」)
 
 ### 機能
 
@@ -56,7 +56,7 @@
   - ⚠️ **004 AC9 の既知の穴**(監視開始と同じ分のコメントが再挿入されると素通りする)に対して
     **残る歯止めが「1 人 1 回」だけになった。**これまでは 20 件が二重の蓋になっていた
   - ⚠️ **`コメント返しを見送った (limit)` は出なくなる。**切り分けの表からも落とした
-  - 規約側の読みへの影響は `docs/d3-automation-policy.md` の
+  - 規約側の読みへの影響は `docs/developers/d3-automation-policy.md` の
     「コメント返しの件数上限を撤廃した (2026-09-05 / 人間)」に記録した
 - 設定画面に残っていた「1 配信あたり 20 件までです。」を消した (specs/007 AC25)
 
@@ -83,7 +83,7 @@
 - **配布経路をウェブストア (限定公開) へ切り替えた。**
   <https://chromewebstore.google.com/detail/kpjfmcppkncdmehdpgcochaanbmodaim>
   - **署名され、自動更新が効く。**未署名 ZIP では、不具合を直しても古い版を使い続ける人に
-    届かなかった。これが今回いちばん効く変化 (→ `docs/d3-automation-policy.md` の「判断の履歴」)
+    届かなかった。これが今回いちばん効く変化 (→ `docs/developers/d3-automation-policy.md` の「判断の履歴」)
   - 起動のたびの「デベロッパー モードの拡張機能を無効にする」が出なくなる
   - **限定公開なのでストアの検索・カテゴリ一覧には出ない。**到達経路は README と説明ページの
     リンクだけで、そこは今までと変わらない
@@ -91,9 +91,9 @@
     2 経路を並走させると、旧版とストア版が同時に有効になって**同じ相手へ 2 回投稿する**
 - ⚠️ **デベロッパーモード版からの移行では、設定・呼び名の辞書・投稿履歴は引き継がれない。**
   拡張を削除した時点で保存も消えるため。書き出してから入れ替える手順は
-  [docs/install.md](docs/install.md#デベロッパーモード版から入れ替える)。
+  [docs/users/install.md](docs/users/install.md#デベロッパーモード版から入れ替える)。
   **投稿履歴も書き戻すこと** — 捨てると再投稿の抑止が白紙になる
-- README / 説明ページ / `docs/install.md` / `docs/for-testers.md` / 配布 ZIP の `INSTALL.txt` を
+- README / 説明ページ / `docs/users/install.md` / `docs/testers/for-testers.md` / 配布 ZIP の `INSTALL.txt` を
   ストア経由の手順に差し替えた
 
 ### 機能
@@ -128,14 +128,14 @@
   - ⚠️ **説明ページの URL が変わった** → <https://max-enterme.github.io/shoutlink/>。
     **GitHub Pages は旧 URL をリダイレクトしない(404 になる)。**
     リポジトリの URL は 301 で新しい名前へ追従する(blob URL も含む)。
-  - `docs/t1-findings.md` の旧名は**観測記録なので書き換えていない。**
+  - `docs/developers/t1-findings.md` の旧名は**観測記録なので書き換えていない。**
 - **`manifest.json` の `key` を、Chrome ウェブストアが割り当てた公開鍵に差し替えた。**
   **拡張 ID が `bfmfamnekclamfdjbfndmomljgneejgo` から
   `kpjfmcppkncdmehdpgcochaanbmodaim` に変わる**(ストアのアイテム ID と同じ)。
   - ⚠️ **デベロッパーモードで入れている場合、この版を読み込むと別の拡張として扱われ、
     設定・呼び名の辞書・投稿履歴を引き継がない。**
     入れ替える前に設定ページの DevTools で `chrome.storage` を書き出しておくこと
-    (手順 → [docs/setup-and-verify.md](docs/setup-and-verify.md) 「ストアへ移すと拡張 ID が変わる」)。
+    (手順 → [docs/developers/setup-and-verify.md](docs/developers/setup-and-verify.md) 「ストアへ移すと拡張 ID が変わる」)。
   - **揃えた理由は二重投稿の防止。** ID が違うとストア版と並存できてしまい、
     **両方が動いて同じ相手へ 2 回投稿する。**揃えれば Chrome の重複防止が効く。
   - ストア提出用 ZIP は今までどおり `key` を落とすので、`npm run package:store` の出力は変わらない。

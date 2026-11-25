@@ -42,7 +42,7 @@ yt-live-chat-pinned-message-renderer
 「既に固定済み」と誤判定し、一度も固定しない**状態だった。
 
 → 表示されていて (`hidden` / `aria-hidden` / `display:none` を除外) かつ中身があるものだけを
-「固定中」とみなすよう修正。回帰テストを [tests/pinner.test.ts](../tests/pinner.test.ts) に追加。
+「固定中」とみなすよう修正。回帰テストを [tests/pinner.test.ts](../../tests/pinner.test.ts) に追加。
 
 なお `yt-live-chat-banner-manager` の中に `#visible-banners`(通常時は空・高さ 0)がある。
 **実際に固定したときここに生えると見て候補の先頭に置いたが、これは未確認。**
@@ -206,7 +206,7 @@ content script が `www.youtube.com/live_chat*` にも注入されるため、**
   ノード単位の抑止 (`WeakSet`) も同じ理由で消える。
 
 → **投稿できたときだけ「誰に・何を・いつ・どの配信で」を `chrome.storage.local` に残し、
-起動時に読み戻して抑止の初期値にする** ([src/post-log.ts](../src/post-log.ts))。
+起動時に読み戻して抑止の初期値にする** ([src/post-log.ts](../../src/post-log.ts))。
 
 **クールダウンの適用範囲は「同じ配信の中」だけ** (2026-08-07 に方針決定):
 

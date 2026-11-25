@@ -351,7 +351,7 @@ export function onPostLogChanged(handler: (log: PostLog) => void): () => void
 **ドキュメントとコード中の言及 (`tests/docs.test.ts` 新規)**
 - **`src/` と `public/` に `cooldownSec` の出現が 0 件**(AC5 / AC17)
 - **`README.md` と `docs/*` に「クールダウン」の出現が 0 件。**ただし
-  **`docs/t1-findings.md` は除外**(過去の実機ログの記録)
+  **`docs/developers/t1-findings.md` は除外**(過去の実機ログの記録)
 - `src/` に `dedupe` の出現が 0 件(ファイル削除とコメントの直し漏れを同時に見る / AC17)
 
 ## 依存 / 前提
@@ -380,7 +380,7 @@ export function onPostLogChanged(handler: (log: PostLog) => void): () => void
 - **AC1 / AC4 の実配信での通し確認は人手。** リロードで再投稿しないことは、実際にリダイレクトを
   受けないと最終確認ができない(001 の不具合が出た経路そのもの)。
   → 配信中に 1 人からリダイレクトを受け、投稿された後にチャットをポップアウトし直して
-  **2 回目が出ないこと**を見る。`docs/for-testers.md` のテスト B をこの形に書き換える。
+  **2 回目が出ないこと**を見る。`docs/testers/for-testers.md` のテスト B をこの形に書き換える。
 - **`chrome.runtime.onMessage` の非同期応答。** 応答を `await` の後に返すなら、リスナーは
   **同期的に `true` を返す**必要がある(返さないとチャネルが閉じて options 側に応答が届かない)。
   ここを外すと「押しても何も返らない」になる。**実装時に必ず踏むので、レビューで見る。**
@@ -388,6 +388,6 @@ export function onPostLogChanged(handler: (log: PostLog) => void): () => void
   チャット側が `savePostLog` した直後に自分の変更を読み戻すが、`normalizePostLog` を通した
   同じ内容が入るだけなので無害。**ただし `postLog` を差し替える処理に重い副作用を足さないこと**
   (`selfEcho.reset()` は冪等なので可)。
-- **`docs/t1-findings.md` と `specs/001` / `specs/004` と `CHANGELOG.md` の過去エントリは書き換えない。**
+- **`docs/developers/t1-findings.md` と `specs/001` / `specs/004` と `CHANGELOG.md` の過去エントリは書き換えない。**
   過去の調査・決定・リリースの記録であり、当時 `cooldownSec` があったことは事実。
   書き換えると記録が嘘になる。`CHANGELOG.md` は**新しいエントリを足すだけ。**
