@@ -330,7 +330,7 @@ describe('辞書の左右分割 (AC6〜AC13)', () => {
   // ⚠ **plan.md のテストケース表は「保存される」としているが、これは現行の
   //    `validateEntryMessage`(message-field.ts)の挙動と食い違う。**自由文が
   //    `MAX_ENTRY_MESSAGE_LENGTH`(200)を超えると保存はされない
-  //    (docs/for-testers.md のテスト H / `tests/options.test.ts` の
+  //    (docs/testers/for-testers.md のテスト H / `tests/options.test.ts` の
   //    「AC6 で弾かれた自由文は、再描画をまたいでも残る」と同じ規約)。AC23 は
   //    「**現行のまま**」を求める回帰条件なので、挙動は変えず、期待値を実際の現行動作に
   //    合わせて書いている(表の「保存されている」は採らない — plan.md の記載ミスと判断)。

@@ -67,7 +67,7 @@ export function normalizeConfig(raw: unknown): Config {
  * 人の 1 クリックはそれに当たらない。
  *
  * ドキュメントが「OFF でも手動から使える」と説明している根拠がここ。
- * **この関数の挙動を変えるなら README / docs/install.md / docs/index.html も直すこと。**
+ * **この関数の挙動を変えるなら README / docs/users/install.md / docs/index.html も直すこと。**
  */
 export function isActionAllowed(enabled: boolean, origin?: 'auto' | 'manual'): boolean {
   return enabled || origin === 'manual'

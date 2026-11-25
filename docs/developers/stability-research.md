@@ -22,9 +22,9 @@
 
 **確度: 高**(複数の独立した実装が同じ名前を使っている)
 
-現状 [`selectors.ts`](../src/selectors.ts) は `REDIRECT_TEXT_PATTERNS`(`とその視聴者が参加しました`)
-との一致を**必須**にしている。これが日本語 UI 前提([README](../README.md) の前提)と
-未解決 G、[specs/002-i18n](../specs/002-i18n/spec.md) の根になっている。
+現状 [`selectors.ts`](../../src/selectors.ts) は `REDIRECT_TEXT_PATTERNS`(`とその視聴者が参加しました`)
+との一致を**必須**にしている。これが日本語 UI 前提([README](../../README.md) の前提)と
+未解決 G、[specs/002-i18n](../../specs/002-i18n/spec.md) の根になっている。
 
 実際には専用の型がある。
 
@@ -85,7 +85,7 @@ API 経路に移っても改善しない。**
 
 ### 副産物
 
-このサンプル群は、合成 DOM のままの [`tests/fixtures/live-chat.ts`](../tests/fixtures/live-chat.ts)
+このサンプル群は、合成 DOM のままの [`tests/fixtures/live-chat.ts`](../../tests/fixtures/live-chat.ts)
 を実データに置き換える材料としてそのまま使える。
 
 ---
@@ -100,7 +100,7 @@ API 経路に移っても改善しない。**
 `yt-live-chat-banner-manager:has(yt-live-chat-banner-chat-summary-renderer)` と
 `:has()` で要約バナーだけを狙い撃ちしている = 兄弟に別種のバナーが居る)
 
-いまの [`getPinnedBanner`](../src/selectors.ts) の第 1 候補は
+いまの [`getPinnedBanner`](../../src/selectors.ts) の第 1 候補は
 
 ```
 yt-live-chat-banner-manager #visible-banners yt-live-chat-banner-renderer
@@ -163,8 +163,8 @@ t1-findings の 2 回目で出た `既に固定中のメッセージがあるた
 - **5 分以上非表示だと 1 分に 1 回**まで絞られる(intensive throttling)
 - 音声再生・WebSocket/WebRTC のあるページは対象外。**ライブチャットのポップアップは該当しない**
 
-[`wait.ts`](../src/wait.ts) の `waitFor` は `setTimeout(100ms)` のチェーン。
-[`pinner.ts:149`](../src/pinner.ts) の 4 秒待ちは、**ポップアウトを OBS の裏に置く/最小化する
+[`wait.ts`](../../src/wait.ts) の `waitFor` は `setTimeout(100ms)` のチェーン。
+[`pinner.ts:149`](../../src/pinner.ts) の 4 秒待ちは、**ポップアウトを OBS の裏に置く/最小化する
 実運用で、最初の 1 回の sleep を抜けた時点で期限切れになり `unavailable` に落ちる。**
 
 未解決 F は MutationObserver の発火だけを心配しているが、**危ないのはポーリング側**。

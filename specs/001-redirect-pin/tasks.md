@@ -20,7 +20,7 @@ feature: redirect-pin
     受信から投稿までの所要時間(AC1) / `ifEmpty` が実際の固定バナーを拾うか(plan.md R4)
 
 - [ ] T9: セキュリティ点検 / インシデント点検の指摘への対応。結果は
-      [docs/security-review.md](../../docs/security-review.md)(2026-08-06 実施)。**点検は完了、対応は S3/S4/S6 が残り。**
+      [docs/developers/security-review.md](../../docs/developers/security-review.md)(2026-08-06 実施)。**点検は完了、対応は S3/S4/S6 が残り。**
   - [x] S2 (高): 未確認の文言パターン (`/リダイレクト/` `/raid/i` 等) を自動発火から外し、診断ログ専用に降格した。
         2026-08-06 の②と同型の再発経路だった
   - [x] S1 (高): 自分が投稿した返礼が**固定バナー**として再検知される自己ループを止めた。

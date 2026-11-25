@@ -35,7 +35,7 @@ status: 完了
 揃えてある。**コメント側から何が取れるか**を確かめるまで照合方式を決められないため、
 **「まず実 DOM で採取し、その結果で確定する」**順序を tasks に固定した(T1 → 以降)。
 
-**2026-08-15 に採取完了**([docs/004-t1-collect.md](../../docs/004-t1-collect.md))。確かめた 3 点:
+**2026-08-15 に採取完了**([docs/developers/004-t1-collect.md](../../docs/developers/004-t1-collect.md))。確かめた 3 点:
 
 1. **投稿者のチャンネルは取れる。** ただしリンクやテキストではなく、
    **DOM 属性 `whole-message-clickable` の中**(パーセントデコード + base64 を 2 段解いた先)。
@@ -52,7 +52,7 @@ status: 完了
 **ハンドルはどこにも無い。**表示名は `@…` の形をしていることがあるが、
 **チャンネル名は誰でも自由に決められるのでハンドルの保証がない。照合には使わない**(D1)。
 
-本 repo は送信元の取り違えを**実際に 2 回起こしている**([t1-findings.md](../../docs/t1-findings.md))。
+本 repo は送信元の取り違えを**実際に 2 回起こしている**([t1-findings.md](../../docs/developers/t1-findings.md))。
 **推測を照合の経路に置かない**という原則は、採取が済んだ後も変わらない(AC4 の fail-closed)。
 
 ## スコープ
@@ -63,7 +63,7 @@ status: 完了
   - `DirectoryEntry` に **コメント返し専用の自由文**を追加(003 の自由文とは**別のフィールド** / D4 の決定)。
     `commentTemplate` の `{msg}` に差し込む
   - チャットのコメントから投稿者を特定する手段の**実 DOM 採取**と、それに基づく照合の確定
-    (**採取は完了** / [docs/004-t1-collect.md](../../docs/004-t1-collect.md))
+    (**採取は完了** / [docs/developers/004-t1-collect.md](../../docs/developers/004-t1-collect.md))
   - `DirectoryEntry.channelId`(`UC…`)と、**`@handle` からの解決**(AC17)。
     これに伴う `host_permissions`(`https://www.youtube.com/*`)の追加。**content script は増やさない**
   - 一致したときの投稿(**固定はしない**)と、多重投稿の抑止(同一配信・同一人物に 1 回)
@@ -132,7 +132,7 @@ status: 完了
   | **(d)** 特定できないなら**本 feature を畳む**(T1 の記録だけ残す) | 誤爆ゼロ | 機能が無くなる |
 
   > **決定(2026-08-15 / 人間 / T1 の採取結果を見て): (c) を採る。feature は畳まない。**
-  > 採取の全文は [docs/004-t1-collect.md](../../docs/004-t1-collect.md)。
+  > 採取の全文は [docs/developers/004-t1-collect.md](../../docs/developers/004-t1-collect.md)。
   >
   > **① 投稿者の特定 — DOM 属性から取る。**
   > メッセージ要素の **DOM 属性** `whole-message-clickable` に
@@ -188,7 +188,7 @@ status: 完了
 
 - **D3: 自動投稿の範囲が広がることの判断。**
   001 の D3 は「リダイレクト受信時のみ・低頻度」という前提で
-  「グレーだが開示した上で自己責任」と決着した([d3-automation-policy.md](../../docs/d3-automation-policy.md))。
+  「グレーだが開示した上で自己責任」と決着した([d3-automation-policy.md](../../docs/developers/d3-automation-policy.md))。
   **本 feature は引き金を増やし、投稿の頻度を上げる。**前提が変わる以上、
   **同じ結論のままでよいかは人間が決める。**既定 OFF・配信内 1 回・5 秒間隔
   (**20 件の上限は 2026-09-05 に撤廃**)は頻度を抑える設計だが、**判断そのものの代わりにはならない。**
@@ -200,17 +200,17 @@ status: 完了
   >   `replyToComment` も既定 false(自動登録でも false)。**何もしなければ 001 と同じ挙動**で、
   >   004 は「有効にした人だけ頻度が上がる」形になる。これは
   >   **001 本体は既定 ON のまま**(`enabled: true` / [src/config.ts](../../src/config.ts))で、001 が採ったのは
-  >   [d3-automation-policy.md](../../docs/d3-automation-policy.md) の **A に開示と配布経路の限定を付けた形**だが、
+  >   [d3-automation-policy.md](../../docs/developers/d3-automation-policy.md) の **A に開示と配布経路の限定を付けた形**だが、
   >   **004 が足す引き金には B の考え方(本人に選ばせる)を適用した** — 頻度が上がる側だけを既定 OFF にしたので、
   >   **既存の利用者が黙って頻度の高い側へ動くことはない。**
   > - **ON にしたときの頻度も、スパムポリシーが撃とうとしている像から遠いまま。**
   >   1 配信・1 人につき 1 回 / 5 秒間隔 / 誘導先は相手のチャンネル。
   >   「大量の、反復的な」に寄る形にはしていない。
   >   (**2026-09-05: このうち「1 配信 20 件の上限」は撤廃した** →
-  >   [d3-automation-policy.md](../../docs/d3-automation-policy.md) の「判断の履歴」)
+  >   [d3-automation-policy.md](../../docs/developers/d3-automation-policy.md) の「判断の履歴」)
   > - 争点は 001 のときと同じく**経路(API か DOM か)**で、引き金の数はそこを動かさない。
   >
-  > **やること:** [d3-automation-policy.md](../../docs/d3-automation-policy.md) に **004 で前提が変わったことと、
+  > **やること:** [d3-automation-policy.md](../../docs/developers/d3-automation-policy.md) に **004 で前提が変わったことと、
   > この再判断の結果**を追記する(T11 の完了条件)。ドキュメントの開示は T10 が持つ。
   >
   > **持ち越し:** 経路を公式 API(`liveChatMessages.insert`)へ寄せる案は**引き続き未採用**。
@@ -244,7 +244,7 @@ status: 完了
 
   > **決定(2026-08-13 / 人間 / 003 D1 と同時に判断): T12 を main マージのブロッカーにしない。**
   > 集約ブランチ `004-comment-link` は T12 を待たずに main へマージしてよい。
-  > 代わりに **README / docs/install.md / docs/index.html(公開ページ)/ docs/for-testers.md
+  > 代わりに **README / docs/users/install.md / docs/index.html(公開ページ)/ docs/testers/for-testers.md
   > (ZIP に `START-HERE.md` として同梱される唯一の説明)に「実配信での通し確認は未実施」と明記**し(T10 に含める)、
   > **T12 の issue は開けたまま残す**(実施できた時点でその記述を外す)。
   >

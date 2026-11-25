@@ -96,7 +96,7 @@
 > 動いてしまい、他人の配信のチャットへ投稿するという不具合を起こしています (2026-08-06)。
 > **今回増えたのはページを取得するための許可だけで、コンテンツスクリプトが動く範囲は
 > `https://studio.youtube.com/live_chat*` のまま変わっていません**
-> (この点は自動テストでも固定しています / [security-review.md](security-review.md) S10)。
+> (この点は自動テストでも固定しています / [security-review.md](developers/security-review.md) S10)。
 
 ## 本拡張と YouTube の関係
 

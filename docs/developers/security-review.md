@@ -31,7 +31,7 @@
 
 | 観点 | 結果 |
 |---|---|
-| 外部通信 | **点検時は無し。**`fetch` / `XMLHttpRequest` / `WebSocket` / `sendBeacon` / 動的 `import()` の使用箇所ゼロ。<br>⚠️ **2026-08-15 に変わった (004 / S10)** — [channel-id.ts](../src/channel-id.ts) が **`fetch` を 1 か所使う**(設定画面から、辞書に登録されたチャンネルのページを取得 / `credentials: 'omit'`)。**開発者のサーバは無いまま**だが、「通信を一切行わない」ではなくなったので、**for-testers.md / privacy-policy.md の文言を T10 で書き換えた**<br>⚠️ **2026-09-10 にさらに変わった (007)** — `channel-id.ts` の `fetch` 呼び出しは `resolveChannelId` / `fetchIconAsDataUrl` / `resolveChannelPage` の 3 か所(`resolveChannelId` は `resolveChannelPage` の薄いラッパ)、宛先は **`www.youtube.com`(チャンネルページ)と `yt3.googleusercontent.com`(チャンネルアイコン画像)の 2 つ**になった。新たな引き金は**辞書タブの「アイコンと表記名を取得」**。開発者のサーバは無いまま<br>⚠️ **訂正 (2026-09-10 / 007):** ボタン名が旧のまま(「アイコンをまとめて取得」→「アイコンと表記名を取得」)だった上、`resolveChannelPage` は同じ取得でチャンネルページの `og:title` から**チャンネルの表記名も読み取り**、`upsertChannelName` 経由で `chrome.storage.local` に控えることに触れていなかった。読み取り・保存の対象に**チャンネルの表記名**を追記する |
+| 外部通信 | **点検時は無し。**`fetch` / `XMLHttpRequest` / `WebSocket` / `sendBeacon` / 動的 `import()` の使用箇所ゼロ。<br>⚠️ **2026-08-15 に変わった (004 / S10)** — [channel-id.ts](../../src/channel-id.ts) が **`fetch` を 1 か所使う**(設定画面から、辞書に登録されたチャンネルのページを取得 / `credentials: 'omit'`)。**開発者のサーバは無いまま**だが、「通信を一切行わない」ではなくなったので、**for-testers.md / privacy-policy.md の文言を T10 で書き換えた**<br>⚠️ **2026-09-10 にさらに変わった (007)** — `channel-id.ts` の `fetch` 呼び出しは `resolveChannelId` / `fetchIconAsDataUrl` / `resolveChannelPage` の 3 か所(`resolveChannelId` は `resolveChannelPage` の薄いラッパ)、宛先は **`www.youtube.com`(チャンネルページ)と `yt3.googleusercontent.com`(チャンネルアイコン画像)の 2 つ**になった。新たな引き金は**辞書タブの「アイコンと表記名を取得」**。開発者のサーバは無いまま<br>⚠️ **訂正 (2026-09-10 / 007):** ボタン名が旧のまま(「アイコンをまとめて取得」→「アイコンと表記名を取得」)だった上、`resolveChannelPage` は同じ取得でチャンネルページの `og:title` から**チャンネルの表記名も読み取り**、`upsertChannelName` 経由で `chrome.storage.local` に控えることに触れていなかった。読み取り・保存の対象に**チャンネルの表記名**を追記する |
 | リモートコード実行 | `eval` / `new Function` / 文字列 `setTimeout` 無し。MV3 なので既定 CSP のまま |
 | DOM インジェクション | `src/` の `innerHTML` は `manual-trigger.ts:119` の 1 箇所のみで**静的文字列**。動的な値は全て `textContent` / `dataset` 経由。options ページも `createElement` + `textContent` |
 | 権限 | `permissions: ["storage"]` のみ。`web_accessible_resources` 無し・background 無し |
@@ -236,19 +236,19 @@ normalizeChannelUrl('/@%3Cscript%3E')
 
 ①の事故そのものの話を、**テスターに渡す説明文が古いまま**だった。
 
-- `docs/for-testers.md` §1「何をする拡張か(権限の説明)」→
+- `docs/testers/for-testers.md` §1「何をする拡張か(権限の説明)」→
   「`youtube.com/live_chat` と `studio.youtube.com/live_chat`」と書いてあった。
   この文書は**外部のテスターに「この拡張は何をするか」を説明する唯一の資料**で、
   ~~ZIP の `START-HERE.md` として同梱される。~~
 
-  > **訂正 (2026-08-16 / 004 T10): `docs/for-testers.md` は ZIP に同梱されていない。**
-  > [scripts/package.mjs](../scripts/package.mjs) が ZIP に入れるのは **`dist/` の中身と
+  > **訂正 (2026-08-16 / 004 T10): `docs/testers/for-testers.md` は ZIP に同梱されていない。**
+  > [scripts/package.mjs](../../scripts/package.mjs) が ZIP に入れるのは **`dist/` の中身と
   > `INSTALL.txt` だけ**で、`START-HERE.md` は存在しない(for-testers.md は別途手渡す /
   > [setup-and-verify.md](setup-and-verify.md) §8)。
   > **したがって「ZIP を展開した人がまず読む文書」は `INSTALL.txt`** であり、
   > 配布物と食い違ってはいけないのはそちら。S5 と同型の食い違いは 004 の
   > `host_permissions` 追加でも起こりうるため、**T10 で `INSTALL.txt` にも許可の説明を入れた。**
-- `docs/setup-and-verify.md` §4「動く場所」→ 同上。
+- `docs/developers/setup-and-verify.md` §4「動く場所」→ 同上。
   さらに冒頭の警告が「T1 未実施 / セレクタはすべて推測」のままで、現状と合っていなかった。
 
 → **この点検で修正した。**
@@ -260,7 +260,7 @@ background も `fetch` も無く、content script の注入は `content_scripts.
 この宣言は実質不要(少なくとも `https://studio.youtube.com/live_chat*` で足りる)。
 拡張の権限表示は「入れてもらう」ときの信頼に直結するので、絞っておくほうがよい。
 
-> **⚠️ 前提が変わった (2026-08-15 / [004](../specs/004-comment-link/spec.md) AC17)。**
+> **⚠️ 前提が変わった (2026-08-15 / [004](../../specs/004-comment-link/spec.md) AC17)。**
 > 「`fetch` も無いので実質不要」という理由は、**`fetch` を使うようになったことで成り立たなくなった。**
 > 004 は `host_permissions` に **`https://www.youtube.com/*` を足す**(下の S10)。
 > **`studio.youtube.com` 側を `live_chat*` へ絞る話は S6 のまま残る**(こちらは今も未対応)。
@@ -272,7 +272,7 @@ background も `fetch` も無く、content script の注入は `content_scripts.
 超えると `set` が reject するが `guardAsync` が握るため、**コンソールに 1 行出るだけで
 以後の登録が保存されない**。件数上限(古い順に切る)か `local` への退避を検討。
 
-**✅ 対応済み (2026-08-14 / [003](../specs/003-per-source-message/spec.md) T1) — `local` へ退避した:**
+**✅ 対応済み (2026-08-14 / [003](../../specs/003-per-source-message/spec.md) T1) — `local` へ退避した:**
 
 - 保存先を `chrome.storage.local`(上限 10MB)へ移した。**件数上限は設けていない** —
   `sync` の 8KB と桁が違い、自由文 200 字 × 実用的な件数では問題にならないため。
@@ -286,7 +286,7 @@ background も `fetch` も無く、content script の注入は `content_scripts.
   「既に local に辞書がある」で止まるので、「次回再試行する」と出すと事実と食い違う。
 - **移行の成否はログに 1 行出す**(無言で失敗すると「辞書が消えた」ようにしか見えない)。
   ログは `migrateDirectoryToLocal` の中で出す — 辞書はチャットと**設定画面の両方**から読まれ、
-  `docs/install.md` は設定画面を先に開く導線を書いているので、呼び出し側に任せるとその経路だけ無言になる。
+  `docs/users/install.md` は設定画面を先に開く導線を書いているので、呼び出し側に任せるとその経路だけ無言になる。
 - **`sync` 側のキーは消さない**(片方向コピー)。消すと、まだ移行していない別 PC の Chrome から
   辞書が消えて復元できない。
 - **代償: 辞書が端末間で同期されなくなる**(配信は 1 台で回す前提。投稿履歴と同じ判断)。
@@ -304,7 +304,7 @@ background も `fetch` も無く、content script の注入は `content_scripts.
 **✅ 対応済み (2026-08-06):** 設定「手動トリガーを出す」(`showManualTrigger`) を足し、**既定 OFF** にした。
 
 機能そのものは残す。消すと**テスターが検証できるものが実質無くなる**ため —
-[for-testers.md](for-testers.md) のテスト A / A' / C / D / E / F / G / G' は全部このパネル経由で、
+[for-testers.md](../testers/for-testers.md) のテスト A / A' / C / D / E / F / G / G' は全部このパネル経由で、
 自動検知を使うテスト B は「実際にリダイレクトを受けられる場合のみ」(送る側に登録者 1,000 人以上の要件)。
 plan.md R1 の「通知形式が変わったときの逃げ道」と、③固定の切り分け経路
 ([t1-findings.md](t1-findings.md)「切り分けの経路を常設した」)としても要る。
@@ -324,7 +324,7 @@ for-testers.md §7 には④の採取について注意書きがあるので、�
 **何のためか**: コメントから取れる投稿者の ID は `UC…` 形だが、辞書の鍵は `@handle` 形で
 文字列比較が一致しない。**照合用に `DirectoryEntry.channelId` を埋める**ため、
 登録されているチャンネルのページを**1 回だけ取得**して `UC…` を取り出す
-([channel-id.ts](../src/channel-id.ts) / 004 AC17)。
+([channel-id.ts](../../src/channel-id.ts) / 004 AC17)。
 
 **⚠️ 事故 1(`www.youtube.com` で content script が動いた)とは別物。**
 混同されやすいので、違いを明示する。
@@ -339,7 +339,7 @@ for-testers.md §7 には④の採取について注意書きがあるので、�
 
 **注入範囲は 1 つも増えていない。** `content_scripts.matches` は
 `https://studio.youtube.com/live_chat*` のまま。
-**この点は文書だけでなく [tests/manifest.test.ts](../tests/manifest.test.ts) で機械的に固定した** —
+**この点は文書だけでなく [tests/manifest.test.ts](../../tests/manifest.test.ts) で機械的に固定した** —
 事故 1 の再発防止はこれまで `tests/scope.test.ts`(実行時の判定)と本書の記述だけで、
 **manifest の中身そのものを押さえるテストが無かった。**
 
@@ -350,7 +350,7 @@ for-testers.md §7 には④の採取について注意書きがあるので、�
   (リダイレクト返礼は今までどおり動く / AC17)
 - **抽出を間違えると別人に反応する。**チャンネルページには他人の `UC…` が大量に載っているため、
   「最初に見つかった `UC…`」は採らない。**ページ自身を表す metadata(canonical / og:url /
-  itemprop / externalId)だけを見て、出所が食い違ったら失敗にする**([channel-id.ts](../src/channel-id.ts))
+  itemprop / externalId)だけを見て、出所が食い違ったら失敗にする**([channel-id.ts](../../src/channel-id.ts))
 - **利用者から見た許可表示は変わる。**インストール時に `www.youtube.com` が出るので、
   README / install.md / index.html / for-testers.md / privacy-policy.md と
   **配布 ZIP の `INSTALL.txt`**(`scripts/package.mjs`)に説明を入れる(004 T10)

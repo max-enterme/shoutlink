@@ -1292,3 +1292,38 @@ describe('check-links.mjs — 008 B1', () => {
     expect(existsSync(path.join(root, 'docs/index.html'))).toBe(true)
   })
 })
+
+describe('008: relocated links', () => {
+  function relocatedFiles(): Record<string, string> {
+    return {
+      'README.md': '[利用者](docs/users/install.md)\n' +
+        '[開発者](docs/developers/setup-and-verify.md)\n' +
+        '[テスター](docs/testers/for-testers.md)\n',
+      'docs/users/install.md': '# Install\n',
+      'docs/developers/setup-and-verify.md': '# Setup\n[導入](../users/install.md)\n',
+      'docs/testers/for-testers.md': '# Test\n[導入](../users/install.md)\n',
+    }
+  }
+
+  // 検出根拠: 配下の走査・相対解決・README からの到達判定が壊れると exit 0 にならない。
+  it('relocated links: 3 ディレクトリの文書へ README から到達できる', () => {
+    const { status, stderr } = runCheckLinks(createFixtureRoot(relocatedFiles()))
+    expect(status).toBe(0)
+    expect(stderr).toBe('')
+  })
+
+  // 検出根拠: src の旧パス検査を外すと exit 1 と参照元行の期待が落ちる。
+  it('relocated links: src に旧パスが残ると失敗する', () => {
+    const root = createFixtureRoot({
+      ...relocatedFiles(),
+      // check-links:ignore-next docs/install.md -- 移動前の不在パスを残す負例フィクスチャ
+      'src/sample.ts': '// docs/install.md\n',
+    })
+    const { status, stderr } = runCheckLinks(root)
+    expect(status).toBe(1)
+    expect(stderr).toContain(`${path.join('src', 'sample.ts')}:1`)
+    // check-links:ignore-next docs/install.md -- 移動前の不在パスの診断を確認する
+    expect(stderr).toContain('docs/install.md')
+    expect(stderr).toContain('[実在確認]')
+  })
+})
