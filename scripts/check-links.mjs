@@ -280,19 +280,26 @@ function extractDocReferences(absPath, kind) {
           for (let j = start; j < match.index + match[0].length; j++) masked[j] = ' '
         }
         let rest = masked.join('')
-        rest = rest.replace(/https?:\/\/[^\s'"`<>()[\]{}\\、。]+/g, (raw) => {
+        const urlRe = /https?:\/\/[^\s'"`<>()[\]{}\\、。]+/g
+        let urlMatch
+        while ((urlMatch = urlRe.exec(rest))) {
+          let raw = urlMatch[0]
           // 自repoのmd URLだけは、直後の句読点・装飾・和文を含めない。
           const reduced = reduceAbsoluteUrl(raw)
-          if (reduced !== null) {
-            const mdEnd = /^.*?\.md(?:\?[^#\s'"`<>()[\]{}\\、。，:）*]+)?(?:#[\p{L}\p{N}%_-]+)?/u.exec(raw)
+          const extendedMd = reduced !== null && /^.*?\.md(?=[A-Za-z0-9/-]|\.[A-Za-z0-9])/.test(raw)
+          if (reduced !== null && !extendedMd) {
+            const mdEnd = /^.*?\.md(?![A-Za-z0-9/-]|\.[A-Za-z0-9])(?:\?[^#\s'"`<>()[\]{}\\、。，:）*]+)?(?:#[\p{L}\p{N}%_-]+)?/u.exec(raw)
             if (mdEnd) raw = mdEnd[0]
           }
-          candidates.push({ raw, lineNo: i + 1, base: 'root', syntax: 'url' })
-          return ' '.repeat(raw.length)
-        })
-        // ASCII のパス文字に続く docs は別パスの一部。先頭の _ は強調記法として扱う。
+          if (!extendedMd) candidates.push({ raw, lineNo: i + 1, base: 'root', syntax: 'url' })
+          // 切り詰めたURLの直後から再開し、続く別の参照を残す。
+          const end = urlMatch.index + raw.length
+          rest = rest.slice(0, urlMatch.index) + ' '.repeat(raw.length) + rest.slice(end)
+          urlRe.lastIndex = end
+        }
+        // ASCII のパス文字に続く docs は別パスの一部。先頭の _ / __ は強調記法として扱う。
         // .md で本体を終え、装飾の * / ? を glob 判定へ混ぜない。
-        const bareRe = /(?<![A-Za-z0-9_./-])_?((?:\.{1,2}\/)*docs\/[^\s'"`<>()[\]{}\\,;|、。・「」『』【】（）→]+?\.md(?:#[\p{L}\p{N}%_-]+)?(?::\d+(?::\d+)?)?)/gu
+        const bareRe = /(?<![A-Za-z0-9_./-])_{0,2}((?:\.{1,2}\/)*docs\/[^\s'"`<>()[\]{}\\,;|、。・「」『』【】（）→]+?\.md(?![A-Za-z0-9/-]|\.[A-Za-z0-9])(?:#[\p{L}\p{N}%_-]+)?(?::\d+(?::\d+)?)?)/gu
         for (const match of rest.matchAll(bareRe)) {
           const raw = match[1]
           if (/[*?]/.test(raw.split('.md')[0])) continue
