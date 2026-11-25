@@ -67,6 +67,7 @@ README・他の md・index.html のいずれからも参照されていない。
 
 `.github/ISSUE_TEMPLATE/config.yml` に絶対 URL 2 本、`specs/001`〜`004` に 6 / 1 / 22 / 41 本、
 `src/*.ts` と `tests/*.ts` に Markdown リンクと**裸のパス**が混在。
+<!-- check-links:ignore-next docs/003-findings.md -- 過去の未作成予定・不在説明を記録として保持する -->
 `src/composer.ts:15` の `docs/003-findings.md` は**既に不在**。
 
 **これらは md を動かさない限り壊れない。**動かすかは 006 の管掌なので、ここでは検査しない(→ D2)。
@@ -162,6 +163,7 @@ README・他の md・index.html のいずれからも参照されていない。
 - **006 が「公開サイト専用の md」を作ると検査④で落ちる。**
   被参照元を README に一本化したため。意図した挙動だが、006 側で踏むので記録しておく。
 - **他の feature が docs に md を足すと、README への追記も必須になる。**
+<!-- check-links:ignore-next docs/003-findings.md -- 過去の未作成予定・不在説明を記録として保持する -->
   例: **003 T6**(issue #20, open)は `docs/003-findings.md` を新設する予定で、
   README に足さないと**検査④で CI が落ちる**。意図した挙動だが、理由が分からないと踏む。
 - **GUI 要件は無い。**`docs/index.html` の**見た目を一切変えない**ため §10 は該当しない。
