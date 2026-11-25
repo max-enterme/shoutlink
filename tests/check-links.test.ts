@@ -53,6 +53,7 @@ afterEach(() => {
 describe('check-links.mjs — ① 相対リンクの実在', () => {
   it('実在しないファイルへの相対リンクで非 0 になり、そのパスが出力に出る', () => {
     const root = createFixtureRoot({
+      // check-links:ignore-next docs/nope.md -- フィクスチャ内だけに置く検査用の参照
       'README.md': '# Test\n\n[missing](docs/nope.md)\n',
     })
 
@@ -86,6 +87,7 @@ describe('check-links.mjs — ② 自リポジトリ絶対 URL の還元', () =>
 describe('check-links.mjs — ③ md の見出しアンカー', () => {
   it('実在する md + 実在しない見出しアンカーで非 0 になり、そのアンカーが出力に出る', () => {
     const root = createFixtureRoot({
+      // check-links:ignore-next docs/target.md#存在しない見出し -- フィクスチャ内だけに置く検査用の参照
       'README.md': '# Test\n\n[link](docs/target.md#存在しない見出し)\n',
       // check-links:ignore-next docs/target.md -- フィクスチャ内だけに置く検査用の参照
       'docs/target.md': '# 対象\n\n## 実在する見出し\n\n本文\n',
@@ -100,6 +102,7 @@ describe('check-links.mjs — ③ md の見出しアンカー', () => {
 
   it('正例: 実在する日本語見出し(#上限が効かない場合)が解決されて exit 0 になる', () => {
     const root = createFixtureRoot({
+      // check-links:ignore-next docs/target.md#上限が効かない場合 -- フィクスチャ内だけに置く検査用の参照
       'README.md': '# Test\n\n[link](docs/target.md#上限が効かない場合)\n',
       // check-links:ignore-next docs/target.md -- フィクスチャ内だけに置く検査用の参照
       'docs/target.md': '# 対象\n\n#### 上限が効かない場合\n\n本文\n',
@@ -128,6 +131,7 @@ describe('check-links.mjs — ④ 孤立検出', () => {
 
   it('正例: README → A → B と間接的に辿れる B は孤立にならない (推移的到達可能性)', () => {
     const root = createFixtureRoot({
+      // check-links:ignore-next docs/a.md -- フィクスチャ内だけに置く検査用の参照
       'README.md': '# Test\n\n[a](docs/a.md)\n',
       // check-links:ignore-next docs/a.md -- フィクスチャ内だけに置く検査用の参照
       'docs/a.md': '# A\n\n[b](b.md)\n',
@@ -193,6 +197,7 @@ describe('check-links.mjs — 008 B1', () => {
   // 検出根拠: 対象の走査・抽出・実在またはアンカー検査を外すと、違反診断の期待が落ちる。
   it('expanded sources: specs/sample/spec.md の Markdown リンクを検査する', () => {
     const root = createFixtureRoot({
+      // check-links:ignore-next docs/target.md -- フィクスチャ内だけに置く検査用の参照
       'README.md': '[target](docs/target.md)\n',
       // check-links:ignore-next docs/target.md -- フィクスチャ内だけに置く検査用の参照
       'docs/target.md': '# Target\n\n## 見出し\n',
@@ -211,6 +216,7 @@ describe('check-links.mjs — 008 B1', () => {
   // 検出根拠: 対象の走査・抽出・実在またはアンカー検査を外すと、違反診断の期待が落ちる。
   it('expanded sources: src/sample.ts の Markdown リンクを検査する', () => {
     const root = createFixtureRoot({
+      // check-links:ignore-next docs/target.md -- フィクスチャ内だけに置く検査用の参照
       'README.md': '[target](docs/target.md)\n',
       // check-links:ignore-next docs/target.md -- フィクスチャ内だけに置く検査用の参照
       'docs/target.md': '# Target\n\n## 見出し\n',
@@ -230,6 +236,7 @@ describe('check-links.mjs — 008 B1', () => {
   // 検出根拠: 対象の走査・抽出・実在またはアンカー検査を外すと、違反診断の期待が落ちる。
   it('expanded sources: tests/sample.test.ts の Markdown リンクを検査する', () => {
     const root = createFixtureRoot({
+      // check-links:ignore-next docs/target.md -- フィクスチャ内だけに置く検査用の参照
       'README.md': '[target](docs/target.md)\n',
       // check-links:ignore-next docs/target.md -- フィクスチャ内だけに置く検査用の参照
       'docs/target.md': '# Target\n\n## 見出し\n',
@@ -249,6 +256,7 @@ describe('check-links.mjs — 008 B1', () => {
   // 検出根拠: 解決先・抽出除外を誤ると exit 0 の期待が落ちる（検査全削除は正例単独では検出できない）。
   it('bare URLs: .github/ISSUE_TEMPLATE/config.yml の正しい blob', () => {
     const root = createFixtureRoot({
+      // check-links:ignore-next docs/target.md -- フィクスチャ内だけに置く検査用の参照
       'README.md': '[target](docs/target.md)\n',
       // check-links:ignore-next docs/target.md -- フィクスチャ内だけに置く検査用の参照
       'docs/target.md': '# Target\n\n## 見出し\n',
@@ -264,6 +272,7 @@ describe('check-links.mjs — 008 B1', () => {
   // 検出根拠: 対象の走査・抽出・実在またはアンカー検査を外すと、違反診断の期待が落ちる。
   it('bare URLs: .github/ISSUE_TEMPLATE/config.yml の移動前 blob', () => {
     const root = createFixtureRoot({
+      // check-links:ignore-next docs/users/target.md -- フィクスチャ内だけに置く検査用の参照
       'README.md': '[new](docs/users/target.md)\n',
       // check-links:ignore-next docs/users/target.md -- フィクスチャ内だけに置く検査用の参照
       'docs/users/target.md': '# Target\n',
@@ -282,6 +291,7 @@ describe('check-links.mjs — 008 B1', () => {
   // 検出根拠: 解決先・抽出除外を誤ると exit 0 の期待が落ちる（検査全削除は正例単独では検出できない）。
   it('bare URLs: .github/ISSUE_TEMPLATE/config.yml の正しい Pages', () => {
     const root = createFixtureRoot({
+      // check-links:ignore-next docs/target.md -- フィクスチャ内だけに置く検査用の参照
       'README.md': '[target](docs/target.md)\n',
       // check-links:ignore-next docs/target.md -- フィクスチャ内だけに置く検査用の参照
       'docs/target.md': '# Target\n\n## 見出し\n',
@@ -297,6 +307,7 @@ describe('check-links.mjs — 008 B1', () => {
   // 検出根拠: 対象の走査・抽出・実在またはアンカー検査を外すと、違反診断の期待が落ちる。
   it('bare URLs: .github/ISSUE_TEMPLATE/config.yml の移動前 Pages', () => {
     const root = createFixtureRoot({
+      // check-links:ignore-next docs/users/target.md -- フィクスチャ内だけに置く検査用の参照
       'README.md': '[new](docs/users/target.md)\n',
       // check-links:ignore-next docs/users/target.md -- フィクスチャ内だけに置く検査用の参照
       'docs/users/target.md': '# Target\n',
@@ -315,6 +326,7 @@ describe('check-links.mjs — 008 B1', () => {
   // 検出根拠: 解決先・抽出除外を誤ると exit 0 の期待が落ちる（検査全削除は正例単独では検出できない）。
   it('bare URLs: src/sample.ts の正しい blob', () => {
     const root = createFixtureRoot({
+      // check-links:ignore-next docs/target.md -- フィクスチャ内だけに置く検査用の参照
       'README.md': '[target](docs/target.md)\n',
       // check-links:ignore-next docs/target.md -- フィクスチャ内だけに置く検査用の参照
       'docs/target.md': '# Target\n\n## 見出し\n',
@@ -330,6 +342,7 @@ describe('check-links.mjs — 008 B1', () => {
   // 検出根拠: 対象の走査・抽出・実在またはアンカー検査を外すと、違反診断の期待が落ちる。
   it('bare URLs: src/sample.ts の移動前 blob', () => {
     const root = createFixtureRoot({
+      // check-links:ignore-next docs/users/target.md -- フィクスチャ内だけに置く検査用の参照
       'README.md': '[new](docs/users/target.md)\n',
       // check-links:ignore-next docs/users/target.md -- フィクスチャ内だけに置く検査用の参照
       'docs/users/target.md': '# Target\n',
@@ -348,6 +361,7 @@ describe('check-links.mjs — 008 B1', () => {
   // 検出根拠: 解決先・抽出除外を誤ると exit 0 の期待が落ちる（検査全削除は正例単独では検出できない）。
   it('bare URLs: src/sample.ts の正しい Pages', () => {
     const root = createFixtureRoot({
+      // check-links:ignore-next docs/target.md -- フィクスチャ内だけに置く検査用の参照
       'README.md': '[target](docs/target.md)\n',
       // check-links:ignore-next docs/target.md -- フィクスチャ内だけに置く検査用の参照
       'docs/target.md': '# Target\n\n## 見出し\n',
@@ -363,6 +377,7 @@ describe('check-links.mjs — 008 B1', () => {
   // 検出根拠: 対象の走査・抽出・実在またはアンカー検査を外すと、違反診断の期待が落ちる。
   it('bare URLs: src/sample.ts の移動前 Pages', () => {
     const root = createFixtureRoot({
+      // check-links:ignore-next docs/users/target.md -- フィクスチャ内だけに置く検査用の参照
       'README.md': '[new](docs/users/target.md)\n',
       // check-links:ignore-next docs/users/target.md -- フィクスチャ内だけに置く検査用の参照
       'docs/users/target.md': '# Target\n',
@@ -417,6 +432,7 @@ describe('check-links.mjs — 008 B1', () => {
   it('bare paths: README.md の不在パス', () => {
     const root = createFixtureRoot({
       'README.md':
+        // check-links:ignore-next docs/target.md -- フィクスチャ内だけに置く検査用の参照
         '[target](docs/target.md)\n' +
         // check-links:ignore-next docs/missing.md -- フィクスチャ内だけに置く検査用の参照
         '`docs/missing.md`\n',
@@ -436,7 +452,9 @@ describe('check-links.mjs — 008 B1', () => {
   it('bare paths: docs/context.md の不在パス', () => {
     const root = createFixtureRoot({
       'README.md':
+        // check-links:ignore-next docs/target.md -- フィクスチャ内だけに置く検査用の参照
         '[target](docs/target.md)\n' +
+        // check-links:ignore-next docs/context.md -- フィクスチャ内だけに置く検査用の参照
         '[context](docs/context.md)\n',
       // check-links:ignore-next docs/target.md -- フィクスチャ内だけに置く検査用の参照
       'docs/target.md': '# Target\n\n## 見出し\n',
@@ -456,6 +474,7 @@ describe('check-links.mjs — 008 B1', () => {
   // 検出根拠: 対象の走査・抽出・実在またはアンカー検査を外すと、違反診断の期待が落ちる。
   it('bare paths: specs/sample.md の不在パス', () => {
     const root = createFixtureRoot({
+      // check-links:ignore-next docs/target.md -- フィクスチャ内だけに置く検査用の参照
       'README.md': '[target](docs/target.md)\n',
       // check-links:ignore-next docs/target.md -- フィクスチャ内だけに置く検査用の参照
       'docs/target.md': '# Target\n\n## 見出し\n',
@@ -474,6 +493,7 @@ describe('check-links.mjs — 008 B1', () => {
   // 検出根拠: 対象の走査・抽出・実在またはアンカー検査を外すと、違反診断の期待が落ちる。
   it('bare paths: src/sample.ts の不在パス', () => {
     const root = createFixtureRoot({
+      // check-links:ignore-next docs/target.md -- フィクスチャ内だけに置く検査用の参照
       'README.md': '[target](docs/target.md)\n',
       // check-links:ignore-next docs/target.md -- フィクスチャ内だけに置く検査用の参照
       'docs/target.md': '# Target\n\n## 見出し\n',
@@ -492,6 +512,7 @@ describe('check-links.mjs — 008 B1', () => {
   // 検出根拠: 対象の走査・抽出・実在またはアンカー検査を外すと、違反診断の期待が落ちる。
   it('bare paths: tests/sample.ts の不在パス', () => {
     const root = createFixtureRoot({
+      // check-links:ignore-next docs/target.md -- フィクスチャ内だけに置く検査用の参照
       'README.md': '[target](docs/target.md)\n',
       // check-links:ignore-next docs/target.md -- フィクスチャ内だけに置く検査用の参照
       'docs/target.md': '# Target\n\n## 見出し\n',
@@ -510,6 +531,7 @@ describe('check-links.mjs — 008 B1', () => {
   // 検出根拠: 解決先・抽出除外を誤ると exit 0 の期待が落ちる（検査全削除は正例単独では検出できない）。
   it('bare paths: 実在する md', () => {
     const root = createFixtureRoot({
+      // check-links:ignore-next docs/target.md -- フィクスチャ内だけに置く検査用の参照
       'README.md': '[target](docs/target.md)\n',
       // check-links:ignore-next docs/target.md -- フィクスチャ内だけに置く検査用の参照
       'docs/target.md': '# Target\n\n## 見出し\n',
@@ -525,6 +547,7 @@ describe('check-links.mjs — 008 B1', () => {
   // 検出根拠: 解決先・抽出除外を誤ると exit 0 の期待が落ちる（検査全削除は正例単独では検出できない）。
   it('bare paths: 実在アンカー', () => {
     const root = createFixtureRoot({
+      // check-links:ignore-next docs/target.md -- フィクスチャ内だけに置く検査用の参照
       'README.md': '[target](docs/target.md)\n',
       // check-links:ignore-next docs/target.md -- フィクスチャ内だけに置く検査用の参照
       'docs/target.md': '# Target\n\n## 見出し\n',
@@ -540,6 +563,7 @@ describe('check-links.mjs — 008 B1', () => {
   // 検出根拠: 解決先・抽出除外を誤ると exit 0 の期待が落ちる（検査全削除は正例単独では検出できない）。
   it('bare paths: 行番号接尾辞', () => {
     const root = createFixtureRoot({
+      // check-links:ignore-next docs/target.md -- フィクスチャ内だけに置く検査用の参照
       'README.md': '[target](docs/target.md)\n',
       // check-links:ignore-next docs/target.md -- フィクスチャ内だけに置く検査用の参照
       'docs/target.md': '# Target\n\n## 見出し\n',
@@ -555,6 +579,7 @@ describe('check-links.mjs — 008 B1', () => {
   // 検出根拠: 解決先・抽出除外を誤ると exit 0 の期待が落ちる（検査全削除は正例単独では検出できない）。
   it('bare paths: アンカーと行番号', () => {
     const root = createFixtureRoot({
+      // check-links:ignore-next docs/target.md -- フィクスチャ内だけに置く検査用の参照
       'README.md': '[target](docs/target.md)\n',
       // check-links:ignore-next docs/target.md -- フィクスチャ内だけに置く検査用の参照
       'docs/target.md': '# Target\n\n## 見出し\n',
@@ -570,6 +595,7 @@ describe('check-links.mjs — 008 B1', () => {
   // 検出根拠: 解決先・抽出除外を誤ると exit 0 の期待が落ちる（検査全削除は正例単独では検出できない）。
   it('bare paths: ソース基準の ../docs', () => {
     const root = createFixtureRoot({
+      // check-links:ignore-next docs/target.md -- フィクスチャ内だけに置く検査用の参照
       'README.md': '[target](docs/target.md)\n',
       // check-links:ignore-next docs/target.md -- フィクスチャ内だけに置く検査用の参照
       'docs/target.md': '# Target\n\n## 見出し\n',
@@ -585,6 +611,7 @@ describe('check-links.mjs — 008 B1', () => {
   // 検出根拠: 解決先・抽出除外を誤ると exit 0 の期待が落ちる（検査全削除は正例単独では検出できない）。
   it('bare paths: 参照元基準の ./docs', () => {
     const root = createFixtureRoot({
+      // check-links:ignore-next docs/target.md -- フィクスチャ内だけに置く検査用の参照
       'README.md': '[target](docs/target.md)\n',
       // check-links:ignore-next docs/target.md -- フィクスチャ内だけに置く検査用の参照
       'docs/target.md': '# Target\n\n## 見出し\n',
@@ -598,6 +625,7 @@ describe('check-links.mjs — 008 B1', () => {
   // 検出根拠: 対象の走査・抽出・実在またはアンカー検査を外すと、違反診断の期待が落ちる。
   it('bare paths: 大小文字違い', () => {
     const root = createFixtureRoot({
+      // check-links:ignore-next docs/target.md -- フィクスチャ内だけに置く検査用の参照
       'README.md': '[target](docs/target.md)\n',
       // check-links:ignore-next docs/target.md -- フィクスチャ内だけに置く検査用の参照
       'docs/target.md': '# Target\n\n## 見出し\n',
@@ -615,6 +643,7 @@ describe('check-links.mjs — 008 B1', () => {
   // 検出根拠: 対象の走査・抽出・実在またはアンカー検査を外すと、違反診断の期待が落ちる。
   it('bare paths: 不在アンカー', () => {
     const root = createFixtureRoot({
+      // check-links:ignore-next docs/target.md -- フィクスチャ内だけに置く検査用の参照
       'README.md': '[target](docs/target.md)\n',
       // check-links:ignore-next docs/target.md -- フィクスチャ内だけに置く検査用の参照
       'docs/target.md': '# Target\n\n## 見出し\n',
@@ -1094,6 +1123,7 @@ describe('check-links.mjs — 008 B1', () => {
   // 検出根拠: 解決先・抽出除外を誤ると exit 0 の期待が落ちる（検査全削除は正例単独では検出できない）。
   it('bare paths: README.md の 実在する md', () => {
     const root = createFixtureRoot({
+      // check-links:ignore-next docs/target.md -- フィクスチャ内だけに置く検査用の参照
       'README.md': '[target](docs/target.md)\n' +
         // check-links:ignore-next docs/target.md -- フィクスチャ内だけに置く検査用の参照
         '`docs/target.md`\n',
@@ -1108,6 +1138,7 @@ describe('check-links.mjs — 008 B1', () => {
   // 検出根拠: 解決先・抽出除外を誤ると exit 0 の期待が落ちる（検査全削除は正例単独では検出できない）。
   it('bare paths: README.md の 実在アンカー', () => {
     const root = createFixtureRoot({
+      // check-links:ignore-next docs/target.md -- フィクスチャ内だけに置く検査用の参照
       'README.md': '[target](docs/target.md)\n' +
         // check-links:ignore-next docs/target.md#見出し -- フィクスチャ内だけに置く検査用の参照
         '`docs/target.md#見出し`\n',
@@ -1122,6 +1153,7 @@ describe('check-links.mjs — 008 B1', () => {
   // 検出根拠: 解決先・抽出除外を誤ると exit 0 の期待が落ちる（検査全削除は正例単独では検出できない）。
   it('bare paths: README.md の 行番号接尾辞', () => {
     const root = createFixtureRoot({
+      // check-links:ignore-next docs/target.md -- フィクスチャ内だけに置く検査用の参照
       'README.md': '[target](docs/target.md)\n' +
         // check-links:ignore-next docs/target.md:42 -- フィクスチャ内だけに置く検査用の参照
         '`docs/target.md:42`\n',
@@ -1137,7 +1169,10 @@ describe('check-links.mjs — 008 B1', () => {
   // check-links:ignore-next docs/context.md -- フィクスチャ内だけに置く検査用の参照
   it('bare paths: docs/context.md の 実在する md', () => {
     const root = createFixtureRoot({
-      'README.md': '[target](docs/target.md)\n[context](docs/context.md)\n',
+      // check-links:ignore-next docs/target.md -- フィクスチャ内だけに置く検査用の参照
+      'README.md': '[target](docs/target.md)\n' +
+        // check-links:ignore-next docs/context.md -- フィクスチャ内だけに置く検査用の参照
+        '[context](docs/context.md)\n',
       // check-links:ignore-next docs/target.md -- フィクスチャ内だけに置く検査用の参照
       'docs/target.md': '# Target\n\n## 見出し\n',
       // check-links:ignore-next docs/context.md -- フィクスチャ内だけに置く検査用の参照
@@ -1154,7 +1189,10 @@ describe('check-links.mjs — 008 B1', () => {
   // check-links:ignore-next docs/context.md -- フィクスチャ内だけに置く検査用の参照
   it('bare paths: docs/context.md の 実在アンカー', () => {
     const root = createFixtureRoot({
-      'README.md': '[target](docs/target.md)\n[context](docs/context.md)\n',
+      // check-links:ignore-next docs/target.md -- フィクスチャ内だけに置く検査用の参照
+      'README.md': '[target](docs/target.md)\n' +
+        // check-links:ignore-next docs/context.md -- フィクスチャ内だけに置く検査用の参照
+        '[context](docs/context.md)\n',
       // check-links:ignore-next docs/target.md -- フィクスチャ内だけに置く検査用の参照
       'docs/target.md': '# Target\n\n## 見出し\n',
       // check-links:ignore-next docs/context.md -- フィクスチャ内だけに置く検査用の参照
@@ -1171,7 +1209,10 @@ describe('check-links.mjs — 008 B1', () => {
   // check-links:ignore-next docs/context.md -- フィクスチャ内だけに置く検査用の参照
   it('bare paths: docs/context.md の 行番号接尾辞', () => {
     const root = createFixtureRoot({
-      'README.md': '[target](docs/target.md)\n[context](docs/context.md)\n',
+      // check-links:ignore-next docs/target.md -- フィクスチャ内だけに置く検査用の参照
+      'README.md': '[target](docs/target.md)\n' +
+        // check-links:ignore-next docs/context.md -- フィクスチャ内だけに置く検査用の参照
+        '[context](docs/context.md)\n',
       // check-links:ignore-next docs/target.md -- フィクスチャ内だけに置く検査用の参照
       'docs/target.md': '# Target\n\n## 見出し\n',
       // check-links:ignore-next docs/context.md -- フィクスチャ内だけに置く検査用の参照
@@ -1187,6 +1228,7 @@ describe('check-links.mjs — 008 B1', () => {
   // 検出根拠: 解決先・抽出除外を誤ると exit 0 の期待が落ちる（検査全削除は正例単独では検出できない）。
   it('bare paths: specs/sample.md の 実在する md', () => {
     const root = createFixtureRoot({
+      // check-links:ignore-next docs/target.md -- フィクスチャ内だけに置く検査用の参照
       'README.md': '[target](docs/target.md)\n',
       // check-links:ignore-next docs/target.md -- フィクスチャ内だけに置く検査用の参照
       'docs/target.md': '# Target\n\n## 見出し\n',
@@ -1202,6 +1244,7 @@ describe('check-links.mjs — 008 B1', () => {
   // 検出根拠: 解決先・抽出除外を誤ると exit 0 の期待が落ちる（検査全削除は正例単独では検出できない）。
   it('bare paths: specs/sample.md の 実在アンカー', () => {
     const root = createFixtureRoot({
+      // check-links:ignore-next docs/target.md -- フィクスチャ内だけに置く検査用の参照
       'README.md': '[target](docs/target.md)\n',
       // check-links:ignore-next docs/target.md -- フィクスチャ内だけに置く検査用の参照
       'docs/target.md': '# Target\n\n## 見出し\n',
@@ -1217,6 +1260,7 @@ describe('check-links.mjs — 008 B1', () => {
   // 検出根拠: 解決先・抽出除外を誤ると exit 0 の期待が落ちる（検査全削除は正例単独では検出できない）。
   it('bare paths: specs/sample.md の 行番号接尾辞', () => {
     const root = createFixtureRoot({
+      // check-links:ignore-next docs/target.md -- フィクスチャ内だけに置く検査用の参照
       'README.md': '[target](docs/target.md)\n',
       // check-links:ignore-next docs/target.md -- フィクスチャ内だけに置く検査用の参照
       'docs/target.md': '# Target\n\n## 見出し\n',
@@ -1232,6 +1276,7 @@ describe('check-links.mjs — 008 B1', () => {
   // 検出根拠: 解決先・抽出除外を誤ると exit 0 の期待が落ちる（検査全削除は正例単独では検出できない）。
   it('bare paths: tests/sample.ts の 実在する md', () => {
     const root = createFixtureRoot({
+      // check-links:ignore-next docs/target.md -- フィクスチャ内だけに置く検査用の参照
       'README.md': '[target](docs/target.md)\n',
       // check-links:ignore-next docs/target.md -- フィクスチャ内だけに置く検査用の参照
       'docs/target.md': '# Target\n\n## 見出し\n',
@@ -1247,6 +1292,7 @@ describe('check-links.mjs — 008 B1', () => {
   // 検出根拠: 解決先・抽出除外を誤ると exit 0 の期待が落ちる（検査全削除は正例単独では検出できない）。
   it('bare paths: tests/sample.ts の 実在アンカー', () => {
     const root = createFixtureRoot({
+      // check-links:ignore-next docs/target.md -- フィクスチャ内だけに置く検査用の参照
       'README.md': '[target](docs/target.md)\n',
       // check-links:ignore-next docs/target.md -- フィクスチャ内だけに置く検査用の参照
       'docs/target.md': '# Target\n\n## 見出し\n',
@@ -1262,6 +1308,7 @@ describe('check-links.mjs — 008 B1', () => {
   // 検出根拠: 解決先・抽出除外を誤ると exit 0 の期待が落ちる（検査全削除は正例単独では検出できない）。
   it('bare paths: tests/sample.ts の 行番号接尾辞', () => {
     const root = createFixtureRoot({
+      // check-links:ignore-next docs/target.md -- フィクスチャ内だけに置く検査用の参照
       'README.md': '[target](docs/target.md)\n',
       // check-links:ignore-next docs/target.md -- フィクスチャ内だけに置く検査用の参照
       'docs/target.md': '# Target\n\n## 見出し\n',
@@ -1296,8 +1343,11 @@ describe('check-links.mjs — 008 B1', () => {
 describe('008: relocated links', () => {
   function relocatedFiles(): Record<string, string> {
     return {
+      // check-links:ignore-next docs/users/install.md -- フィクスチャ内だけに置く検査用の参照
       'README.md': '[利用者](docs/users/install.md)\n' +
+        // check-links:ignore-next docs/developers/setup-and-verify.md -- フィクスチャ内だけに置く検査用の参照
         '[開発者](docs/developers/setup-and-verify.md)\n' +
+        // check-links:ignore-next docs/testers/for-testers.md -- フィクスチャ内だけに置く検査用の参照
         '[テスター](docs/testers/for-testers.md)\n',
       'docs/users/install.md': '# Install\n',
       'docs/developers/setup-and-verify.md': '# Setup\n[導入](../users/install.md)\n',
@@ -1325,5 +1375,880 @@ describe('008: relocated links', () => {
     // check-links:ignore-next docs/install.md -- 移動前の不在パスの診断を確認する
     expect(stderr).toContain('docs/install.md')
     expect(stderr).toContain('[実在確認]')
+  })
+})
+
+describe('check-links.mjs — 008 レビュー回帰', () => {
+  it('A1 不在: **対象**', () => {
+    const root = createFixtureRoot({
+      // check-links:ignore-next docs/a.md -- フィクスチャ内だけに置く検査用の参照
+      'README.md': '[a](docs/a.md)\n',
+      // check-links:ignore-next docs/a.md -- フィクスチャ内だけに置く検査用の参照
+      'docs/a.md': '# Intro\n',
+      // check-links:ignore-next docs/gone.md -- フィクスチャ内だけに置く検査用の参照
+      'specs/s.md': '**docs/gone.md**\n',
+    })
+    const { status, stderr } = runCheckLinks(root)
+    expect(status).toBe(1)
+    expect(stderr).toContain('[実在確認]')
+    expect(stderr).toContain(`${path.join('specs', 's.md')}:1`)
+  })
+
+  it('A1 実在: **対象**', () => {
+    const root = createFixtureRoot({
+      // check-links:ignore-next docs/a.md -- フィクスチャ内だけに置く検査用の参照
+      'README.md': '[a](docs/a.md)\n',
+      // check-links:ignore-next docs/a.md -- フィクスチャ内だけに置く検査用の参照
+      'docs/a.md': '# Intro\n',
+      // check-links:ignore-next docs/a.md -- フィクスチャ内だけに置く検査用の参照
+      'specs/s.md': '**docs/a.md**\n',
+    })
+    const { status, stderr } = runCheckLinks(root)
+    expect(status).toBe(0)
+    expect(stderr).toBe('')
+  })
+
+  it('A1 不在: *対象*', () => {
+    const root = createFixtureRoot({
+      // check-links:ignore-next docs/a.md -- フィクスチャ内だけに置く検査用の参照
+      'README.md': '[a](docs/a.md)\n',
+      // check-links:ignore-next docs/a.md -- フィクスチャ内だけに置く検査用の参照
+      'docs/a.md': '# Intro\n',
+      // check-links:ignore-next docs/gone.md -- フィクスチャ内だけに置く検査用の参照
+      'specs/s.md': '*docs/gone.md*\n',
+    })
+    const { status, stderr } = runCheckLinks(root)
+    expect(status).toBe(1)
+    expect(stderr).toContain('[実在確認]')
+    expect(stderr).toContain(`${path.join('specs', 's.md')}:1`)
+  })
+
+  it('A1 実在: *対象*', () => {
+    const root = createFixtureRoot({
+      // check-links:ignore-next docs/a.md -- フィクスチャ内だけに置く検査用の参照
+      'README.md': '[a](docs/a.md)\n',
+      // check-links:ignore-next docs/a.md -- フィクスチャ内だけに置く検査用の参照
+      'docs/a.md': '# Intro\n',
+      // check-links:ignore-next docs/a.md -- フィクスチャ内だけに置く検査用の参照
+      'specs/s.md': '*docs/a.md*\n',
+    })
+    const { status, stderr } = runCheckLinks(root)
+    expect(status).toBe(0)
+    expect(stderr).toBe('')
+  })
+
+  it('A1 不在: _対象_', () => {
+    const root = createFixtureRoot({
+      // check-links:ignore-next docs/a.md -- フィクスチャ内だけに置く検査用の参照
+      'README.md': '[a](docs/a.md)\n',
+      // check-links:ignore-next docs/a.md -- フィクスチャ内だけに置く検査用の参照
+      'docs/a.md': '# Intro\n',
+      // check-links:ignore-next docs/gone.md -- フィクスチャ内だけに置く検査用の参照
+      'specs/s.md': '_docs/gone.md_\n',
+    })
+    const { status, stderr } = runCheckLinks(root)
+    expect(status).toBe(1)
+    expect(stderr).toContain('[実在確認]')
+    expect(stderr).toContain(`${path.join('specs', 's.md')}:1`)
+  })
+
+  it('A1 実在: _対象_', () => {
+    const root = createFixtureRoot({
+      // check-links:ignore-next docs/a.md -- フィクスチャ内だけに置く検査用の参照
+      'README.md': '[a](docs/a.md)\n',
+      // check-links:ignore-next docs/a.md -- フィクスチャ内だけに置く検査用の参照
+      'docs/a.md': '# Intro\n',
+      // check-links:ignore-next docs/a.md -- フィクスチャ内だけに置く検査用の参照
+      'specs/s.md': '_docs/a.md_\n',
+    })
+    const { status, stderr } = runCheckLinks(root)
+    expect(status).toBe(0)
+    expect(stderr).toBe('')
+  })
+
+  it('A1 不在: （対象）', () => {
+    const root = createFixtureRoot({
+      // check-links:ignore-next docs/a.md -- フィクスチャ内だけに置く検査用の参照
+      'README.md': '[a](docs/a.md)\n',
+      // check-links:ignore-next docs/a.md -- フィクスチャ内だけに置く検査用の参照
+      'docs/a.md': '# Intro\n',
+      // check-links:ignore-next docs/gone.md -- フィクスチャ内だけに置く検査用の参照
+      'specs/s.md': '（docs/gone.md）\n',
+    })
+    const { status, stderr } = runCheckLinks(root)
+    expect(status).toBe(1)
+    expect(stderr).toContain('[実在確認]')
+    expect(stderr).toContain(`${path.join('specs', 's.md')}:1`)
+  })
+
+  it('A1 実在: （対象）', () => {
+    const root = createFixtureRoot({
+      // check-links:ignore-next docs/a.md -- フィクスチャ内だけに置く検査用の参照
+      'README.md': '[a](docs/a.md)\n',
+      // check-links:ignore-next docs/a.md -- フィクスチャ内だけに置く検査用の参照
+      'docs/a.md': '# Intro\n',
+      // check-links:ignore-next docs/a.md -- フィクスチャ内だけに置く検査用の参照
+      'specs/s.md': '（docs/a.md）\n',
+    })
+    const { status, stderr } = runCheckLinks(root)
+    expect(status).toBe(0)
+    expect(stderr).toBe('')
+  })
+
+  it('A1 不在: 詳細は対象 を参照', () => {
+    const root = createFixtureRoot({
+      // check-links:ignore-next docs/a.md -- フィクスチャ内だけに置く検査用の参照
+      'README.md': '[a](docs/a.md)\n',
+      // check-links:ignore-next docs/a.md -- フィクスチャ内だけに置く検査用の参照
+      'docs/a.md': '# Intro\n',
+      // check-links:ignore-next docs/gone.md -- フィクスチャ内だけに置く検査用の参照
+      'specs/s.md': '詳細はdocs/gone.md を参照\n',
+    })
+    const { status, stderr } = runCheckLinks(root)
+    expect(status).toBe(1)
+    expect(stderr).toContain('[実在確認]')
+    expect(stderr).toContain(`${path.join('specs', 's.md')}:1`)
+  })
+
+  it('A1 実在: 詳細は対象 を参照', () => {
+    const root = createFixtureRoot({
+      // check-links:ignore-next docs/a.md -- フィクスチャ内だけに置く検査用の参照
+      'README.md': '[a](docs/a.md)\n',
+      // check-links:ignore-next docs/a.md -- フィクスチャ内だけに置く検査用の参照
+      'docs/a.md': '# Intro\n',
+      // check-links:ignore-next docs/a.md -- フィクスチャ内だけに置く検査用の参照
+      'specs/s.md': '詳細はdocs/a.md を参照\n',
+    })
+    const { status, stderr } = runCheckLinks(root)
+    expect(status).toBe(0)
+    expect(stderr).toBe('')
+  })
+
+  it('A1 不在: 詳細は 対象を参照', () => {
+    const root = createFixtureRoot({
+      // check-links:ignore-next docs/a.md -- フィクスチャ内だけに置く検査用の参照
+      'README.md': '[a](docs/a.md)\n',
+      // check-links:ignore-next docs/a.md -- フィクスチャ内だけに置く検査用の参照
+      'docs/a.md': '# Intro\n',
+      // check-links:ignore-next docs/gone.md -- フィクスチャ内だけに置く検査用の参照
+      'specs/s.md': '詳細は docs/gone.mdを参照\n',
+    })
+    const { status, stderr } = runCheckLinks(root)
+    expect(status).toBe(1)
+    expect(stderr).toContain('[実在確認]')
+    expect(stderr).toContain(`${path.join('specs', 's.md')}:1`)
+  })
+
+  it('A1 実在: 詳細は 対象を参照', () => {
+    const root = createFixtureRoot({
+      // check-links:ignore-next docs/a.md -- フィクスチャ内だけに置く検査用の参照
+      'README.md': '[a](docs/a.md)\n',
+      // check-links:ignore-next docs/a.md -- フィクスチャ内だけに置く検査用の参照
+      'docs/a.md': '# Intro\n',
+      // check-links:ignore-next docs/a.md -- フィクスチャ内だけに置く検査用の参照
+      'specs/s.md': '詳細は docs/a.mdを参照\n',
+    })
+    const { status, stderr } = runCheckLinks(root)
+    expect(status).toBe(0)
+    expect(stderr).toBe('')
+  })
+
+  it('A1 不在: see 対象: foo', () => {
+    const root = createFixtureRoot({
+      // check-links:ignore-next docs/a.md -- フィクスチャ内だけに置く検査用の参照
+      'README.md': '[a](docs/a.md)\n',
+      // check-links:ignore-next docs/a.md -- フィクスチャ内だけに置く検査用の参照
+      'docs/a.md': '# Intro\n',
+      // check-links:ignore-next docs/gone.md -- フィクスチャ内だけに置く検査用の参照
+      'specs/s.md': 'see docs/gone.md: foo\n',
+    })
+    const { status, stderr } = runCheckLinks(root)
+    expect(status).toBe(1)
+    expect(stderr).toContain('[実在確認]')
+    expect(stderr).toContain(`${path.join('specs', 's.md')}:1`)
+  })
+
+  it('A1 実在: see 対象: foo', () => {
+    const root = createFixtureRoot({
+      // check-links:ignore-next docs/a.md -- フィクスチャ内だけに置く検査用の参照
+      'README.md': '[a](docs/a.md)\n',
+      // check-links:ignore-next docs/a.md -- フィクスチャ内だけに置く検査用の参照
+      'docs/a.md': '# Intro\n',
+      // check-links:ignore-next docs/a.md -- フィクスチャ内だけに置く検査用の参照
+      'specs/s.md': 'see docs/a.md: foo\n',
+    })
+    const { status, stderr } = runCheckLinks(root)
+    expect(status).toBe(0)
+    expect(stderr).toBe('')
+  })
+
+  it('A1 不在: 対象:12:3', () => {
+    const root = createFixtureRoot({
+      // check-links:ignore-next docs/a.md -- フィクスチャ内だけに置く検査用の参照
+      'README.md': '[a](docs/a.md)\n',
+      // check-links:ignore-next docs/a.md -- フィクスチャ内だけに置く検査用の参照
+      'docs/a.md': '# Intro\n',
+      // check-links:ignore-next docs/gone.md:12:3 -- フィクスチャ内だけに置く検査用の参照
+      'specs/s.md': 'docs/gone.md:12:3\n',
+    })
+    const { status, stderr } = runCheckLinks(root)
+    expect(status).toBe(1)
+    expect(stderr).toContain('[実在確認]')
+    expect(stderr).toContain(`${path.join('specs', 's.md')}:1`)
+  })
+
+  it('A1 実在: 対象:12:3', () => {
+    const root = createFixtureRoot({
+      // check-links:ignore-next docs/a.md -- フィクスチャ内だけに置く検査用の参照
+      'README.md': '[a](docs/a.md)\n',
+      // check-links:ignore-next docs/a.md -- フィクスチャ内だけに置く検査用の参照
+      'docs/a.md': '# Intro\n',
+      // check-links:ignore-next docs/a.md:12:3 -- フィクスチャ内だけに置く検査用の参照
+      'specs/s.md': 'docs/a.md:12:3\n',
+    })
+    const { status, stderr } = runCheckLinks(root)
+    expect(status).toBe(0)
+    expect(stderr).toBe('')
+  })
+
+  it('A1 不在: 対象*', () => {
+    const root = createFixtureRoot({
+      // check-links:ignore-next docs/a.md -- フィクスチャ内だけに置く検査用の参照
+      'README.md': '[a](docs/a.md)\n',
+      // check-links:ignore-next docs/a.md -- フィクスチャ内だけに置く検査用の参照
+      'docs/a.md': '# Intro\n',
+      // check-links:ignore-next docs/gone.md -- フィクスチャ内だけに置く検査用の参照
+      'specs/s.md': 'docs/gone.md*\n',
+    })
+    const { status, stderr } = runCheckLinks(root)
+    expect(status).toBe(1)
+    expect(stderr).toContain('[実在確認]')
+    expect(stderr).toContain(`${path.join('specs', 's.md')}:1`)
+  })
+
+  it('A1 実在: 対象*', () => {
+    const root = createFixtureRoot({
+      // check-links:ignore-next docs/a.md -- フィクスチャ内だけに置く検査用の参照
+      'README.md': '[a](docs/a.md)\n',
+      // check-links:ignore-next docs/a.md -- フィクスチャ内だけに置く検査用の参照
+      'docs/a.md': '# Intro\n',
+      // check-links:ignore-next docs/a.md -- フィクスチャ内だけに置く検査用の参照
+      'specs/s.md': 'docs/a.md*\n',
+    })
+    const { status, stderr } = runCheckLinks(root)
+    expect(status).toBe(0)
+    expect(stderr).toBe('')
+  })
+
+  it('A1 不在: 対象?', () => {
+    const root = createFixtureRoot({
+      // check-links:ignore-next docs/a.md -- フィクスチャ内だけに置く検査用の参照
+      'README.md': '[a](docs/a.md)\n',
+      // check-links:ignore-next docs/a.md -- フィクスチャ内だけに置く検査用の参照
+      'docs/a.md': '# Intro\n',
+      // check-links:ignore-next docs/gone.md -- フィクスチャ内だけに置く検査用の参照
+      'specs/s.md': 'docs/gone.md?\n',
+    })
+    const { status, stderr } = runCheckLinks(root)
+    expect(status).toBe(1)
+    expect(stderr).toContain('[実在確認]')
+    expect(stderr).toContain(`${path.join('specs', 's.md')}:1`)
+  })
+
+  it('A1 実在: 対象?', () => {
+    const root = createFixtureRoot({
+      // check-links:ignore-next docs/a.md -- フィクスチャ内だけに置く検査用の参照
+      'README.md': '[a](docs/a.md)\n',
+      // check-links:ignore-next docs/a.md -- フィクスチャ内だけに置く検査用の参照
+      'docs/a.md': '# Intro\n',
+      // check-links:ignore-next docs/a.md -- フィクスチャ内だけに置く検査用の参照
+      'specs/s.md': 'docs/a.md?\n',
+    })
+    const { status, stderr } = runCheckLinks(root)
+    expect(status).toBe(0)
+    expect(stderr).toBe('')
+  })
+
+  it('A1 不在: 対象#intro', () => {
+    const root = createFixtureRoot({
+      // check-links:ignore-next docs/a.md -- フィクスチャ内だけに置く検査用の参照
+      'README.md': '[a](docs/a.md)\n',
+      // check-links:ignore-next docs/a.md -- フィクスチャ内だけに置く検査用の参照
+      'docs/a.md': '# Intro\n',
+      // check-links:ignore-next docs/gone.md#intro -- フィクスチャ内だけに置く検査用の参照
+      'specs/s.md': 'docs/gone.md#intro\n',
+    })
+    const { status, stderr } = runCheckLinks(root)
+    expect(status).toBe(1)
+    expect(stderr).toContain('[実在確認]')
+    expect(stderr).toContain(`${path.join('specs', 's.md')}:1`)
+  })
+
+  it('A1 実在: 対象#intro', () => {
+    const root = createFixtureRoot({
+      // check-links:ignore-next docs/a.md -- フィクスチャ内だけに置く検査用の参照
+      'README.md': '[a](docs/a.md)\n',
+      // check-links:ignore-next docs/a.md -- フィクスチャ内だけに置く検査用の参照
+      'docs/a.md': '# Intro\n',
+      // check-links:ignore-next docs/a.md#intro -- フィクスチャ内だけに置く検査用の参照
+      'specs/s.md': 'docs/a.md#intro\n',
+    })
+    const { status, stderr } = runCheckLinks(root)
+    expect(status).toBe(0)
+    expect(stderr).toBe('')
+  })
+
+  it('A1 不在: 対象#intro:12:3', () => {
+    const root = createFixtureRoot({
+      // check-links:ignore-next docs/a.md -- フィクスチャ内だけに置く検査用の参照
+      'README.md': '[a](docs/a.md)\n',
+      // check-links:ignore-next docs/a.md -- フィクスチャ内だけに置く検査用の参照
+      'docs/a.md': '# Intro\n',
+      // check-links:ignore-next docs/gone.md#intro:12:3 -- フィクスチャ内だけに置く検査用の参照
+      'specs/s.md': 'docs/gone.md#intro:12:3\n',
+    })
+    const { status, stderr } = runCheckLinks(root)
+    expect(status).toBe(1)
+    expect(stderr).toContain('[実在確認]')
+    expect(stderr).toContain(`${path.join('specs', 's.md')}:1`)
+  })
+
+  it('A1 実在: 対象#intro:12:3', () => {
+    const root = createFixtureRoot({
+      // check-links:ignore-next docs/a.md -- フィクスチャ内だけに置く検査用の参照
+      'README.md': '[a](docs/a.md)\n',
+      // check-links:ignore-next docs/a.md -- フィクスチャ内だけに置く検査用の参照
+      'docs/a.md': '# Intro\n',
+      // check-links:ignore-next docs/a.md#intro:12:3 -- フィクスチャ内だけに置く検査用の参照
+      'specs/s.md': 'docs/a.md#intro:12:3\n',
+    })
+    const { status, stderr } = runCheckLinks(root)
+    expect(status).toBe(0)
+    expect(stderr).toBe('')
+  })
+
+  it('A1 矢印の両側を別々に抽出', () => {
+    const root = createFixtureRoot({
+      // check-links:ignore-next docs/a.md -- フィクスチャ内だけに置く検査用の参照
+      'README.md': '[a](docs/a.md)\n',
+      // check-links:ignore-next docs/a.md -- フィクスチャ内だけに置く検査用の参照
+      'docs/a.md': '# Intro\n',
+      // check-links:ignore-next docs/a.md -- フィクスチャ内だけに置く検査用の参照
+      'specs/s.md': 'docs/a.md' +
+        // check-links:ignore-next docs/gone.md -- フィクスチャ内だけに置く検査用の参照
+        '→docs/gone.md\n',
+    })
+    const { status, stderr } = runCheckLinks(root)
+    expect(status).toBe(1)
+    expect(stderr).toContain('[実在確認]')
+    expect(stderr.match(/\[実在確認\]/g)).toHaveLength(1)
+    // check-links:ignore-next docs/gone.md -- フィクスチャ内だけに置く検査用の参照
+    expect(stderr).toContain('docs/gone.md')
+    // check-links:ignore-next docs/gone.md -- フィクスチャ内だけに置く検査用の参照
+    expect(stderr).not.toContain('→docs/gone.md')
+  })
+
+  it('A1 検査外: docs/*.md', () => {
+    const root = createFixtureRoot({
+      'README.md': '# Test\n',
+      'specs/s.md': 'docs/*.md\n',
+    })
+    const { status, stderr } = runCheckLinks(root)
+    expect(status).toBe(0)
+    expect(stderr).toBe('')
+  })
+
+  it('A1 検査外: docs/**/*.md', () => {
+    const root = createFixtureRoot({
+      'README.md': '# Test\n',
+      'specs/s.md': 'docs/**/*.md\n',
+    })
+    const { status, stderr } = runCheckLinks(root)
+    expect(status).toBe(0)
+    expect(stderr).toBe('')
+  })
+
+  it('A1 検査外: docs/foo?.md', () => {
+    const root = createFixtureRoot({
+      'README.md': '# Test\n',
+      'specs/s.md': 'docs/foo?.md\n',
+    })
+    const { status, stderr } = runCheckLinks(root)
+    expect(status).toBe(0)
+    expect(stderr).toBe('')
+  })
+
+  it('A1 検査外: x対象', () => {
+    const root = createFixtureRoot({
+      'README.md': '# Test\n',
+      'specs/s.md': 'xdocs/gone.md\n',
+    })
+    const { status, stderr } = runCheckLinks(root)
+    expect(status).toBe(0)
+    expect(stderr).toBe('')
+  })
+
+  it('A1 検査外: 1対象', () => {
+    const root = createFixtureRoot({
+      'README.md': '# Test\n',
+      'specs/s.md': '1docs/gone.md\n',
+    })
+    const { status, stderr } = runCheckLinks(root)
+    expect(status).toBe(0)
+    expect(stderr).toBe('')
+  })
+
+  it('A1 検査外: /対象', () => {
+    const root = createFixtureRoot({
+      'README.md': '# Test\n',
+      'specs/s.md': '/docs/gone.md\n',
+    })
+    const { status, stderr } = runCheckLinks(root)
+    expect(status).toBe(0)
+    expect(stderr).toBe('')
+  })
+
+  it('A1 検査外: .対象', () => {
+    const root = createFixtureRoot({
+      'README.md': '# Test\n',
+      'specs/s.md': '.docs/gone.md\n',
+    })
+    const { status, stderr } = runCheckLinks(root)
+    expect(status).toBe(0)
+    expect(stderr).toBe('')
+  })
+
+  it('A1 検査外: -対象', () => {
+    const root = createFixtureRoot({
+      'README.md': '# Test\n',
+      'specs/s.md': '-docs/gone.md\n',
+    })
+    const { status, stderr } = runCheckLinks(root)
+    expect(status).toBe(0)
+    expect(stderr).toBe('')
+  })
+
+  it('A1 検査外: _x_対象', () => {
+    const root = createFixtureRoot({
+      'README.md': '# Test\n',
+      'specs/s.md': '_x_docs/gone.md\n',
+    })
+    const { status, stderr } = runCheckLinks(root)
+    expect(status).toBe(0)
+    expect(stderr).toBe('')
+  })
+
+  it('A2 不在 URL末尾: .', () => {
+    const root = createFixtureRoot({
+      // check-links:ignore-next docs/a.md -- フィクスチャ内だけに置く検査用の参照
+      'README.md': '[a](docs/a.md)\n',
+      // check-links:ignore-next docs/a.md -- フィクスチャ内だけに置く検査用の参照
+      'docs/a.md': '# Intro\n',
+      // check-links:ignore-next https://github.com/max-enterme/shoutlink/blob/main/docs/gone.md -- フィクスチャ内だけに置く検査用の参照
+      'specs/s.md': 'https://github.com/max-enterme/shoutlink/blob/main/docs/gone.md.\n',
+    })
+    const { status, stderr } = runCheckLinks(root)
+    expect(status).toBe(1)
+    expect(stderr).toContain('[実在確認]')
+  })
+
+  it('A2 実在 URL末尾: .', () => {
+    const root = createFixtureRoot({
+      // check-links:ignore-next docs/a.md -- フィクスチャ内だけに置く検査用の参照
+      'README.md': '[a](docs/a.md)\n',
+      // check-links:ignore-next docs/a.md -- フィクスチャ内だけに置く検査用の参照
+      'docs/a.md': '# Intro\n',
+      // check-links:ignore-next https://github.com/max-enterme/shoutlink/blob/main/docs/a.md -- フィクスチャ内だけに置く検査用の参照
+      'specs/s.md': 'https://github.com/max-enterme/shoutlink/blob/main/docs/a.md.\n',
+    })
+    const { status, stderr } = runCheckLinks(root)
+    expect(status).toBe(0)
+    expect(stderr).toBe('')
+  })
+
+  it('A2 不在 URL末尾: ,', () => {
+    const root = createFixtureRoot({
+      // check-links:ignore-next docs/a.md -- フィクスチャ内だけに置く検査用の参照
+      'README.md': '[a](docs/a.md)\n',
+      // check-links:ignore-next docs/a.md -- フィクスチャ内だけに置く検査用の参照
+      'docs/a.md': '# Intro\n',
+      // check-links:ignore-next https://github.com/max-enterme/shoutlink/blob/main/docs/gone.md -- フィクスチャ内だけに置く検査用の参照
+      'specs/s.md': 'https://github.com/max-enterme/shoutlink/blob/main/docs/gone.md,\n',
+    })
+    const { status, stderr } = runCheckLinks(root)
+    expect(status).toBe(1)
+    expect(stderr).toContain('[実在確認]')
+  })
+
+  it('A2 実在 URL末尾: ,', () => {
+    const root = createFixtureRoot({
+      // check-links:ignore-next docs/a.md -- フィクスチャ内だけに置く検査用の参照
+      'README.md': '[a](docs/a.md)\n',
+      // check-links:ignore-next docs/a.md -- フィクスチャ内だけに置く検査用の参照
+      'docs/a.md': '# Intro\n',
+      // check-links:ignore-next https://github.com/max-enterme/shoutlink/blob/main/docs/a.md -- フィクスチャ内だけに置く検査用の参照
+      'specs/s.md': 'https://github.com/max-enterme/shoutlink/blob/main/docs/a.md,\n',
+    })
+    const { status, stderr } = runCheckLinks(root)
+    expect(status).toBe(0)
+    expect(stderr).toBe('')
+  })
+
+  it('A2 不在 URL末尾: :', () => {
+    const root = createFixtureRoot({
+      // check-links:ignore-next docs/a.md -- フィクスチャ内だけに置く検査用の参照
+      'README.md': '[a](docs/a.md)\n',
+      // check-links:ignore-next docs/a.md -- フィクスチャ内だけに置く検査用の参照
+      'docs/a.md': '# Intro\n',
+      // check-links:ignore-next https://github.com/max-enterme/shoutlink/blob/main/docs/gone.md -- フィクスチャ内だけに置く検査用の参照
+      'specs/s.md': 'https://github.com/max-enterme/shoutlink/blob/main/docs/gone.md:\n',
+    })
+    const { status, stderr } = runCheckLinks(root)
+    expect(status).toBe(1)
+    expect(stderr).toContain('[実在確認]')
+  })
+
+  it('A2 実在 URL末尾: :', () => {
+    const root = createFixtureRoot({
+      // check-links:ignore-next docs/a.md -- フィクスチャ内だけに置く検査用の参照
+      'README.md': '[a](docs/a.md)\n',
+      // check-links:ignore-next docs/a.md -- フィクスチャ内だけに置く検査用の参照
+      'docs/a.md': '# Intro\n',
+      // check-links:ignore-next https://github.com/max-enterme/shoutlink/blob/main/docs/a.md -- フィクスチャ内だけに置く検査用の参照
+      'specs/s.md': 'https://github.com/max-enterme/shoutlink/blob/main/docs/a.md:\n',
+    })
+    const { status, stderr } = runCheckLinks(root)
+    expect(status).toBe(0)
+    expect(stderr).toBe('')
+  })
+
+  it('A2 不在 URL末尾: ）', () => {
+    const root = createFixtureRoot({
+      // check-links:ignore-next docs/a.md -- フィクスチャ内だけに置く検査用の参照
+      'README.md': '[a](docs/a.md)\n',
+      // check-links:ignore-next docs/a.md -- フィクスチャ内だけに置く検査用の参照
+      'docs/a.md': '# Intro\n',
+      // check-links:ignore-next https://github.com/max-enterme/shoutlink/blob/main/docs/gone.md -- フィクスチャ内だけに置く検査用の参照
+      'specs/s.md': 'https://github.com/max-enterme/shoutlink/blob/main/docs/gone.md）\n',
+    })
+    const { status, stderr } = runCheckLinks(root)
+    expect(status).toBe(1)
+    expect(stderr).toContain('[実在確認]')
+  })
+
+  it('A2 実在 URL末尾: ）', () => {
+    const root = createFixtureRoot({
+      // check-links:ignore-next docs/a.md -- フィクスチャ内だけに置く検査用の参照
+      'README.md': '[a](docs/a.md)\n',
+      // check-links:ignore-next docs/a.md -- フィクスチャ内だけに置く検査用の参照
+      'docs/a.md': '# Intro\n',
+      // check-links:ignore-next https://github.com/max-enterme/shoutlink/blob/main/docs/a.md -- フィクスチャ内だけに置く検査用の参照
+      'specs/s.md': 'https://github.com/max-enterme/shoutlink/blob/main/docs/a.md）\n',
+    })
+    const { status, stderr } = runCheckLinks(root)
+    expect(status).toBe(0)
+    expect(stderr).toBe('')
+  })
+
+  it('A2 不在 URL末尾: **', () => {
+    const root = createFixtureRoot({
+      // check-links:ignore-next docs/a.md -- フィクスチャ内だけに置く検査用の参照
+      'README.md': '[a](docs/a.md)\n',
+      // check-links:ignore-next docs/a.md -- フィクスチャ内だけに置く検査用の参照
+      'docs/a.md': '# Intro\n',
+      // check-links:ignore-next https://github.com/max-enterme/shoutlink/blob/main/docs/gone.md -- フィクスチャ内だけに置く検査用の参照
+      'specs/s.md': 'https://github.com/max-enterme/shoutlink/blob/main/docs/gone.md**\n',
+    })
+    const { status, stderr } = runCheckLinks(root)
+    expect(status).toBe(1)
+    expect(stderr).toContain('[実在確認]')
+  })
+
+  it('A2 実在 URL末尾: **', () => {
+    const root = createFixtureRoot({
+      // check-links:ignore-next docs/a.md -- フィクスチャ内だけに置く検査用の参照
+      'README.md': '[a](docs/a.md)\n',
+      // check-links:ignore-next docs/a.md -- フィクスチャ内だけに置く検査用の参照
+      'docs/a.md': '# Intro\n',
+      // check-links:ignore-next https://github.com/max-enterme/shoutlink/blob/main/docs/a.md -- フィクスチャ内だけに置く検査用の参照
+      'specs/s.md': 'https://github.com/max-enterme/shoutlink/blob/main/docs/a.md**\n',
+    })
+    const { status, stderr } = runCheckLinks(root)
+    expect(status).toBe(0)
+    expect(stderr).toBe('')
+  })
+
+  it('A2 不在 URL末尾: を参照', () => {
+    const root = createFixtureRoot({
+      // check-links:ignore-next docs/a.md -- フィクスチャ内だけに置く検査用の参照
+      'README.md': '[a](docs/a.md)\n',
+      // check-links:ignore-next docs/a.md -- フィクスチャ内だけに置く検査用の参照
+      'docs/a.md': '# Intro\n',
+      // check-links:ignore-next https://github.com/max-enterme/shoutlink/blob/main/docs/gone.md -- フィクスチャ内だけに置く検査用の参照
+      'specs/s.md': 'https://github.com/max-enterme/shoutlink/blob/main/docs/gone.mdを参照\n',
+    })
+    const { status, stderr } = runCheckLinks(root)
+    expect(status).toBe(1)
+    expect(stderr).toContain('[実在確認]')
+  })
+
+  it('A2 実在 URL末尾: を参照', () => {
+    const root = createFixtureRoot({
+      // check-links:ignore-next docs/a.md -- フィクスチャ内だけに置く検査用の参照
+      'README.md': '[a](docs/a.md)\n',
+      // check-links:ignore-next docs/a.md -- フィクスチャ内だけに置く検査用の参照
+      'docs/a.md': '# Intro\n',
+      // check-links:ignore-next https://github.com/max-enterme/shoutlink/blob/main/docs/a.md -- フィクスチャ内だけに置く検査用の参照
+      'specs/s.md': 'https://github.com/max-enterme/shoutlink/blob/main/docs/a.mdを参照\n',
+    })
+    const { status, stderr } = runCheckLinks(root)
+    expect(status).toBe(0)
+    expect(stderr).toBe('')
+  })
+
+  it('A2 不在 URL末尾: ?plain=1', () => {
+    const root = createFixtureRoot({
+      // check-links:ignore-next docs/a.md -- フィクスチャ内だけに置く検査用の参照
+      'README.md': '[a](docs/a.md)\n',
+      // check-links:ignore-next docs/a.md -- フィクスチャ内だけに置く検査用の参照
+      'docs/a.md': '# Intro\n',
+      // check-links:ignore-next https://github.com/max-enterme/shoutlink/blob/main/docs/gone.md?plain=1 -- フィクスチャ内だけに置く検査用の参照
+      'specs/s.md': 'https://github.com/max-enterme/shoutlink/blob/main/docs/gone.md?plain=1\n',
+    })
+    const { status, stderr } = runCheckLinks(root)
+    expect(status).toBe(1)
+    expect(stderr).toContain('[実在確認]')
+  })
+
+  it('A2 実在 URL末尾: ?plain=1', () => {
+    const root = createFixtureRoot({
+      // check-links:ignore-next docs/a.md -- フィクスチャ内だけに置く検査用の参照
+      'README.md': '[a](docs/a.md)\n',
+      // check-links:ignore-next docs/a.md -- フィクスチャ内だけに置く検査用の参照
+      'docs/a.md': '# Intro\n',
+      // check-links:ignore-next https://github.com/max-enterme/shoutlink/blob/main/docs/a.md?plain=1 -- フィクスチャ内だけに置く検査用の参照
+      'specs/s.md': 'https://github.com/max-enterme/shoutlink/blob/main/docs/a.md?plain=1\n',
+    })
+    const { status, stderr } = runCheckLinks(root)
+    expect(status).toBe(0)
+    expect(stderr).toBe('')
+  })
+
+  it('A2 不在 URL末尾: #intro', () => {
+    const root = createFixtureRoot({
+      // check-links:ignore-next docs/a.md -- フィクスチャ内だけに置く検査用の参照
+      'README.md': '[a](docs/a.md)\n',
+      // check-links:ignore-next docs/a.md -- フィクスチャ内だけに置く検査用の参照
+      'docs/a.md': '# Intro\n',
+      // check-links:ignore-next https://github.com/max-enterme/shoutlink/blob/main/docs/gone.md#intro -- フィクスチャ内だけに置く検査用の参照
+      'specs/s.md': 'https://github.com/max-enterme/shoutlink/blob/main/docs/gone.md#intro\n',
+    })
+    const { status, stderr } = runCheckLinks(root)
+    expect(status).toBe(1)
+    expect(stderr).toContain('[実在確認]')
+  })
+
+  it('A2 実在 URL末尾: #intro', () => {
+    const root = createFixtureRoot({
+      // check-links:ignore-next docs/a.md -- フィクスチャ内だけに置く検査用の参照
+      'README.md': '[a](docs/a.md)\n',
+      // check-links:ignore-next docs/a.md -- フィクスチャ内だけに置く検査用の参照
+      'docs/a.md': '# Intro\n',
+      // check-links:ignore-next https://github.com/max-enterme/shoutlink/blob/main/docs/a.md#intro -- フィクスチャ内だけに置く検査用の参照
+      'specs/s.md': 'https://github.com/max-enterme/shoutlink/blob/main/docs/a.md#intro\n',
+    })
+    const { status, stderr } = runCheckLinks(root)
+    expect(status).toBe(0)
+    expect(stderr).toBe('')
+  })
+
+  it('A2 不在 URL末尾: ?plain=1#intro', () => {
+    const root = createFixtureRoot({
+      // check-links:ignore-next docs/a.md -- フィクスチャ内だけに置く検査用の参照
+      'README.md': '[a](docs/a.md)\n',
+      // check-links:ignore-next docs/a.md -- フィクスチャ内だけに置く検査用の参照
+      'docs/a.md': '# Intro\n',
+      // check-links:ignore-next https://github.com/max-enterme/shoutlink/blob/main/docs/gone.md?plain=1#intro -- フィクスチャ内だけに置く検査用の参照
+      'specs/s.md': 'https://github.com/max-enterme/shoutlink/blob/main/docs/gone.md?plain=1#intro\n',
+    })
+    const { status, stderr } = runCheckLinks(root)
+    expect(status).toBe(1)
+    expect(stderr).toContain('[実在確認]')
+  })
+
+  it('A2 実在 URL末尾: ?plain=1#intro', () => {
+    const root = createFixtureRoot({
+      // check-links:ignore-next docs/a.md -- フィクスチャ内だけに置く検査用の参照
+      'README.md': '[a](docs/a.md)\n',
+      // check-links:ignore-next docs/a.md -- フィクスチャ内だけに置く検査用の参照
+      'docs/a.md': '# Intro\n',
+      // check-links:ignore-next https://github.com/max-enterme/shoutlink/blob/main/docs/a.md?plain=1#intro -- フィクスチャ内だけに置く検査用の参照
+      'specs/s.md': 'https://github.com/max-enterme/shoutlink/blob/main/docs/a.md?plain=1#intro\n',
+    })
+    const { status, stderr } = runCheckLinks(root)
+    expect(status).toBe(0)
+    expect(stderr).toBe('')
+  })
+
+  it('A2 他repoのURLは対象外', () => {
+    const root = createFixtureRoot({
+      'README.md': '# Test\n',
+      // check-links:ignore-next https://github.com/other/repo/blob/main/docs/gone.mdを参照 -- フィクスチャ内だけに置く検査用の参照
+      'specs/s.md': 'https://github.com/other/repo/blob/main/docs/gone.mdを参照\n',
+    })
+    const { status, stderr } = runCheckLinks(root)
+    expect(status).toBe(0)
+    expect(stderr).toBe('')
+  })
+
+  it('A3 ラベル内の閉じ括弧でも外側を検査', () => {
+    const root = createFixtureRoot({
+      // check-links:ignore-next docs/a.md -- フィクスチャ内だけに置く検査用の参照
+      'README.md': '[a](docs/a.md)\n',
+      // check-links:ignore-next docs/a.md -- フィクスチャ内だけに置く検査用の参照
+      'docs/a.md': '[see [1]](./gone.md)\n',
+    })
+    const { status, stderr } = runCheckLinks(root)
+    expect(status).toBe(1)
+    expect(stderr).toContain('[実在確認]')
+  })
+
+  it('A3 画像入りリンクの外側を検査', () => {
+    const root = createFixtureRoot({
+      // check-links:ignore-next docs/a.md -- フィクスチャ内だけに置く検査用の参照
+      'README.md': '[a](docs/a.md)\n',
+      // check-links:ignore-next docs/a.md -- フィクスチャ内だけに置く検査用の参照
+      'docs/a.md': '[![b](i.png)](./gone.md)\n',
+      'docs/i.png': '',
+    })
+    const { status, stderr } = runCheckLinks(root)
+    expect(status).toBe(1)
+    expect(stderr).toContain('[実在確認]')
+    expect(stderr).toContain('./gone.md')
+  })
+
+  it('A3 画像入りリンクの内側も検査', () => {
+    const root = createFixtureRoot({
+      // check-links:ignore-next docs/a.md -- フィクスチャ内だけに置く検査用の参照
+      'README.md': '[a](docs/a.md)\n',
+      // check-links:ignore-next docs/a.md -- フィクスチャ内だけに置く検査用の参照
+      'docs/a.md': '[![b](missing.png)](./a.md)\n',
+    })
+    const { status, stderr } = runCheckLinks(root)
+    expect(status).toBe(1)
+    expect(stderr).toContain('[実在確認]')
+    expect(stderr).toContain('missing.png')
+  })
+
+  it('A3 バッジの外側リンクだけでも孤立しない', () => {
+    const root = createFixtureRoot({
+      // check-links:ignore-next docs/a.md -- フィクスチャ内だけに置く検査用の参照
+      'README.md': '[![b](docs/i.png)](docs/a.md)\n',
+      // check-links:ignore-next docs/a.md -- フィクスチャ内だけに置く検査用の参照
+      'docs/a.md': '# Intro\n',
+      'docs/i.png': '',
+    })
+    const { status, stderr } = runCheckLinks(root)
+    expect(status).toBe(0)
+    expect(stderr).toBe('')
+  })
+
+  it('A4 specs/s.md 不在', () => {
+    const root = createFixtureRoot({
+      // check-links:ignore-next docs/a.md -- フィクスチャ内だけに置く検査用の参照
+      'README.md': '[a](docs/a.md)\n',
+      // check-links:ignore-next docs/a.md -- フィクスチャ内だけに置く検査用の参照
+      'docs/a.md': '# Intro\n',
+      // check-links:ignore-next docs/missing.md -- フィクスチャ内だけに置く検査用の参照
+      'specs/s.md': '[guide](docs/missing.md)\n',
+    })
+    const { status, stderr } = runCheckLinks(root)
+    expect(status).toBe(1)
+    expect(stderr).toContain('[実在確認]')
+    expect(stderr).toContain(`${path.join('specs', 's.md')}:1`)
+  })
+
+  it('A4 specs/s.md 実在', () => {
+    const root = createFixtureRoot({
+      // check-links:ignore-next docs/a.md -- フィクスチャ内だけに置く検査用の参照
+      'README.md': '[a](docs/a.md)\n',
+      // check-links:ignore-next docs/a.md -- フィクスチャ内だけに置く検査用の参照
+      'docs/a.md': '# Intro\n',
+      // check-links:ignore-next docs/a.md -- フィクスチャ内だけに置く検査用の参照
+      'specs/s.md': '[guide](docs/a.md)\n',
+    })
+    const { status, stderr } = runCheckLinks(root)
+    expect(status).toBe(0)
+    expect(stderr).toBe('')
+  })
+
+  it('A4 src/sample.ts 不在', () => {
+    const root = createFixtureRoot({
+      // check-links:ignore-next docs/a.md -- フィクスチャ内だけに置く検査用の参照
+      'README.md': '[a](docs/a.md)\n',
+      // check-links:ignore-next docs/a.md -- フィクスチャ内だけに置く検査用の参照
+      'docs/a.md': '# Intro\n',
+      // check-links:ignore-next docs/missing.md -- フィクスチャ内だけに置く検査用の参照
+      'src/sample.ts': '// [guide](docs/missing.md)\n',
+    })
+    const { status, stderr } = runCheckLinks(root)
+    expect(status).toBe(1)
+    expect(stderr).toContain('[実在確認]')
+    expect(stderr).toContain(`${path.join('src', 'sample.ts')}:1`)
+  })
+
+  it('A4 src/sample.ts 実在', () => {
+    const root = createFixtureRoot({
+      // check-links:ignore-next docs/a.md -- フィクスチャ内だけに置く検査用の参照
+      'README.md': '[a](docs/a.md)\n',
+      // check-links:ignore-next docs/a.md -- フィクスチャ内だけに置く検査用の参照
+      'docs/a.md': '# Intro\n',
+      // check-links:ignore-next docs/a.md -- フィクスチャ内だけに置く検査用の参照
+      'src/sample.ts': '// [guide](docs/a.md)\n',
+    })
+    const { status, stderr } = runCheckLinks(root)
+    expect(status).toBe(0)
+    expect(stderr).toBe('')
+  })
+
+  it('A4 不在アンカー', () => {
+    const root = createFixtureRoot({
+      // check-links:ignore-next docs/a.md -- フィクスチャ内だけに置く検査用の参照
+      'README.md': '[a](docs/a.md)\n',
+      // check-links:ignore-next docs/a.md -- フィクスチャ内だけに置く検査用の参照
+      'docs/a.md': '# Intro\n',
+      // check-links:ignore-next docs/a.md#missing -- フィクスチャ内だけに置く検査用の参照
+      'src/sample.ts': '// [guide](docs/a.md#missing)\n',
+    })
+    const { status, stderr } = runCheckLinks(root)
+    expect(status).toBe(1)
+    expect(stderr).toContain('[見出しアンカー]')
+  })
+
+  it('A4 大小文字違い', () => {
+    const root = createFixtureRoot({
+      // check-links:ignore-next docs/a.md -- フィクスチャ内だけに置く検査用の参照
+      'README.md': '[a](docs/a.md)\n',
+      // check-links:ignore-next docs/a.md -- フィクスチャ内だけに置く検査用の参照
+      'docs/a.md': '# Intro\n',
+      // check-links:ignore-next docs/A.md -- フィクスチャ内だけに置く検査用の参照
+      'src/sample.ts': '// [guide](docs/A.md)\n',
+    })
+    const { status, stderr } = runCheckLinks(root)
+    expect(status).toBe(1)
+    expect(stderr).toContain('[実在確認]')
+  })
+
+  it('A4 追加範囲のrootリンクは孤立を救済しない', () => {
+    const root = createFixtureRoot({
+      'README.md': '# Test\n',
+      // check-links:ignore-next docs/a.md -- フィクスチャ内だけに置く検査用の参照
+      'docs/a.md': '# Intro\n',
+      // check-links:ignore-next docs/a.md -- フィクスチャ内だけに置く検査用の参照
+      'src/sample.ts': '// [guide](docs/a.md)\n',
+    })
+    const { status, stderr } = runCheckLinks(root)
+    expect(status).toBe(1)
+    expect(stderr).toContain('[孤立]')
   })
 })

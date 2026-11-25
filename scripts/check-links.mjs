@@ -183,6 +183,8 @@ function checkLink(rawUrl, ctx) {
     relPath = url // 相対リンク
   }
 
+  // クエリはファイル名に含めず、後ろのアンカーは保持する。
+  relPath = relPath.replace(/\?[^#]*/, '')
   const { pathPart, anchor } = splitAnchor(relPath)
   if (!pathPart) return // 自ページ内アンカーのみ
 
@@ -261,18 +263,39 @@ function extractDocReferences(absPath, kind) {
         }
       } else if (!skipped) {
         // 先に抽出した範囲を空白に置き換え、URL 内部のパスを二重に拾わない。
-        let rest = line.replace(/!?\[[^\]]*\]\(([^)]+)\)/g, (whole, raw) => {
+        const masked = line.split('')
+        for (const match of line.matchAll(/\]\(([^)]+)\)/g)) {
+          const raw = match[1]
           candidates.push({ raw, lineNo: i + 1, base: 'source', syntax: 'markdown' })
-          return ' '.repeat(whole.length)
-        })
+          // ラベル中の ] や画像リンクがあっても、各 ]( の宛先を拾う。
+          // 対応する [ まで隠し、ラベルのURLやパスを裸参照として重複抽出しない。
+          let start = match.index
+          let depth = 1
+          while (start > 0 && depth > 0) {
+            start--
+            if (line[start] === ']') depth++
+            if (line[start] === '[') depth--
+          }
+          if (depth > 0) start = match.index
+          for (let j = start; j < match.index + match[0].length; j++) masked[j] = ' '
+        }
+        let rest = masked.join('')
         rest = rest.replace(/https?:\/\/[^\s'"`<>()[\]{}\\、。]+/g, (raw) => {
+          // 自repoのmd URLだけは、直後の句読点・装飾・和文を含めない。
+          const reduced = reduceAbsoluteUrl(raw)
+          if (reduced !== null) {
+            const mdEnd = /^.*?\.md(?:\?[^#\s'"`<>()[\]{}\\、。，:）*]+)?(?:#[\p{L}\p{N}%_-]+)?/u.exec(raw)
+            if (mdEnd) raw = mdEnd[0]
+          }
           candidates.push({ raw, lineNo: i + 1, base: 'root', syntax: 'url' })
           return ' '.repeat(raw.length)
         })
-        const bareRe = /(?<![\p{L}\p{N}_./-])(?:\.{1,2}\/)*docs\/[^\s'"`<>()[\]{}\\,;|、。・「」『』【】]+/gu
+        // ASCII のパス文字に続く docs は別パスの一部。先頭の _ は強調記法として扱う。
+        // .md で本体を終え、装飾の * / ? を glob 判定へ混ぜない。
+        const bareRe = /(?<![A-Za-z0-9_./-])_?((?:\.{1,2}\/)*docs\/[^\s'"`<>()[\]{}\\,;|、。・「」『』【】（）→]+?\.md(?:#[\p{L}\p{N}%_-]+)?(?::\d+(?::\d+)?)?)/gu
         for (const match of rest.matchAll(bareRe)) {
-          const raw = match[0].replace(/[.!]+$/, '')
-          if (/[*?]/.test(raw) || !/\.md(?:#[^:]+)?(?::\d+)?$/.test(raw)) continue
+          const raw = match[1]
+          if (/[*?]/.test(raw.split('.md')[0])) continue
           candidates.push({
             raw, lineNo: i + 1,
             base: raw.startsWith('.') ? 'source' : 'root', syntax: 'bare',
@@ -298,6 +321,7 @@ function pointsToDocsMd(raw, baseDir) {
     if (target === null) return false
     baseDir = root
   }
+  target = target.replace(/\?[^#]*/, '')
   const { pathPart } = splitAnchor(target)
   const relative = path.relative(docsDir, path.resolve(baseDir, pathPart))
   return relative !== '' && !relative.startsWith('..') && !path.isAbsolute(relative)
@@ -306,8 +330,9 @@ function pointsToDocsMd(raw, baseDir) {
 
 function checkDocFile(absPath, kind, primary = false) {
   for (const { raw, lineNo, base, syntax } of extractDocReferences(absPath, kind)) {
-    const baseDir = base === 'root' ? root : path.dirname(absPath)
-    const target = syntax === 'bare' ? raw.replace(/:\d+$/, '') : raw
+    const baseDir = base === 'root' || (!primary && syntax === 'markdown' && raw.startsWith('docs/'))
+      ? root : path.dirname(absPath)
+    const target = syntax === 'bare' ? raw.replace(/:\d+(?::\d+)?$/, '') : raw
     if (!primary && !pointsToDocsMd(target, baseDir)) continue
     checkLink(target, {
       sourceFile: absPath, baseDir, lineNo,
