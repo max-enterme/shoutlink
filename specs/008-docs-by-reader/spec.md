@@ -3,7 +3,7 @@ feature: docs-by-reader
 issue: 171
 release: r2
 priority: should
-status: 進行中
+status: レビュー
 ---
 
 # 008 文書を読者別に整理する
